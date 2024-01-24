@@ -1,3 +1,10 @@
+# Folders 
+data/
+reports/
+runs/
+.idea/
+skripts/FIA_data_analysis/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

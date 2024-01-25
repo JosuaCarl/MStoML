@@ -43,7 +43,7 @@ def read_feature_map_XML(path_to_featureXML):
     return fm
 
 
-def define_metabolite_table(path_to_library_file):
+def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
     """
     read tsv file and create list of FeatureFinderMetaboIdentCompound
     """
@@ -52,6 +52,9 @@ def define_metabolite_table(path_to_library_file):
         tsv_reader = csv.reader(tsv_file, delimiter="\t")
         next(tsv_reader)  # skip header
         for row in tsv_reader:
+            # extract mass range from metabolites
+            if float(row[2]) < mass_range[0] or float(row[2]) > mass_range[1]:
+                continue
             metaboTable.append(
                 oms.FeatureFinderMetaboIdentCompound(
                     row[0],  # name
@@ -91,7 +94,7 @@ def mnx_to_oms(df: pd.DataFrame) -> pd.DataFrame:
                                  df["formula"].values,
                                  df["mass"].values,
                                  df["charge"].values,
-                                 zeros(len(df.index)),
+                                 ones(len(df.index)),
                                  zeros(len(df.index)),
                                  zeros(len(df.index)))),
                         columns=["CompoundName", "SumFormula", "Mass", "Charge", "RetentionTime", "RetentionTimeRange",
@@ -499,6 +502,67 @@ def consensus_features(feature_maps: list) -> oms.ConsensusMap:
 
     return consensus_map
 
+## Targeted
+def feature_detection_targeted(filepath: str, metab_table:list, experiment: oms.MSExperiment = None,
+                               mz_window:float=5.0, rt_window:float=20.0, n_isotopes:int=2, isotope_pmin:float=0.0,
+                               peak_width:float=60.0) -> oms.FeatureMap:
+    """
+    Feature detection
+    """
+
+    if not experiment:
+        experiment = oms.MSExperiment()
+        oms.MzMLFile().load(filepath, experiment)
+
+    # FeatureMap to store results
+    feature_map = oms.FeatureMap()
+    
+    # create FeatureFinderAlgorithmMetaboIdent and assign ms data
+    ff = oms.FeatureFinderAlgorithmMetaboIdent()
+    ff.setMSData(experiment)
+    ff_par = ff.getDefaults()
+    ff_par.setValue(b"extract:mz_window",  mz_window)
+    ff_par.setValue(b"extract:rt_window",  rt_window)
+    ff_par.setValue(b'extract:n_isotopes', n_isotopes)
+    ff_par.setValue(b'extract:isotope_pmin', isotope_pmin)
+    ff_par.setValue(b"detect:peak_width",  peak_width)
+    ff.setParameters(ff_par)
+    
+    # run the FeatureFinderMetaboIdent with the metabo_table and mzML file path -> store results in fm
+    ff.run(metab_table, feature_map, filepath)
+    
+    feature_map.setUniqueIds()  # Assigns a new, valid unique id per feature
+    feature_map.setPrimaryMSRunPath([filepath.encode()])
+    
+    return feature_map
+
+def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compound_library_file:str, 
+                               mz_window:float=5.0, rt_window:float=20.0, peak_width:float=60.0,
+                               mass_cutoff:list=[50.0, 10000.0]) -> oms.FeatureMap:
+    """
+    @mz_window: ppm
+    @rt_window: s
+    @peak_width: s
+    returns: pyopenms.FeatureMap
+    """
+    if not experiment:
+        experiment = oms.MSExperiment()
+        oms.MzMLFile().load(filepath, experiment)
+    
+    print("Defining metabolite table...")
+    metab_table = define_metabolite_table(compound_library_file, mass_range)
+    print("Metabolite table defined...")
+    
+    feature_map = feature_detection_targeted("", metab_table, experiment, mz_window, rt_window, peak_width)
+    print("Feature map created.")
+
+
+    
+    return feature_map
+
+### Label assigning
+def annotate_feature_map(feature_map:oms.FeatureMap, metabolite_mass) -> oms.FeatureMap:
+    return feature_map
 
 ### Plotting ###
 def quick_plot(spectrum: oms.MSSpectrum, xlim: [int | float, int | float] = None, plottype: str = "line") -> None:

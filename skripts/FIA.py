@@ -101,23 +101,22 @@ def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
         next(tsv_reader)  # skip header
         for row in tsv_reader:
             # extract mass range from metabolites
-            if float(row[2]) < mass_range[0] or float(row[2]) > mass_range[1]:
-                continue
-            metaboTable.append(
-                oms.FeatureFinderMetaboIdentCompound(
-                    row[0],  # name
-                    row[1],  # sum formula
-                    float(row[2]),  # mass
-                    [int(float(charge)) for charge in row[3].split(",")],  # charges
-                    [float(rt) for rt in row[4].split(",")],  # RTs
-                    [
-                        float(rt_range) for rt_range in row[5].split(",")
-                    ],  # RT ranges
-                    [
-                        float(iso_distrib) for iso_distrib in row[6].split(",")
-                    ],  # isotope distributions
+            if float(row[2]) > mass_range[0] and float(row[2]) < mass_range[1]:
+                metaboTable.append(
+                    oms.FeatureFinderMetaboIdentCompound(
+                        row[0],  # name
+                        row[1],  # sum formula
+                        float(row[2]),  # mass
+                        [int(float(charge)) for charge in row[3].split(",")],  # charges
+                        [float(rt) for rt in row[4].split(",")],  # RTs
+                        [
+                            float(rt_range) for rt_range in row[5].split(",")
+                        ],  # RT ranges
+                        [
+                            float(iso_distrib) for iso_distrib in row[6].split(",")
+                        ],  # isotope distributions
+                    )
                 )
-            )
     return metaboTable
 
 

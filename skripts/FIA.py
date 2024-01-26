@@ -13,16 +13,30 @@ import csv
 
 ### FILES ###
 # Loading
-def read_mzxml(filepath: str) -> oms.MSExperiment:
+def read_experiment(filepath: str) -> oms.MSExperiment:
     """
-    Read in MzXML File as a pyopenms experiment
+    Read in MzXML or MzML File as a pyopenms experiment
     @path: String
     return: pyopenms.MSExperiment
     """
     experiment = oms.MSExperiment()
-    file = oms.MzXMLFile()
-    file.load(filename=filepath, exp=experiment)
+    if filepath.endswith(".mzML"):
+        file = oms.MzMLFile()
+        file.load(filename=filepath, exp=experiment)
+    elif filepath.endswith(".mzXML"):
+        file = oms.MzXMLFile()
+        file.load(filename=filepath, exp=experiment)
     return experiment
+
+
+def load_experiment(filepath:str, experiment:oms.MSExperiment=None) -> oms.MSExperiment:
+    """
+    If no experiment is given, loads and returns it from either .mzML or .mzXML file.
+    """
+    if not experiment:
+        return read_experiment(filepath)
+    else:
+        return experiment
 
 
 def read_mnx(filepath: str) -> pd.DataFrame:
@@ -36,7 +50,10 @@ def read_mnx(filepath: str) -> pd.DataFrame:
                        )[["#ID", "name", "formula", "charge", "mass"]].loc[1:].reset_index(drop=True).dropna()
 
 
-def read_feature_map_XML(path_to_featureXML):
+def read_feature_map_XML(path_to_featureXML:str) -> oms.FeatureMap:
+    """
+    Reads in feature Map from file
+    """
     fm = oms.FeatureMap()
     fh = oms.FeatureXMLFile()
     fh.load(path_to_featureXML, fm)
@@ -45,7 +62,7 @@ def read_feature_map_XML(path_to_featureXML):
 
 def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
     """
-    read tsv file and create list of FeatureFinderMetaboIdentCompound
+    Read tsv file and create list of FeatureFinderMetaboIdentCompound
     """
     metaboTable = []
     with open(path_to_library_file, "r") as tsv_file:
@@ -120,14 +137,20 @@ def join_df_by(df: pd.DataFrame, joiner: str, combiner: str) -> pd.DataFrame:
 
 
 # Storing
-def store_experiment(experiment: oms.MSExperiment, filepath: str) -> None:
+def store_experiment(filepath:str, experiment: oms.MSExperiment) -> None:
     """
     Store Experiment as MzXML file
     @experiment: pyopenms.MSExperiment
     @filepath: string with path to savefile
     return: None
     """
-    oms.MzXMLFile().store(filepath, experiment)
+    if filepath.endswith(".mzXML"):
+        oms.MzXMLFile().store(filepath, experiment)
+    elif filepath.endswith(".mzML"):
+        oms.MzMLFile().store(filepath, experiment)
+    else:
+        oms.MzMLFile().store(filepath, experiment)
+
 
 
 ### DataHandling ###
@@ -155,8 +178,8 @@ def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upp
     return new_spectrum
 
 
-def limit_experiment(experiment: oms.MSExperiment, mz_lower_limit: int | float, mz_upper_limit: int | float,
-                     sample_size: int, deepcopy: bool = False) -> oms.MSExperiment:
+def limit_experiment(filepath:str, experiment: oms.MSExperiment = None, mz_lower_limit: int | float=0, mz_upper_limit: int | float=10000,
+                     sample_size: int =10e6, deepcopy: bool = False) -> oms.MSExperiment:
     """
     Limits the range of all spectra in an experiment to <mz_lower_limit> and <mz_upper_limit>. 
     Uniformly samples <sample_size> number of peaks from the spectrum (without replacement).
@@ -167,6 +190,8 @@ def limit_experiment(experiment: oms.MSExperiment, mz_lower_limit: int | float, 
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     Returns: pyopenms.MSExperiment 
     """
+    experiment = load_experiment(filpath, experiment)
+
     if deepcopy:
         lim_exp = copy_experiment(experiment)
     else:
@@ -185,6 +210,8 @@ def smooth_spectra(experiment: oms.MSExperiment, gaussian_width: float, deepcopy
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: oms.MSExperiment
     """
+    experiment = load_experiment(filpath, experiment)
+
     if deepcopy:
         smooth_exp = copy_experiment(experiment)
     else:
@@ -199,13 +226,15 @@ def smooth_spectra(experiment: oms.MSExperiment, gaussian_width: float, deepcopy
 
 
 # Centroiding
-def centroid_experiment(experiment: oms.MSExperiment, deepcopy: bool = False) -> oms.MSExperiment:
+def centroid_experiment(filepath:str, experiment: oms.MSExperiment = None, deepcopy: bool = False) -> oms.MSExperiment:
     """
     Reduce dataset to centroids
     @experiment: pyopenms.MSExperiment
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: 
     """
+    experiment = load_experiment(filpath, experiment)
+
     accu_exp = oms.MSExperiment()
     oms.PeakPickerHiRes().pickExperiment(experiment, accu_exp, True)
     if deepcopy:
@@ -218,7 +247,7 @@ def centroid_experiment(experiment: oms.MSExperiment, deepcopy: bool = False) ->
 
 
 # Merging
-def merge_spectra(experiment: oms.MSExperiment, block_size: int = None, deepcopy: bool = False) -> oms.MSExperiment:
+def merge_spectra(filepath:str, experiment: oms.MSExperiment = None, block_size: int = None, deepcopy: bool = False) -> oms.MSExperiment:
     """
     Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
     @experiment: pyopenms.MSExperiment
@@ -226,6 +255,8 @@ def merge_spectra(experiment: oms.MSExperiment, block_size: int = None, deepcopy
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: 
     """
+    experiment = load_experiment(filpath, experiment)
+
     if deepcopy:
         merge_exp = copy_experiment(experiment)
     else:
@@ -241,7 +272,7 @@ def merge_spectra(experiment: oms.MSExperiment, block_size: int = None, deepcopy
 
 
 # Normalization
-def normalize_spectra(experiment: oms.MSExperiment, normalization_method: str = "to_one",
+def normalize_spectra(filepath:str, experiment: oms.MSExperiment = None, normalization_method: str = "to_one",
                       deepcopy: bool = False) -> oms.MSExperiment:
     """
     Normalizes spectra
@@ -249,6 +280,8 @@ def normalize_spectra(experiment: oms.MSExperiment, normalization_method: str = 
     @normalization_method: "to_TIC" | "to_one" 
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     """
+    experiment = load_experiment(filpath, experiment)
+
     if deepcopy:
         norm_exp = copy_experiment(experiment)
     else:
@@ -293,13 +326,16 @@ def deisotope_spectrum(spectrum: oms.MSSpectrum, fragment_tolerance: float = 0.1
     return spectrum
 
 
-def deisotope_experiment(experiment: oms.MSExperiment, fragment_tolerance: float = 0.1, fragment_unit_ppm: bool = False,
+def deisotope_experiment(filepath:str, experiment: oms.MSExperiment = None, fragment_tolerance: float = 0.1, fragment_unit_ppm: bool = False,
                          min_charge: int = 1, max_charge: int = 3,
                          keep_only_deisotoped: bool = True, min_isopeaks: int = 2, max_isopeaks: int = 10,
                          make_single_charged: bool = True, annotate_charge: bool = True,
                          annotate_iso_peak_count: bool = True, use_decreasing_model: bool = True,
                          start_intensity_check: bool = False, add_up_intensity: bool = False,
                          deepcopy: bool = False):
+
+    experiment = load_experiment(filpath, experiment)
+
     if deepcopy:
         deisotop_exp = copy_experiment(experiment)
     else:
@@ -335,9 +371,7 @@ def untargeted_feature_detection(filepath: str,
     @deepcopy
     return
     """
-    if not experiment:
-        experiment = oms.MSExperiment()
-        oms.MzMLFile().load(filepath, experiment)
+    experiment = load_experiment(filpath, experiment)
 
     experiment.sortSpectra(True)
 
@@ -362,10 +396,8 @@ def mass_trace_detection(filepath: str, experiment: oms.MSExperiment = None,
     """
     Mass trace detection
     """
-    if not experiment:
-        experiment = oms.MSExperiment()
-        oms.MzMLFile().load(filepath, experiment)
-
+    experiment = load_experiment(filepath, experiment)
+    
     mass_traces = ([])
     mtd = oms.MassTraceDetection()
     mtd_par = (mtd.getDefaults())
@@ -405,9 +437,7 @@ def feature_detection_untargeted(filepath: str, experiment: oms.MSExperiment = N
     Feature detection
     """
 
-    if not experiment:
-        experiment = oms.MSExperiment()
-        oms.MzMLFile().load(filepath, experiment)
+    experiment = load_experiment(filepath, experiment)
 
     # feature detection
     feature_map = oms.FeatureMap()  # output features
@@ -507,12 +537,10 @@ def feature_detection_targeted(filepath: str, metab_table:list, experiment: oms.
                                mz_window:float=5.0, rt_window:float=20.0, n_isotopes:int=2, isotope_pmin:float=0.0,
                                peak_width:float=60.0) -> oms.FeatureMap:
     """
-    Feature detection
+    Feature detection with a given metabolic table
     """
 
-    if not experiment:
-        experiment = oms.MSExperiment()
-        oms.MzMLFile().load(filepath, experiment)
+    experiment = load_experiment(filepath, experiment)
 
     # FeatureMap to store results
     feature_map = oms.FeatureMap()
@@ -545,9 +573,7 @@ def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compo
     @peak_width: s
     returns: pyopenms.FeatureMap
     """
-    if not experiment:
-        experiment = oms.MSExperiment()
-        oms.MzMLFile().load(filepath, experiment)
+    experiment = load_experiment(filepath, experiment)
     
     print("Defining metabolite table...")
     metab_table = define_metabolite_table(compound_library_file, mass_range)

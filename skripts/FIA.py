@@ -1,14 +1,43 @@
 import os
+import csv
+import shutil
+import requests
+from copy import deepcopy
+from tqdm import tqdm
+from numpy import *
 import pandas as pd
 import pyopenms as oms
-from numpy import *
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
 import plotly.express as px
-from copy import deepcopy
-from tqdm import tqdm
-import csv
+from sklearn.impute import KNNImputer
+from sklearn.preprocessing import FunctionTransformer
+from sklearn.pipeline import Pipeline
+
+### DATA OBTAIN ###
+def batch_download(base_url:str, file_urls:list, save_directory:str) -> None:
+    """
+    Download files from a list into a directory.
+    """
+    for file_url in file_urls:
+        request = requests.get(base_url + file_url, allow_redirects=True)
+        open(os.path.join(save_directory, os.path.basename(file_url)), "wb").write(request.content)
+
+### DIRECTORIES ###
+def build_directory(dir_path:str) -> None:
+    """
+    Build a new directory in the given path.
+    """
+    if not os.path.isdir(os.path.join(os.getcwd(), dir_path)):
+        os.mkdir(os.path.join(os.getcwd(), dir_path))
+
+def clean_dir(dir_path:str, subfolder:str) -> str: 
+    cleaned_dir = os.path.join(dir_path, subfolder)
+    if os.path.exists(cleaned_dir):
+        shutil.rmtree(cleaned_dir)
+    os.mkdir(cleaned_dir)
+    return cleaned_dir
 
 
 ### FILES ###
@@ -20,12 +49,14 @@ def read_experiment(filepath: str) -> oms.MSExperiment:
     return: pyopenms.MSExperiment
     """
     experiment = oms.MSExperiment()
-    if filepath.endswith(".mzML"):
+    if filepath.endswith(".mzML") or filepath.endswith(".MzML"):
         file = oms.MzMLFile()
-        file.load(filename=filepath, exp=experiment)
-    elif filepath.endswith(".mzXML"):
+        file.load(filepath, experiment)
+    elif filepath.endswith(".mzXML") or filepath.endswith(".MzXML"):
         file = oms.MzXMLFile()
-        file.load(filename=filepath, exp=experiment)
+        file.load(filepath, experiment)
+    else: 
+        raise ValueError(f'Invalid ending of {filepath}. Must be in [".MzXML", ".mzXML", ".MzML", ".mzML"]')
     return experiment
 
 
@@ -33,11 +64,11 @@ def load_experiment(filepath:str, experiment:oms.MSExperiment=None) -> oms.MSExp
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
-    if not experiment:
-        return read_experiment(filepath)
-    else:
+    if experiment:
         return experiment
-
+    else:
+        return read_experiment(filepath)
+    
 
 def read_mnx(filepath: str) -> pd.DataFrame:
     """
@@ -153,7 +184,7 @@ def store_experiment(filepath:str, experiment: oms.MSExperiment) -> None:
 
 
 
-### DataHandling ###
+### DATA TRANSFORMATION ###
 # Limiting
 def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upper_limit: int | float,
                    sample_size: int) -> oms.MSSpectrum:
@@ -190,7 +221,7 @@ def limit_experiment(filepath:str, experiment: oms.MSExperiment = None, mz_lower
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     Returns: pyopenms.MSExperiment 
     """
-    experiment = load_experiment(filpath, experiment)
+    experiment = load_experiment(filepath, experiment)
 
     if deepcopy:
         lim_exp = copy_experiment(experiment)
@@ -210,7 +241,7 @@ def smooth_spectra(experiment: oms.MSExperiment, gaussian_width: float, deepcopy
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: oms.MSExperiment
     """
-    experiment = load_experiment(filpath, experiment)
+    experiment = load_experiment(filepath, experiment)
 
     if deepcopy:
         smooth_exp = copy_experiment(experiment)
@@ -233,7 +264,7 @@ def centroid_experiment(filepath:str, experiment: oms.MSExperiment = None, deepc
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: 
     """
-    experiment = load_experiment(filpath, experiment)
+    experiment = load_experiment(filepath, experiment)
 
     accu_exp = oms.MSExperiment()
     oms.PeakPickerHiRes().pickExperiment(experiment, accu_exp, True)
@@ -246,6 +277,21 @@ def centroid_experiment(filepath:str, experiment: oms.MSExperiment = None, deepc
     return centroid_exp
 
 
+def centroid_batch(run_dir:str, file_ending:str=".mzML") -> str:
+    """
+    Centroids a batch of experiments, extracted from files in a given directory with a given file ending (i.e. .mzML or .mzXML).
+    Returns the new directors as path/centroids.
+    """
+    cleaned_dir = clean_dir(run_dir, "centroids")
+
+    for file in os.listdir(run_dir):
+        if file.endswith(file_ending):
+            centroided_exp = centroid_experiment(os.path.join(run_dir, file))
+            oms.MzMLFile().store(os.path.join(cleaned_dir, file), centroided_exp)
+
+    return os.path.normpath(os.path.join(run_dir, "centroids"))
+
+
 # Merging
 def merge_spectra(filepath:str, experiment: oms.MSExperiment = None, block_size: int = None, deepcopy: bool = False) -> oms.MSExperiment:
     """
@@ -255,7 +301,7 @@ def merge_spectra(filepath:str, experiment: oms.MSExperiment = None, block_size:
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: 
     """
-    experiment = load_experiment(filpath, experiment)
+    experiment = load_experiment(filepath, experiment)
 
     if deepcopy:
         merge_exp = copy_experiment(experiment)
@@ -280,7 +326,7 @@ def normalize_spectra(filepath:str, experiment: oms.MSExperiment = None, normali
     @normalization_method: "to_TIC" | "to_one" 
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     """
-    experiment = load_experiment(filpath, experiment)
+    experiment = load_experiment(filepath, experiment)
 
     if deepcopy:
         norm_exp = copy_experiment(experiment)
@@ -334,7 +380,7 @@ def deisotope_experiment(filepath:str, experiment: oms.MSExperiment = None, frag
                          start_intensity_check: bool = False, add_up_intensity: bool = False,
                          deepcopy: bool = False):
 
-    experiment = load_experiment(filpath, experiment)
+    experiment = load_experiment(filepath, experiment)
 
     if deepcopy:
         deisotop_exp = copy_experiment(experiment)
@@ -350,47 +396,6 @@ def deisotope_experiment(filepath:str, experiment: oms.MSExperiment = None, frag
 
 
 ### Feature detection ###
-# Untargeted
-def untargeted_feature_detection(filepath: str,
-                                 experiment: oms.MSExperiment = None,
-                                 feature_filepath: str = None,
-                                 mass_error_ppm: float = 5.0,
-                                 noise_threshold_int: float = 3000.0,
-                                 width_filtering: str = "fixed",
-                                 isotope_filtering_model="none",
-                                 remove_single_traces="true",
-                                 mz_scoring_by_elements="false",
-                                 report_convex_hulls="true",
-                                 deepcopy: bool = False) -> oms.FeatureMap:
-    """
-    Untargeted detection of features.
-    @experiment: pyopenms.MSExperiment
-    @mass_error_ppm: float, error of the mass in parts per million
-    @noise_threshold_int: threshold for noise in the intensity
-    @width_filtering
-    @deepcopy
-    return
-    """
-    experiment = load_experiment(filpath, experiment)
-
-    experiment.sortSpectra(True)
-
-    # Mass trace detection
-    mass_traces = mass_trace_detection(filepath, experiment, mass_error_ppm, noise_threshold_int)
-
-    # Elution Peak Detection
-    mass_traces_deconvol = elution_peak_detection(mass_traces, width_filtering)
-
-    # Feature finding
-    fm = feature_detection_untargeted(filepath, experiment, mass_traces_deconvol, isotope_filtering_model,
-                                      remove_single_traces, mz_scoring_by_elements, report_convex_hulls)
-
-    if feature_filepath:
-        oms.FeatureXMLFile().store(feature_filepath, fm)
-
-    return fm
-
-
 def mass_trace_detection(filepath: str, experiment: oms.MSExperiment = None,
                          mass_error_ppm: float = 10.0, noise_threshold_int: float = 3000.0) -> list:
     """
@@ -458,12 +463,15 @@ def feature_detection_untargeted(filepath: str, experiment: oms.MSExperiment = N
     return feature_map
 
 
-def align_retention_time(feature_maps: list) -> list:
+def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,max_mz_difference:float=10.0, mz_unit:str="ppm" ) -> list:
     """
     Use as reference for alignment, the file with the largest number of features
     Works well if you have a pooled QC for example.
+    Returns the aligned map at the first position
     """
-    ref_index = feature_maps.index(sorted(feature_maps, key=lambda x: x.size())[-1])
+    ref_index = argmax([fm.size() for fm in feature_maps])
+    feature_maps.insert(0, feature_maps.pop(ref_index))
+
 
     aligner = oms.MapAlignmentAlgorithmPoseClustering()
 
@@ -471,15 +479,13 @@ def align_retention_time(feature_maps: list) -> list:
 
     # parameter optimization
     aligner_par = aligner.getDefaults()
-    aligner_par.setValue("max_num_peaks_considered", -1)  # infinite
-    aligner_par.setValue(
-        "pairfinder:distance_MZ:max_difference", 10.0
-    )  # Never pair features with larger m/z distance
-    aligner_par.setValue("pairfinder:distance_MZ:unit", "ppm")
+    aligner_par.setValue( "max_num_peaks_considered", max_num_peaks_considered )  # -1 = infinite
+    aligner_par.setValue( "pairfinder:distance_MZ:max_difference", max_mz_difference )
+    aligner_par.setValue( "pairfinder:distance_MZ:unit", "ppm" )
     aligner.setParameters(aligner_par)
-    aligner.setReference(feature_maps[ref_index])
+    aligner.setReference(feature_maps[0])
 
-    for feature_map in feature_maps[:ref_index] + feature_maps[ref_index + 1:]:
+    for feature_map in feature_maps[1:]:
         trafo = oms.TransformationDescription()  # save the transformed data points
         aligner.align(feature_map, trafo)
         trafos[feature_map.getMetaValue("spectra_data")[0].decode()] = trafo
@@ -531,6 +537,76 @@ def consensus_features(feature_maps: list) -> oms.ConsensusMap:
     consensus_map.setUniqueIds()
 
     return consensus_map
+
+# Untargeted
+def untargeted_feature_detection(filepath: str,
+                                 experiment: oms.MSExperiment = None,
+                                 feature_filepath: str = None,
+                                 mass_error_ppm: float = 5.0,
+                                 noise_threshold_int: float = 3000.0,
+                                 width_filtering: str = "fixed",
+                                 isotope_filtering_model="none",
+                                 remove_single_traces="true",
+                                 mz_scoring_by_elements="false",
+                                 report_convex_hulls="true",
+                                 deepcopy: bool = False) -> oms.FeatureMap:
+    """
+    Untargeted detection of features.
+    @experiment: pyopenms.MSExperiment
+    @mass_error_ppm: float, error of the mass in parts per million
+    @noise_threshold_int: threshold for noise in the intensity
+    @width_filtering
+    @deepcopy
+    return
+    """
+    experiment = load_experiment(filepath, experiment)
+
+    experiment.sortSpectra(True)
+
+    # Mass trace detection
+    mass_traces = mass_trace_detection(filepath, experiment, mass_error_ppm, noise_threshold_int)
+
+    # Elution Peak Detection
+    mass_traces_deconvol = elution_peak_detection(mass_traces, width_filtering)
+
+    # Feature finding
+    fm = feature_detection_untargeted(filepath, experiment, mass_traces_deconvol, isotope_filtering_model,
+                                      remove_single_traces, mz_scoring_by_elements, report_convex_hulls)
+
+    if feature_filepath:
+        oms.FeatureXMLFile().store(feature_filepath, fm)
+
+    return fm
+
+def untargeted_features_detection(run_dir:str, file_ending:str=".mzML",
+                                    mass_error_ppm:float=10.0,
+                                    noise_threshold_int:float=1000.0,
+                                    width_filtering:str="fixed",
+                                    isotope_filtering_model:str="none",
+                                    remove_single_traces:str="true",
+                                    mz_scoring_by_elements:str="false",
+                                    report_convex_hulls:str="true",
+                                    deepcopy:bool=False) -> list:
+    
+    feature_maps = []
+
+    for file in os.listdir(run_dir):
+        if file.endswith(file_ending):
+            experiment_file = os.path.join(run_dir, file)
+            feature_folder = clean_dir(run_dir, "features")
+            feature_file = os.path.join(feature_folder, f"{file[:-len(file_ending)]}.featureXML")
+            feature_map = untargeted_feature_detection(filepath=experiment_file, experiment=None,
+                                                        feature_filepath=feature_file,
+                                                        mass_error_ppm=mass_error_ppm, noise_threshold_int=noise_threshold_int,
+                                                        width_filtering=width_filtering, isotope_filtering_model=isotope_filtering_model,
+                                                        remove_single_traces=remove_single_traces, mz_scoring_by_elements=mz_scoring_by_elements,
+                                                        report_convex_hulls=report_convex_hulls,
+                                                        deepcopy=deepcopy)
+
+            feature_maps.append(feature_map)
+        return feature_maps
+
+        
 
 ## Targeted
 def feature_detection_targeted(filepath: str, metab_table:list, experiment: oms.MSExperiment = None,
@@ -627,4 +703,49 @@ def dynamic_plot(experiment: oms.MSExperiment, mode: str = "lines") -> None:
                            name=spectrum.getRT())
         fig.add_trace(trace)
     fig.update_layout(title='Superplot MSExperiment')
+    fig.show()
+
+
+def plot_feature_map_rt_alignment(ordered_feature_maps:list) -> None:
+    fig = plt.figure(figsize=(10, 5))
+
+    ax = fig.add_subplot(1, 2, 1)
+    ax.set_title("consensus map before alignment")
+    ax.set_ylabel("m/z")
+    ax.set_xlabel("RT")
+
+    # use alpha value to display feature intensity
+    ax.scatter(
+        [feature.getRT() for feature in ordered_feature_maps[0]],
+        [feature.getMZ() for feature in ordered_feature_maps[0]],
+        alpha=asarray([feature.getIntensity() for feature in ordered_feature_maps[0]])
+        / max([feature.getIntensity() for feature in ordered_feature_maps[0]]),
+    )
+
+    for fm in ordered_feature_maps[1:]:
+        ax.scatter(
+            [feature.getMetaValue("original_RT") for feature in fm],
+            [feature.getMZ() for feature in fm],
+            alpha=asarray([feature.getIntensity() for feature in fm])
+            / max([feature.getIntensity() for feature in fm]),
+        )
+
+    ax = fig.add_subplot(1, 2, 2)
+    ax.set_title("consensus map after alignment")
+    ax.set_xlabel("RT")
+
+    for fm in ordered_feature_maps:
+        ax.scatter(
+            [feature.getRT() for feature in fm],
+            [feature.getMZ() for feature in fm],
+            alpha=asarray([feature.getIntensity() for feature in fm])
+            / max([feature.getIntensity() for feature in fm]),
+        )
+
+    fig.tight_layout()
+    fig.legend(
+        [fm.getMetaValue("spectra_data")[0].decode() for fm in ordered_feature_maps],
+        loc="lower center",
+    )
+    # in some cases get file name elsewhere, e.g. fmap.getDataProcessing()[0].getMetaValue('parameter: out')
     fig.show()

@@ -778,6 +778,37 @@ def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compo
     return feature_map
 
 
+def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compound_library_file:str, 
+                                mz_window:float=5.0, rt_window:float=20.0, peak_width:float=60.0,
+                                mass_cutoff:list=[50.0, 10000.0]) -> oms.FeatureMap:
+    """
+    @mz_window: ppm
+    @rt_window: s
+    @peak_width: s
+    returns: pyopenms.FeatureMap
+    """
+
+    print("Defining metabolite table...")
+    metab_table = define_metabolite_table(compound_library_file, mass_range)
+    print("Metabolite table defined...")
+
+    feature_folder = clean_dir(run_dir, "features_targeted")
+    for file in os.listdir(in_dir):
+        if file.endswith(file_ending):
+            experiment_file = os.path.join(in_dir, file)
+            feature_file = os.path.join(feature_folder, f"{file[:-len(file_ending)]}.featureXML")
+            feature_map = feature_detection_targeted(filepath=experiment_file,
+                                                        metab_table=metab_table, 
+                                                        experiment=None,
+                                                        mz_window=mz_window,
+                                                        rt_window=rt_window,
+                                                        peak_width=peak_width)
+            print("Feature map created.")
+            feature_maps.append(feature_map)
+          
+    return feature_maps
+
+
 
 ### Label assigning
 # Accurate Mass

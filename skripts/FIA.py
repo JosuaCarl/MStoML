@@ -167,6 +167,31 @@ def join_df_by(df: pd.DataFrame, joiner: str, combiner: str) -> pd.DataFrame:
     return comb
 
 
+def consensus_map_df_to_id_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.DataFrame, result_dir:str) -> pd.DataFrame:
+    clean_dir(result_dir)
+    id_df = consensus_map_df
+
+    id_df["identifications"] = pd.Series(["" for x in range(len(id_df.index))])
+
+    for rt, mz, description in zip(
+        mass_search_df["retention_time"],
+        mass_search_df["exp_mass_to_charge"],
+        mass_search_df["description"],
+    ):
+        indices = id_df.index[
+            isclose(id_df["mz"], float(mz), atol=1e-05)
+            & isclose(id_df["RT"], float(rt), atol=1e-05)
+        ].tolist()
+        for index in indices:
+            if description != "null":
+                id_df.loc[index, "identifications"] += str(description) + ";"
+    id_df["identifications"] = [
+        item[:-1] if ";" in item else "" for item in id_df["identifications"]
+    ]
+    id_df.to_csv(os.path.join(result_dir, "result.tsv"), sep="\t", index=False)
+    return id_df
+
+
 # Storing
 def store_experiment(filepath:str, experiment: oms.MSExperiment) -> None:
     """
@@ -286,14 +311,14 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML") -> str:
 
     for file in os.listdir(in_dir):
         if file.endswith(file_ending):
-            centroided_exp = centroid_experiment(os.path.join(in_dir, file))
-            oms.MzMLFile().store(os.path.join(cleaned_dir, file), centroided_exp)
+            centroided_exp = centroid_experiment(os.path.join(in_dir, file), deepcopy=deepcopy)
+            oms.MzMLFile().store(os.path.join(cleaned_dir, f"{file.split('.')[0]}.mzML"), centroided_exp)
 
     return cleaned_dir
 
 
 # Merging
-def merge_spectra(filepath:str, experiment: oms.MSExperiment = None, block_size: int = None, deepcopy: bool = False) -> oms.MSExperiment:
+def merge_experiment(filepath:str, experiment: oms.MSExperiment = None, block_size: int = None, deepcopy: bool = False) -> oms.MSExperiment:
     """
     Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
     @experiment: pyopenms.MSExperiment
@@ -302,6 +327,9 @@ def merge_spectra(filepath:str, experiment: oms.MSExperiment = None, block_size:
     return: 
     """
     experiment = load_experiment(filepath, experiment)
+
+    if block_size is None:
+        block_size = experiment.getNrSpectra()
 
     if deepcopy:
         merge_exp = copy_experiment(experiment)
@@ -316,6 +344,23 @@ def merge_spectra(filepath:str, experiment: oms.MSExperiment = None, block_size:
     merger.mergeSpectraBlockWise(merge_exp)
     return merge_exp
 
+
+def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", block_size: int = None, deepcopy: bool = False) -> str:
+    """
+    Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
+    @experiment: pyopenms.MSExperiment
+    @block_size: int
+    @deepcopy: make a deep copy of the Experiment, so it is an independent object
+    return: 
+    """
+    cleaned_dir = os.path.normpath( clean_dir(run_dir, "merged") )
+
+    for file in os.listdir(in_dir):
+        if file.endswith(file_ending):
+            merged_exp = merge_experiment(os.path.join(in_dir, file), block_size=block_size, deepcopy=deepcopy)
+            oms.MzMLFile().store(os.path.join(cleaned_dir, file), merged_exp)
+
+    return cleaned_dir
 
 # Normalization
 def normalize_spectra(filepath:str, experiment: oms.MSExperiment = None, normalization_method: str = "to_one",
@@ -495,7 +540,7 @@ def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,ma
     return feature_maps
 
 
-def detect_adducts(feature_maps: list, potential_adducts=None) -> list:
+def detect_adducts(feature_maps: list, potential_adducts:list=None) -> list:
     if not potential_adducts:
         potential_adducts = [b"H:+:0.4", b"Na:+:0.2", b"NH4:+:0.2", b"H-1O-1:+:0.1", b"H-3O-2:+:0.1"]
     feature_maps_adducts = []
@@ -511,10 +556,11 @@ def detect_adducts(feature_maps: list, potential_adducts=None) -> list:
     return feature_maps_adducts
 
 
-def store_feature_maps(feature_maps: list):
+def store_feature_maps(feature_maps: list, out_dir:str, ending:str) -> None:
     # Store the feature maps as featureXML files!
+    clean_dir(out_dir)
     for feature_map in feature_maps:
-        oms.FeatureXMLFile().store(feature_map.getMetaValue("spectra_data")[0].decode()[:-4] + "featureXML",
+        oms.FeatureXMLFile().store(os.path.join(out_dir, feature_map.getMetaValue("spectra_data")[0].decode()[:-len(ending)] + ".featureXML"),
                                    feature_map)
 
 
@@ -787,7 +833,7 @@ def dynamic_plot(experiment: oms.MSExperiment, mode: str = "lines") -> None:
     fig.show()
 
 
-def plot_feature_map_rt_alignment(ordered_feature_maps:list) -> None:
+def plot_feature_map_rt_alignment(ordered_feature_maps:list, legend:bool=False) -> None:
     fig = plt.figure(figsize=(10, 5))
 
     ax = fig.add_subplot(1, 2, 1)
@@ -824,11 +870,12 @@ def plot_feature_map_rt_alignment(ordered_feature_maps:list) -> None:
         )
 
     fig.tight_layout()
-    fig.legend(
-        [fm.getMetaValue("spectra_data")[0].decode() for fm in ordered_feature_maps],
-        loc="lower center",
-    )
-    # in some cases get file name elsewhere, e.g. fmap.getDataProcessing()[0].getMetaValue('parameter: out')
+    if legend:
+        fig.legend(
+            [fm.getMetaValue("spectra_data")[0].decode() for fm in ordered_feature_maps],
+            loc="lower center",
+        )
+        
     plt.show()
 
 def extract_feature_coord(feature:oms.Feature, mzs:array, retention_times:array, intensities:array, labels:array, sub_feat:oms.Feature) -> list:

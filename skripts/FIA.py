@@ -91,6 +91,16 @@ def read_feature_map_XML(path_to_featureXML:str) -> oms.FeatureMap:
     fh.load(path_to_featureXML, fm)
     return fm
 
+def read_feature_maps_XML(path_to_featureXMLs:str) -> list:
+    """
+    Reads in feature Maps from file
+    """
+    feature_maps = []
+    for file in os.listdir(path_to_featureXMLs):
+        fm = read_feature_map_XML(os.path.join(path_to_featureXMLs, file))
+        feature_maps.append(fm)
+    return feature_maps
+
 
 def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
     """
@@ -492,10 +502,11 @@ def elution_peak_detection(mass_traces: list, width_filtering: str = "fixed") ->
 
 def feature_detection_untargeted(filepath: str, experiment: oms.MSExperiment = None,
                                  mass_traces_deconvol: list = None, isotope_filtering_model="none",
+                                 charge_lower_bound:int=1, charge_upper_bound:int=3, 
                                  remove_single_traces: str = "true", mz_scoring_by_elements: str = "false",
                                  report_convex_hulls: str = "true") -> oms.FeatureMap:
     """
-    Feature detection
+    Untargeted feature detection
     """
 
     experiment = load_experiment(filepath, experiment)
@@ -503,14 +514,17 @@ def feature_detection_untargeted(filepath: str, experiment: oms.MSExperiment = N
     feature_map = oms.FeatureMap()  # output features
     chrom_out = []  # output chromatograms
     ffm = oms.FeatureFindingMetabo()
+
     ffm_par = ffm.getDefaults()
+    print(type(charge_lower_bound))
+    ffm_par.setValue("charge_lower_bound", charge_lower_bound)
+    ffm_par.setValue("charge_upper_bound", charge_upper_bound)
     ffm_par.setValue("isotope_filtering_model", isotope_filtering_model)
-    ffm_par.setValue("remove_single_traces",
-                     remove_single_traces)  # remove mass traces without satellite isotopic traces
+    ffm_par.setValue("remove_single_traces", remove_single_traces)  # remove mass traces without satellite isotopic traces
     ffm_par.setValue("mz_scoring_by_elements", mz_scoring_by_elements)
     ffm_par.setValue("report_convex_hulls", report_convex_hulls)
-
     ffm.setParameters(ffm_par)
+
     ffm.run(mass_traces_deconvol, feature_map, chrom_out)
     feature_map.setUniqueIds()  # Assigns a new, valid unique id per feature
     feature_map.setPrimaryMSRunPath([filepath.encode()])
@@ -518,15 +532,24 @@ def feature_detection_untargeted(filepath: str, experiment: oms.MSExperiment = N
     return feature_map
 
 
-def assign_feature_map_polarity(feature_maps:list) -> list:
+def assign_feature_maps_polarity(feature_maps:list, scan_polarity:str=None) -> list:
     """
     Assigns the polarity to a list of feature maps, depending on "pos"/"neg" in file name.
     """
     for fm in feature_maps:
-        if b"neg" in os.path.basename(fm.getMetaValue("spectra_data")[0]):
+        if scan_polarity:
+            fm.setMetaValue("scan_polarity", scan_polarity)
+        elif b"neg" in os.path.basename(fm.getMetaValue("spectra_data")[0]):
             fm.setMetaValue("scan_polarity", "negative")
         elif b"pos" in os.path.basename(fm.getMetaValue("spectra_data")[0]):
             fm.setMetaValue("scan_polarity", "positive")
+        for feature in fm:
+            if scan_polarity:
+                feature.setMetaValue("scan_polarity", scan_polarity)
+            elif b"neg" in os.path.basename(fm.getMetaValue("spectra_data")[0]):
+                feature.setMetaValue("scan_polarity", "negative")
+            elif b"pos" in os.path.basename(fm.getMetaValue("spectra_data")[0]):
+                feature.setMetaValue("scan_polarity", "positive")
     return feature_maps
 
 
@@ -584,6 +607,18 @@ def store_feature_maps(feature_maps: list, out_dir:str, ending:str) -> None:
         oms.FeatureXMLFile().store(os.path.join(out_dir, feature_map.getMetaValue("spectra_data")[0].decode()[:-len(ending)] + ".featureXML"),
                                    feature_map)
 
+def separate_feature_maps_pos_neg(feature_maps:list) -> list:
+    """
+    Separate the feature maps into positively and negatively charged feature maps.
+    """
+    positive_features = []
+    negative_features = []
+    for fm in feature_maps:
+        if fm.getMetaValue("scan_polarity") == "positive":
+            positive_features.append(fm)
+        elif fm.getMetaValue("scan_polarity") == "negative":
+            negative_features.append(fm)
+    return [positive_features, negative_features]
 
 def consensus_features_linking(feature_maps: list, feature_grouper:str="QT") -> oms.ConsensusMap:
     if feature_grouper == "KD":
@@ -616,6 +651,8 @@ def untargeted_feature_detection(filepath: str,
                                  feature_filepath: str = None,
                                  mass_error_ppm: float = 5.0,
                                  noise_threshold_int: float = 3000.0,
+                                 charge_lower_bound:int=1,
+                                 charge_upper_bound:int=3,
                                  width_filtering: str = "fixed",
                                  isotope_filtering_model="none",
                                  remove_single_traces="true",
@@ -641,8 +678,15 @@ def untargeted_feature_detection(filepath: str,
     mass_traces_deconvol = elution_peak_detection(mass_traces, width_filtering)
 
     # Feature finding
-    feature_map = feature_detection_untargeted(filepath, experiment, mass_traces_deconvol, isotope_filtering_model,
-                                      remove_single_traces, mz_scoring_by_elements, report_convex_hulls)
+    feature_map = feature_detection_untargeted(filepath=filepath,
+                                               experiment=experiment,
+                                               mass_traces_deconvol=mass_traces_deconvol,
+                                               isotope_filtering_model=isotope_filtering_model,
+                                               charge_lower_bound=charge_lower_bound,
+                                               charge_upper_bound=charge_upper_bound,
+                                               remove_single_traces=remove_single_traces, 
+                                               mz_scoring_by_elements=mz_scoring_by_elements, 
+                                               report_convex_hulls=report_convex_hulls)
 
     if feature_filepath:
         oms.FeatureXMLFile().store(feature_filepath, feature_map)
@@ -652,6 +696,8 @@ def untargeted_feature_detection(filepath: str,
 def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mzML",
                                     mass_error_ppm:float=10.0,
                                     noise_threshold_int:float=1000.0,
+                                    charge_lower_bound:int=1,
+                                    charge_upper_bound:int=3,
                                     width_filtering:str="fixed",
                                     isotope_filtering_model:str="none",
                                     remove_single_traces:str="true",
@@ -669,6 +715,7 @@ def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mz
             feature_map = untargeted_feature_detection(filepath=experiment_file, experiment=None,
                                                         feature_filepath=feature_file,
                                                         mass_error_ppm=mass_error_ppm, noise_threshold_int=noise_threshold_int,
+                                                        charge_lower_bound=charge_lower_bound, charge_upper_bound=charge_upper_bound, 
                                                         width_filtering=width_filtering, isotope_filtering_model=isotope_filtering_model,
                                                         remove_single_traces=remove_single_traces, mz_scoring_by_elements=mz_scoring_by_elements,
                                                         report_convex_hulls=report_convex_hulls,
@@ -735,7 +782,7 @@ def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compo
 
 ### Label assigning
 # Accurate Mass
-def accurate_mass_search(consensus_map:oms.ConsensusMap, tmp_dir:str,
+def accurate_mass_search(consensus_map:oms.ConsensusMap, database_dir:str, tmp_dir:str,
                          positive_adducts_file:str, negative_adducts_file:str, 
                          HMDBMapping_file:str, HMDB2StructMapping_file:str,
                          ionization_mode:str="auto") -> pd.DataFrame:
@@ -748,10 +795,10 @@ def accurate_mass_search(consensus_map:oms.ConsensusMap, tmp_dir:str,
 
     ams_params = ams.getParameters()
     ams_params.setValue( "ionization_mode", ionization_mode)
-    ams_params.setValue( "positive_adducts", os.path.join(base_path, positive_adducts_file) )
-    ams_params.setValue( "negative_adducts", os.path.join(base_path, negative_adducts_file) )
-    ams_params.setValue( "db:mapping", [os.path.join(base_path, HMDBMapping_file)] )
-    ams_params.setValue( "db:struct", [os.path.join(base_path, HMDB2StructMapping_file)] )
+    ams_params.setValue( "positive_adducts", os.path.join(database_dir, positive_adducts_file) )
+    ams_params.setValue( "negative_adducts", os.path.join(database_dir, negative_adducts_file) )
+    ams_params.setValue( "db:mapping", [os.path.join(database_dir, HMDBMapping_file)] )
+    ams_params.setValue( "db:struct", [os.path.join(database_dir, HMDB2StructMapping_file)] )
     ams.setParameters(ams_params)
 
     mztab = oms.MzTab()

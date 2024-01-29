@@ -32,12 +32,13 @@ def build_directory(dir_path:str) -> None:
     if not os.path.isdir(os.path.join(os.getcwd(), dir_path)):
         os.mkdir(os.path.join(os.getcwd(), dir_path))
 
-def clean_dir(dir_path:str, subfolder:str) -> str: 
-    cleaned_dir = os.path.join(dir_path, subfolder)
-    if os.path.exists(cleaned_dir):
-        shutil.rmtree(cleaned_dir)
-    os.mkdir(cleaned_dir)
-    return cleaned_dir
+def clean_dir(dir_path:str, subfolder:str=None) -> str: 
+    if subfolder:
+        dir_path = os.path.join(dir_path, subfolder)
+    if os.path.exists(dir_path):
+        shutil.rmtree(dir_path)
+    os.mkdir(dir_path)
+    return dir_path
 
 
 ### FILES ###
@@ -276,19 +277,19 @@ def centroid_experiment(filepath:str, experiment: oms.MSExperiment = None, deepc
     return centroid_exp
 
 
-def centroid_batch(run_dir:str, file_ending:str=".mzML") -> str:
+def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML") -> str:
     """
     Centroids a batch of experiments, extracted from files in a given directory with a given file ending (i.e. .mzML or .mzXML).
     Returns the new directors as path/centroids.
     """
-    cleaned_dir = clean_dir(run_dir, "centroids")
+    cleaned_dir = os.path.normpath( clean_dir(run_dir, "centroids") )
 
-    for file in os.listdir(run_dir):
+    for file in os.listdir(in_dir):
         if file.endswith(file_ending):
-            centroided_exp = centroid_experiment(os.path.join(run_dir, file))
+            centroided_exp = centroid_experiment(os.path.join(in_dir, file))
             oms.MzMLFile().store(os.path.join(cleaned_dir, file), centroided_exp)
 
-    return os.path.normpath(os.path.join(run_dir, "centroids"))
+    return cleaned_dir
 
 
 # Merging
@@ -668,7 +669,7 @@ def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compo
 
 ### Label assigning
 # Accurate Mass
-def accurate_mass_search(base_path:str, tmp_dir:str,
+def accurate_mass_search(consensus_map:oms.ConsensusMap, base_path:str, tmp_dir:str,
                          positive_adducts_file:str, negative_adducts_file:str, 
                          HMDBMapping_file:str, HMDB2StructMapping_file:str,
                          ionization_mode:str="positive") -> pd.DataFrame:

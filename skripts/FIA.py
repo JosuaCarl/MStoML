@@ -166,8 +166,8 @@ def join_df_by(df: pd.DataFrame, joiner: str, combiner: str) -> pd.DataFrame:
     comb = comb.set_index(combiner)
     return comb
 
-
-def consensus_map_df_to_id_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.DataFrame, result_dir:str) -> pd.DataFrame:
+# Annotation
+def anntotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.DataFrame, result_dir:str) -> pd.DataFrame:
     clean_dir(result_dir)
     id_df = consensus_map_df
 
@@ -207,6 +207,17 @@ def store_experiment(filepath:str, experiment: oms.MSExperiment) -> None:
     else:
         oms.MzMLFile().store(filepath, experiment)
 
+# Printing
+
+def print_params(p):
+    """
+    Print all parameters
+    """
+    if p.size():
+        for i in p.keys():
+            print( "Param:", i, "Value:", p[i], "Description:", p.getDescription(i) )
+    else:
+        print("no data available")
 
 
 ### DATA TRANSFORMATION ###
@@ -489,7 +500,6 @@ def feature_detection_untargeted(filepath: str, experiment: oms.MSExperiment = N
 
     experiment = load_experiment(filepath, experiment)
 
-    # feature detection
     feature_map = oms.FeatureMap()  # output features
     chrom_out = []  # output chromatograms
     ffm = oms.FeatureFindingMetabo()
@@ -506,6 +516,18 @@ def feature_detection_untargeted(filepath: str, experiment: oms.MSExperiment = N
     feature_map.setPrimaryMSRunPath([filepath.encode()])
 
     return feature_map
+
+
+def assign_feature_map_polarity(feature_maps:list) -> list:
+    """
+    Assigns the polarity to a list of feature maps, depending on "pos"/"neg" in file name.
+    """
+    for fm in feature_maps:
+        if b"neg" in os.path.basename(fm.getMetaValue("spectra_data")[0]):
+            fm.setMetaValue("scan_polarity", "negative")
+        elif b"pos" in os.path.basename(fm.getMetaValue("spectra_data")[0]):
+            fm.setMetaValue("scan_polarity", "positive")
+    return feature_maps
 
 
 def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,max_mz_difference:float=10.0, mz_unit:str="ppm" ) -> list:
@@ -541,13 +563,12 @@ def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,ma
 
 
 def detect_adducts(feature_maps: list, potential_adducts:list=None) -> list:
-    if not potential_adducts:
-        potential_adducts = [b"H:+:0.4", b"Na:+:0.2", b"NH4:+:0.2", b"H-1O-1:+:0.1", b"H-3O-2:+:0.1"]
     feature_maps_adducts = []
     for feature_map in feature_maps:
         mfd = oms.MetaboliteFeatureDeconvolution()
         mdf_par = mfd.getDefaults()
-        mdf_par.setValue("potential_adducts", potential_adducts)
+        if potential_adducts:
+            mdf_par.setValue("potential_adducts", potential_adducts)
         mfd.setParameters(mdf_par)
         feature_map_adduct = oms.FeatureMap()
         mfd.compute(feature_map, feature_map_adduct, oms.ConsensusMap(), oms.ConsensusMap())
@@ -611,7 +632,6 @@ def untargeted_feature_detection(filepath: str,
     return
     """
     experiment = load_experiment(filepath, experiment)
-
     experiment.sortSpectra(True)
 
     # Mass trace detection
@@ -629,7 +649,7 @@ def untargeted_feature_detection(filepath: str,
 
     return feature_map
 
-def untargeted_features_detection(run_dir:str, file_ending:str=".mzML",
+def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mzML",
                                     mass_error_ppm:float=10.0,
                                     noise_threshold_int:float=1000.0,
                                     width_filtering:str="fixed",
@@ -642,9 +662,9 @@ def untargeted_features_detection(run_dir:str, file_ending:str=".mzML",
     feature_maps = []
     feature_folder = clean_dir(run_dir, "features")
 
-    for file in os.listdir(run_dir):
+    for file in os.listdir(in_dir):
         if file.endswith(file_ending):
-            experiment_file = os.path.join(run_dir, file)
+            experiment_file = os.path.join(in_dir, file)
             feature_file = os.path.join(feature_folder, f"{file[:-len(file_ending)]}.featureXML")
             feature_map = untargeted_feature_detection(filepath=experiment_file, experiment=None,
                                                         feature_filepath=feature_file,
@@ -715,14 +735,14 @@ def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compo
 
 ### Label assigning
 # Accurate Mass
-def accurate_mass_search(consensus_map:oms.ConsensusMap, base_path:str, tmp_dir:str,
+def accurate_mass_search(consensus_map:oms.ConsensusMap, tmp_dir:str,
                          positive_adducts_file:str, negative_adducts_file:str, 
                          HMDBMapping_file:str, HMDB2StructMapping_file:str,
-                         ionization_mode:str="positive") -> pd.DataFrame:
+                         ionization_mode:str="auto") -> pd.DataFrame:
     """
     Com
     """
-    tmp_dir = clean_dir(base_path, tmp_dir)
+    tmp_dir = clean_dir(tmp_dir)
 
     ams = oms.AccurateMassSearchEngine()
 
@@ -769,13 +789,14 @@ def filter_consensus_map_df(consensus_map_df:pd.DataFrame, max_missing_values:in
     Filter consensus map DataFrame according to min
     """
     to_drop = []
+    cm_df = deepcopy(consensus_map_df)
 
-    for i, row in consensus_map_df.iterrows():
+    for i, row in cm_df.iterrows():
         if row.isna().sum() > max_missing_values or row["quality"] < min_feature_quality:
             to_drop.append(i)
 
-    consensus_map_df.drop(index=consensus_map_df.index[to_drop], inplace=True)
-    return consensus_map_df
+    cm_df.drop(index=cm_df.index[to_drop], inplace=True)
+    return cm_df
 
 # Consensus map imputation
 def impute_consensus_map_df(consensus_map_df:pd.DataFrame, n_nearest_neighbours:int=2) -> pd.DataFrame:

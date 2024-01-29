@@ -517,25 +517,30 @@ def store_feature_maps(feature_maps: list):
                                    feature_map)
 
 
-def consensus_features(feature_maps: list) -> oms.ConsensusMap:
-    feature_grouper = oms.FeatureGroupingAlgorithmKD()
+def consensus_features_linking(feature_maps: list, feature_grouper:str="QT") -> oms.ConsensusMap:
+    if feature_grouper == "KD":
+        feature_grouper = oms.FeatureGroupingAlgorithmKD()
+    elif feature_grouper == "QT":
+        feature_grouper = oms.FeatureGroupingAlgorithmQT()
+    else:
+        raise ValueError(f"{feature_grouper} is not in list of implemented feature groupers. Choose from ['KD','QT'].")
 
     consensus_map = oms.ConsensusMap()
     file_descriptions = consensus_map.getColumnHeaders()
 
     for i, feature_map in enumerate(feature_maps):
         file_description = file_descriptions.get(i, oms.ColumnHeader())
-        file_description.filename = os.path.basename(
-            feature_map.getMetaValue("spectra_data")[0].decode()
-        )
+        file_description.filename = os.path.basename(feature_map.getMetaValue("spectra_data")[0].decode())
         file_description.size = feature_map.size()
+        file_description.unique_id = feature_map.getUniqueId()
+
         file_descriptions[i] = file_description
 
     feature_grouper.group(feature_maps, consensus_map)
     consensus_map.setColumnHeaders(file_descriptions)
-    consensus_map.setUniqueIds()
 
     return consensus_map
+    
 
 # Untargeted
 def untargeted_feature_detection(filepath: str,
@@ -569,13 +574,13 @@ def untargeted_feature_detection(filepath: str,
     mass_traces_deconvol = elution_peak_detection(mass_traces, width_filtering)
 
     # Feature finding
-    fm = feature_detection_untargeted(filepath, experiment, mass_traces_deconvol, isotope_filtering_model,
+    feature_map = feature_detection_untargeted(filepath, experiment, mass_traces_deconvol, isotope_filtering_model,
                                       remove_single_traces, mz_scoring_by_elements, report_convex_hulls)
 
     if feature_filepath:
-        oms.FeatureXMLFile().store(feature_filepath, fm)
+        oms.FeatureXMLFile().store(feature_filepath, feature_map)
 
-    return fm
+    return feature_map
 
 def untargeted_features_detection(run_dir:str, file_ending:str=".mzML",
                                     mass_error_ppm:float=10.0,
@@ -588,11 +593,11 @@ def untargeted_features_detection(run_dir:str, file_ending:str=".mzML",
                                     deepcopy:bool=False) -> list:
     
     feature_maps = []
+    feature_folder = clean_dir(run_dir, "features")
 
     for file in os.listdir(run_dir):
         if file.endswith(file_ending):
             experiment_file = os.path.join(run_dir, file)
-            feature_folder = clean_dir(run_dir, "features")
             feature_file = os.path.join(feature_folder, f"{file[:-len(file_ending)]}.featureXML")
             feature_map = untargeted_feature_detection(filepath=experiment_file, experiment=None,
                                                         feature_filepath=feature_file,
@@ -601,9 +606,9 @@ def untargeted_features_detection(run_dir:str, file_ending:str=".mzML",
                                                         remove_single_traces=remove_single_traces, mz_scoring_by_elements=mz_scoring_by_elements,
                                                         report_convex_hulls=report_convex_hulls,
                                                         deepcopy=deepcopy)
-
             feature_maps.append(feature_map)
-        return feature_maps
+
+    return feature_maps
 
         
 
@@ -656,14 +661,90 @@ def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compo
     
     feature_map = feature_detection_targeted("", metab_table, experiment, mz_window, rt_window, peak_width)
     print("Feature map created.")
-
-
     
     return feature_map
 
+
+
 ### Label assigning
+# Accurate Mass
+def accurate_mass_search(base_path:str, tmp_dir:str,
+                         positive_adducts_file:str, negative_adducts_file:str, 
+                         HMDBMapping_file:str, HMDB2StructMapping_file:str,
+                         ionization_mode:str="positive") -> pd.DataFrame:
+    """
+    Com
+    """
+    tmp_dir = clean_dir(base_path, tmp_dir)
+
+    ams = oms.AccurateMassSearchEngine()
+
+    ams_params = ams.getParameters()
+    ams_params.setValue( "ionization_mode", ionization_mode)
+    ams_params.setValue( "positive_adducts", os.path.join(base_path, positive_adducts_file) )
+    ams_params.setValue( "negative_adducts", os.path.join(base_path, negative_adducts_file) )
+    ams_params.setValue( "db:mapping", [os.path.join(base_path, HMDBMapping_file)] )
+    ams_params.setValue( "db:struct", [os.path.join(base_path, HMDB2StructMapping_file)] )
+    ams.setParameters(ams_params)
+
+    mztab = oms.MzTab()
+    ams.init()
+
+    ams.run(consensus_map, mztab)
+
+    oms.MzTabFile().store(os.path.join(tmp_dir, "ids.tsv"), mztab)
+
+    with open( os.path.join(tmp_dir, "ids_smsection.tsv"), "w" ) as outfile, open( os.path.join(tmp_dir, "ids.tsv"), "r" ) as infile:
+        for line in infile:
+            if line.lstrip().startswith("SM"):
+                outfile.write(line[4:])
+
+    ams_df = pd.read_csv(os.path.join(tmp_dir, "ids_smsection.tsv"), sep="\t")
+
+    return ams_df
+
 def annotate_feature_map(feature_map:oms.FeatureMap, metabolite_mass) -> oms.FeatureMap:
     return feature_map
+
+# Transformation to DataFrame
+def consensus_map_to_df(consensus_map:oms.ConsensusMap) -> pd.DataFrame:
+    intensities = consensus_map.get_intensity_df()
+    meta_data = consensus_map.get_metadata_df()[["RT", "mz", "quality"]]
+
+    cm_df = pd.concat([meta_data, intensities], axis=1)
+    cm_df.reset_index(drop=True, inplace=True)
+    return cm_df 
+
+# Consensus map filtering
+def filter_consensus_map_df(consensus_map_df:pd.DataFrame, max_missing_values:int=1,
+                            min_feature_quality:float=0.8) -> pd.DataFrame:
+    """
+    Filter consensus map DataFrame according to min
+    """
+    to_drop = []
+
+    for i, row in consensus_map_df.iterrows():
+        if row.isna().sum() > max_missing_values or row["quality"] < min_feature_quality:
+            to_drop.append(i)
+
+    consensus_map_df.drop(index=consensus_map_df.index[to_drop], inplace=True)
+    return consensus_map_df
+
+# Consensus map imputation
+def impute_consensus_map_df(consensus_map_df:pd.DataFrame, n_nearest_neighbours:int=2) -> pd.DataFrame:
+    """
+    Data imputation with KNN
+    """
+    if len(consensus_map_df.index) > 0:
+        imputer = Pipeline(
+            [
+                ( "imputer", KNNImputer(n_neighbors=n_nearest_neighbours)),
+                ( "pandarizer", FunctionTransformer( lambda x: pd.DataFrame(x, columns=consensus_map_df.columns) ) )
+            ]
+        )
+        consensus_map_df = imputer.fit_transform(consensus_map_df)
+    return consensus_map_df
+
 
 ### Plotting ###
 def quick_plot(spectrum: oms.MSSpectrum, xlim: [int | float, int | float] = None, plottype: str = "line") -> None:
@@ -747,4 +828,63 @@ def plot_feature_map_rt_alignment(ordered_feature_maps:list) -> None:
         loc="lower center",
     )
     # in some cases get file name elsewhere, e.g. fmap.getDataProcessing()[0].getMetaValue('parameter: out')
+    plt.show()
+
+def extract_feature_coord(feature:oms.Feature, mzs:array, retention_times:array, intensities:array, labels:array, sub_feat:oms.Feature) -> list:
+    if sub_feat:
+        for i, hull_point in enumerate(sub_feat.getConvexHulls()[0].getHullPoints()):
+            mzs = append(mzs, sub_feat.getMZ())
+            retention_times = append(retention_times, hull_point[0])
+            intensities = append(intensities, hull_point[1])
+            labels = append(labels, feature.getMetaValue('label'))
+    else:    
+        mzs = append(mzs, feature.getMZ())
+        retention_times = append(retention_times, feature.getRT())
+        intensities = append(intensities, feature.getIntensity())
+        labels = append(labels, feature.getMetaValue("label"))
+        
+
+    return [mzs, retention_times, intensities, labels]
+
+def plot_features_3D(feature_map:oms.FeatureMap, plottype:str=None) -> None:
+    """
+    Represents found features in 3D
+    """
+    mzs = empty([0])
+    retention_times = empty([0])
+    intensities = empty([0])
+    labels = empty([0])
+
+    for feature in feature_map:
+        if feature.getSubordinates():
+            for i, sub_feat in enumerate(feature.getSubordinates()):
+                mzs, retention_times, intensities, labels = extract_feature_coord(feature, mzs, retention_times, intensities, labels, sub_feat)
+        else:
+            mzs, retention_times, intensities, labels = extract_feature_coord(feature, mzs, retention_times, intensities, labels)
+
+    df = pd.DataFrame({"m/z": mzs, "rt": retention_times, "intensity": intensities, "labels": labels})
+    
+    if plottype == "surface":
+        fig = go.Figure(data=[go.Surface(z=df)])
+        fig.update_layout(title='3D plot of features', autosize=True,
+                    width=500, height=500,
+                    xaxis_title="m/z", yaxis_title="rt",
+                    margin=dict(l=65, r=50, b=65, t=90),
+                    scene = {
+                            "aspectratio": {"x": 1, "y": 1, "z": 0.2}
+                            })
+    elif plottype == "line":
+        fig = px.line_3d(data_frame=df, x="m/z", y="rt", z="intensity", color="labels")
+    elif plottype == "scatter":
+        fig = px.scatter_3d(data_frame=df, x="m/z", y="rt", z="intensity", color="labels", size_max=1)
+ 
+    if plottype:
+        fig.update_traces(showlegend=False)        
+        fig.show()
+    
+    return df
+
+def plot_id_df(id_df:pd.DataFrame) -> None:
+    fig = px.scatter(id_df, x="RT", y="mz", hover_name="identifications")
+    fig.update_layout(title="Consensus features with identifications (hover)")
     fig.show()

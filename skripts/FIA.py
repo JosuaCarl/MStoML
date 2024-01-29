@@ -177,8 +177,7 @@ def join_df_by(df: pd.DataFrame, joiner: str, combiner: str) -> pd.DataFrame:
     return comb
 
 # Annotation
-def anntotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.DataFrame, result_dir:str) -> pd.DataFrame:
-    clean_dir(result_dir)
+def annotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.DataFrame, result_path:str) -> pd.DataFrame:
     id_df = consensus_map_df
 
     id_df["identifications"] = pd.Series(["" for x in range(len(id_df.index))])
@@ -198,7 +197,7 @@ def anntotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.
     id_df["identifications"] = [
         item[:-1] if ";" in item else "" for item in id_df["identifications"]
     ]
-    id_df.to_csv(os.path.join(result_dir, "result.tsv"), sep="\t", index=False)
+    id_df.to_csv(result_path, sep="\t", index=False)
     return id_df
 
 

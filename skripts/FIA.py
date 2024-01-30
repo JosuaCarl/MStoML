@@ -554,7 +554,7 @@ def assign_feature_maps_polarity(feature_maps:list, scan_polarity:str=None) -> l
     return feature_maps
 
 
-def detect_adducts(feature_maps: list, potential_adducts:list=None) -> list:
+def detect_adducts(feature_maps: list, potential_adducts:list=None, verbose_level:int=0) -> list:
     """
     Assigning adducts to peaks
     """
@@ -565,6 +565,7 @@ def detect_adducts(feature_maps: list, potential_adducts:list=None) -> list:
         mdf_par = mfd.getDefaults()
         if potential_adducts:
             mdf_par.setValue("potential_adducts", potential_adducts)
+        mdf_par.setValue("verbose_level", verbose_level)
         mfd.setParameters(mdf_par)
         feature_map_adduct = oms.FeatureMap()
         mfd.compute(feature_map, feature_map_adduct, oms.ConsensusMap(), oms.ConsensusMap())

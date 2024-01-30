@@ -96,7 +96,8 @@ def read_feature_maps_XML(path_to_featureXMLs:str) -> list:
     Reads in feature Maps from file
     """
     feature_maps = []
-    for file in os.listdir(path_to_featureXMLs):
+    print("Reading in feature maps:")
+    for file in tqdm(os.listdir(path_to_featureXMLs)):
         fm = read_feature_map_XML(os.path.join(path_to_featureXMLs, file))
         feature_maps.append(fm)
     return feature_maps
@@ -535,7 +536,8 @@ def assign_feature_maps_polarity(feature_maps:list, scan_polarity:str=None) -> l
     """
     Assigns the polarity to a list of feature maps, depending on "pos"/"neg" in file name.
     """
-    for fm in feature_maps:
+    print("Assign polarity to feature maps:")
+    for fm in tqdm(feature_maps):
         if scan_polarity:
             fm.setMetaValue("scan_polarity", scan_polarity)
         elif b"neg" in os.path.basename(fm.getMetaValue("spectra_data")[0]):
@@ -552,12 +554,31 @@ def assign_feature_maps_polarity(feature_maps:list, scan_polarity:str=None) -> l
     return feature_maps
 
 
+def detect_adducts(feature_maps: list, potential_adducts:list=None) -> list:
+    """
+    Assigning adducts to peaks
+    """
+    feature_maps_adducts = []
+    print("Detecting adducts:")
+    for feature_map in tqdm(feature_maps):
+        mfd = oms.MetaboliteFeatureDeconvolution()
+        mdf_par = mfd.getDefaults()
+        if potential_adducts:
+            mdf_par.setValue("potential_adducts", potential_adducts)
+        mfd.setParameters(mdf_par)
+        feature_map_adduct = oms.FeatureMap()
+        mfd.compute(feature_map, feature_map_adduct, oms.ConsensusMap(), oms.ConsensusMap())
+        feature_maps_adducts.append(feature_map_adduct)
+
+    return feature_maps_adducts
+
 def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,max_mz_difference:float=10.0, mz_unit:str="ppm" ) -> list:
     """
     Use as reference for alignment, the file with the largest number of features
     Works well if you have a pooled QC for example.
     Returns the aligned map at the first position
     """
+    print("Searching feature map with larges number of features:")
     ref_index = argmax([fm.size() for fm in feature_maps])
     feature_maps.insert(0, feature_maps.pop(ref_index))
 
@@ -574,7 +595,8 @@ def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,ma
     aligner.setParameters(aligner_par)
     aligner.setReference(feature_maps[0])
 
-    for feature_map in feature_maps[1:]:
+    print("Aligning retention times:")
+    for feature_map in tqdm(feature_maps[1:]):
         trafo = oms.TransformationDescription()  # save the transformed data points
         aligner.align(feature_map, trafo)
         trafos[feature_map.getMetaValue("spectra_data")[0].decode()] = trafo
@@ -583,26 +605,11 @@ def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,ma
 
     return feature_maps
 
-
-def detect_adducts(feature_maps: list, potential_adducts:list=None) -> list:
-    feature_maps_adducts = []
-    for feature_map in feature_maps:
-        mfd = oms.MetaboliteFeatureDeconvolution()
-        mdf_par = mfd.getDefaults()
-        if potential_adducts:
-            mdf_par.setValue("potential_adducts", potential_adducts)
-        mfd.setParameters(mdf_par)
-        feature_map_adduct = oms.FeatureMap()
-        mfd.compute(feature_map, feature_map_adduct, oms.ConsensusMap(), oms.ConsensusMap())
-        feature_maps_adducts.append(feature_map_adduct)
-
-    return feature_maps_adducts
-
-
 def store_feature_maps(feature_maps: list, out_dir:str, ending:str) -> None:
     # Store the feature maps as featureXML files!
     clean_dir(out_dir)
-    for feature_map in feature_maps:
+    print("Storing feature maps:")
+    for feature_map in tqdm(feature_maps):
         oms.FeatureXMLFile().store(os.path.join(out_dir, feature_map.getMetaValue("spectra_data")[0].decode()[:-len(ending)] + ".featureXML"),
                                    feature_map)
 
@@ -612,7 +619,8 @@ def separate_feature_maps_pos_neg(feature_maps:list) -> list:
     """
     positive_features = []
     negative_features = []
-    for fm in feature_maps:
+    print("Separating feature maps:")
+    for fm in tqdm(feature_maps):
         if fm.getMetaValue("scan_polarity") == "positive":
             positive_features.append(fm)
         elif fm.getMetaValue("scan_polarity") == "negative":

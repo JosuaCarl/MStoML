@@ -1,5 +1,4 @@
 import os
-import csv
 import shutil
 import requests
 from copy import deepcopy
@@ -107,29 +106,23 @@ def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
     """
     Read tsv file and create list of FeatureFinderMetaboIdentCompound
     """
-    metaboTable = []
-    with open(path_to_library_file, "r") as tsv_file:
-        tsv_reader = csv.reader(tsv_file, delimiter="\t")
-        next(tsv_reader)  # skip header
-        for row in tsv_reader:
-            # extract mass range from metabolites
-            if float(row[2]) > mass_range[0] and float(row[2]) < mass_range[1]:
-                metaboTable.append(
+    metabo_table = []
+    df = pd.read_csv(path_to_library_file, quotechar='"', sep="\t")
+    df.apply(lambda row: 
+        metabo_table.append(
                     oms.FeatureFinderMetaboIdentCompound(
-                        row[0],  # name
-                        row[1],  # sum formula
-                        float(row[2]),  # mass
-                        [int(float(charge)) for charge in row[3].split(",")],  # charges
-                        [float(rt) for rt in row[4].split(",")],  # RTs
-                        [
-                            float(rt_range) for rt_range in row[5].split(",")
-                        ],  # RT ranges
-                        [
-                            float(iso_distrib) for iso_distrib in row[6].split(",")
-                        ],  # isotope distributions
+                        row["CompoundName"], row["SumFormula"], row["Mass"],
+                        list(map(int, row["Charge"][1:-1].split(","))), 
+                        list(map(float, row["RetentionTime"][1:-1].split(","))),
+                        list(map(float, row["RetentionTimeRange"][1:-1].split(","))),
+                        list(map(float, row["IsotopeDistribution"][1:-1].split(",")))
                     )
-                )
-    return metaboTable
+                ) 
+    , axis=1)
+
+    metabo_table = [m for m in metabo_table if in1d(m.getCharges(), [0]*len(m.getCharges()))]
+
+    return metabo_table
 
 
 # Copying
@@ -554,7 +547,8 @@ def assign_feature_maps_polarity(feature_maps:list, scan_polarity:str=None) -> l
     return feature_maps
 
 
-def detect_adducts(feature_maps: list, potential_adducts:list=None, verbose_level:int=0) -> list:
+def detect_adducts(feature_maps: list, potential_adducts:list=None, q_try:str="feature", mass_max_diff:float=10.0, unit:str="ppm", max_minority_bound:int=3,
+                   verbose_level:int=0) -> list:
     """
     Assigning adducts to peaks
     """
@@ -566,6 +560,10 @@ def detect_adducts(feature_maps: list, potential_adducts:list=None, verbose_leve
         if potential_adducts:
             mdf_par.setValue("potential_adducts", potential_adducts)
         mdf_par.setValue("verbose_level", verbose_level)
+        mdf_par.setValue("mass_max_diff", mass_max_diff)
+        mdf_par.setValue("unit", unit)
+        mdf_par.setValue("q_try", q_try)
+        mdf_par.setValue("max_minority_bound", max_minority_bound)
         mfd.setParameters(mdf_par)
         feature_map_adduct = oms.FeatureMap()
         mfd.compute(feature_map, feature_map_adduct, oms.ConsensusMap(), oms.ConsensusMap())
@@ -611,7 +609,7 @@ def store_feature_maps(feature_maps: list, out_dir:str, ending:str) -> None:
     clean_dir(out_dir)
     print("Storing feature maps:")
     for feature_map in tqdm(feature_maps):
-        oms.FeatureXMLFile().store(os.path.join(out_dir, feature_map.getMetaValue("spectra_data")[0].decode()[:-len(ending)] + ".featureXML"),
+        oms.FeatureXMLFile().store(os.path.join(out_dir, os.path.basename(feature_map.getMetaValue("spectra_data")[0].decode())[:-len(ending)] + ".featureXML"),
                                    feature_map)
 
 def separate_feature_maps_pos_neg(feature_maps:list) -> list:
@@ -736,7 +734,7 @@ def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mz
 
 ## Targeted
 def feature_detection_targeted(filepath: str, metab_table:list, experiment: oms.MSExperiment = None,
-                               mz_window:float=5.0, rt_window:float=20.0, n_isotopes:int=2, isotope_pmin:float=0.0,
+                               mz_window:float=5.0, rt_window:float=None, n_isotopes:int=2, isotope_pmin:float=0.0,
                                peak_width:float=60.0) -> oms.FeatureMap:
     """
     Feature detection with a given metabolic table
@@ -752,7 +750,8 @@ def feature_detection_targeted(filepath: str, metab_table:list, experiment: oms.
     ff.setMSData(experiment)
     ff_par = ff.getDefaults()
     ff_par.setValue(b"extract:mz_window",  mz_window)
-    ff_par.setValue(b"extract:rt_window",  rt_window)
+    if rt_window:
+        ff_par.setValue(b"extract:rt_window",  rt_window)
     ff_par.setValue(b'extract:n_isotopes', n_isotopes)
     ff_par.setValue(b'extract:isotope_pmin', isotope_pmin)
     ff_par.setValue(b"detect:peak_width",  peak_width)
@@ -767,8 +766,8 @@ def feature_detection_targeted(filepath: str, metab_table:list, experiment: oms.
     return feature_map
 
 def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compound_library_file:str, 
-                               mz_window:float=5.0, rt_window:float=20.0, peak_width:float=60.0,
-                               mass_cutoff:list=[50.0, 10000.0]) -> oms.FeatureMap:
+                               mz_window:float=5.0, rt_window:float=None, peak_width:float=60.0,
+                               mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
     """
     @mz_window: ppm
     @rt_window: s
@@ -789,7 +788,7 @@ def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compo
 
 def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compound_library_file:str, 
                                 mz_window:float=5.0, rt_window:float=20.0, peak_width:float=60.0,
-                                mass_cutoff:list=[50.0, 10000.0]) -> oms.FeatureMap:
+                                mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
     """
     @mz_window: ppm
     @rt_window: s
@@ -802,6 +801,7 @@ def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compo
     print("Metabolite table defined...")
 
     feature_folder = clean_dir(run_dir, "features_targeted")
+    feature_maps = []
     for file in os.listdir(in_dir):
         if file.endswith(file_ending):
             experiment_file = os.path.join(in_dir, file)
@@ -1039,7 +1039,7 @@ def plot_features_3D(feature_map:oms.FeatureMap, plottype:str=None) -> None:
     
     return df
 
-def plot_id_df(id_df:pd.DataFrame) -> None:
+def plot_id_df(id_df:pd.DataFrame, x:str="RT", y:str="mz") -> None:
     fig = px.scatter(id_df, x="RT", y="mz", hover_name="identifications")
     fig.update_layout(title="Consensus features with identifications (hover)")
     fig.show()

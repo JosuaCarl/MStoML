@@ -108,6 +108,9 @@ def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
     """
     metabo_table = []
     df = pd.read_csv(path_to_library_file, quotechar='"', sep="\t")
+    print(f"Read in {len(df.index)} metabolites.")
+    df = df.loc[[False in isin(list(map(int, row["Charge"][1:-1].split(","))), zeros(len(row["Charge"]))) for i, row in df.iterrows()]]
+    print(f"{len(df.index)} remaining after excluding zero charged metabolites.")
     df.apply(lambda row: 
         metabo_table.append(
                     oms.FeatureFinderMetaboIdentCompound(
@@ -119,9 +122,8 @@ def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
                     )
                 ) 
     , axis=1)
-
-    metabo_table = [m for m in metabo_table if in1d(m.getCharges(), [0]*len(m.getCharges()))]
-
+    print("Finished metabolite table.")
+  
     return metabo_table
 
 
@@ -222,8 +224,38 @@ def print_params(p):
     else:
         print("no data available")
 
+### Compound tables transformation ###
+def merge_compounds(path_to_tsv:str) -> pd.DataFrame:
+	"""
+	Joins entries with equal Mass and SumFormula.
+	Links CompoundName with: ;
+	Links rest with: ,
+	"""
+	df = pd.read_csv(path_to_tsv, sep="\t")
+	
+	aggregation_functions = {'CompoundName': lambda x: ";".join(x)}
+	groupies = [ df['Mass'], df["SumFormula"], df["Charge"], df["RetentionTime"], df["RetentionTimeRange"], df["IsotopeDistribution"] ]
+	df_new = df.groupby( groupies , as_index=False).aggregate(aggregation_functions)
 
-### DATA TRANSFORMATION ###
+
+	aggregation_functions = {'Charge': lambda x: x.to_list(),
+							 'RetentionTime': lambda x: x.to_list(),
+							 'RetentionTimeRange': lambda x: x.to_list(),
+							 'IsotopeDistribution': lambda x: x.to_list()}
+	groupies = [ df_new['Mass'], df_new["SumFormula"], df_new["CompoundName"]]
+	df_new = df_new.groupby( groupies , as_index=False).aggregate(aggregation_functions)
+
+	# Exclude inorganics
+	organic_elements = ["H", "C", "N", "P", "I", "Cu", "Mg", "Na", "K", "Zn", "S", "Ca", "Co", "Fe", "O"]
+	elements = ['Ac', 'Ag', 'Al', 'Am', 'Ar', 'As', 'At', 'Au', 'B', 'Ba', 'Be', 'Bh', 'Bi', 'Bk', 'Br', 'C', 'Ca', 'Cd', 'Ce', 'Cf', 'Cl', 'Cm', 'Cn', 'Co', 'Cr', 'Cs', 'Cu', 'Db', 'Ds', 'Dy', 'Er', 'Es', 'Eu', 'F', 'Fe', 'Fl', 'Fm', 'Fr', 'Ga', 'Gd', 'Ge', 'H', 'He', 'Hf', 'Hg', 'Ho', 'Hs', 'I', 'In', 'Ir', 'K', 'Kr', 'La', 'Li', 'Lr', 'Lu', 'Lv', 'Mc', 'Md', 'Mg', 'Mn', 'Mo', 'Mt', 'N', 'Na', 'Nb', 'Nd', 'Ne', 'Nh', 'Ni', 'No', 'Np', 'O', 'Og', 'Os', 'P', 'Pa', 'Pb', 'Pd', 'Pm', 'Po', 'Pr', 'Pt', 'Pu', 'Ra', 'Rb', 'Re', 'Rf', 'Rg', 'Rh', 'Rn', 'Ru', 'S', 'Sb', 'Sc', 'Se', 'Sg', 'Si', 'Sm', 'Sn', 'Sr', 'Ta', 'Tb', 'Tc', 'Te', 'Th', 'Ti', 'Tl', 'Tm', 'Ts', 'U', 'V', 'W', 'Xe', 'Y', 'Yb', 'Zn', 'Zr']
+	exclude_elements = [e for e in elements if e not in organic_elements]
+	for element in exclude_elements:
+		df_new = df_new.loc[~df_new["SumFormula"].str.contains(element)]
+
+	return df_new[["CompoundName", "SumFormula", "Mass", "Charge", "RetentionTime", "RetentionTimeRange", "IsotopeDistribution"]].reset_index(drop=True)
+
+
+### MS DATA TRANSFORMATION ###
 # Limiting
 def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upper_limit: int | float,
                    sample_size: int) -> oms.MSSpectrum:
@@ -323,7 +355,7 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML") -> str:
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "centroids") )
 
-    for file in os.listdir(in_dir):
+    for file in tqdm(os.listdir(in_dir)):
         if file.endswith(file_ending):
             centroided_exp = centroid_experiment(os.path.join(in_dir, file), deepcopy=deepcopy)
             oms.MzMLFile().store(os.path.join(cleaned_dir, f"{file.split('.')[0]}.mzML"), centroided_exp)
@@ -332,9 +364,11 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML") -> str:
 
 
 # Merging
-def merge_experiment(filepath:str, experiment: oms.MSExperiment = None, block_size: int = None, deepcopy: bool = False) -> oms.MSExperiment:
+def merge_experiment(filepath:str, experiment: oms.MSExperiment = None, block_size: int = None,
+                     mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", average_gaussian_cutoff:float=0.01,
+                     deepcopy: bool = False) -> oms.MSExperiment:
     """
-    Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
+    Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals)
     @experiment: pyopenms.MSExperiment
     @block_size: int
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
@@ -351,15 +385,20 @@ def merge_experiment(filepath:str, experiment: oms.MSExperiment = None, block_si
         merge_exp = experiment
     merge_exp.setSpectra(experiment.getSpectra())
     merger = oms.SpectraMerger()
-    if block_size:
-        param = merger.getParameters()
-        param.setValue("block_method:rt_block_size", block_size)
-        merger.setParameters(param)
+    param = merger.getParameters()
+    param.setValue("mz_binning_width", mz_binning_width)
+    param.setValue("mz_binning_width_unit", mz_binning_width_unit)
+    param.setValue("average_gaussian:cutoff", average_gaussian_cutoff)
+    param.setValue("block_method:rt_block_size", block_size)
+    
+    merger.setParameters(param)
     merger.mergeSpectraBlockWise(merge_exp)
     return merge_exp
 
 
-def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", block_size: int = None, deepcopy: bool = False) -> str:
+def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", block_size: int = None, 
+                mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", average_gaussian_cutoff:float=0.01,
+                deepcopy: bool = False) -> str:
     """
     Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
     @experiment: pyopenms.MSExperiment
@@ -369,9 +408,12 @@ def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", block_size: in
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "merged") )
 
-    for file in os.listdir(in_dir):
+    for file in tqdm(os.listdir(in_dir)):
         if file.endswith(file_ending):
-            merged_exp = merge_experiment(os.path.join(in_dir, file), block_size=block_size, deepcopy=deepcopy)
+            merged_exp = merge_experiment(os.path.join(in_dir, file), block_size=block_size, 
+                                          mz_binning_width=mz_binning_width, mz_binning_width_unit=mz_binning_width_unit,
+                                          average_gaussian_cutoff=average_gaussian_cutoff,
+                                          deepcopy=deepcopy)
             oms.MzMLFile().store(os.path.join(cleaned_dir, file), merged_exp)
 
     return cleaned_dir

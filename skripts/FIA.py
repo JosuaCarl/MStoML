@@ -613,7 +613,8 @@ def detect_adducts(feature_maps: list, potential_adducts:list=None, q_try:str="f
 
     return feature_maps_adducts
 
-def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,max_mz_difference:float=10.0, mz_unit:str="ppm" ) -> list:
+def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,max_mz_difference:float=10.0, mz_unit:str="ppm",
+                          superimposer_max_scaling:float=2.0 ) -> list:
     """
     Use as reference for alignment, the file with the largest number of features
     Works well if you have a pooled QC for example.
@@ -633,6 +634,8 @@ def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,ma
     aligner_par.setValue( "max_num_peaks_considered", max_num_peaks_considered )  # -1 = infinite
     aligner_par.setValue( "pairfinder:distance_MZ:max_difference", max_mz_difference )
     aligner_par.setValue( "pairfinder:distance_MZ:unit", "ppm" )
+    aligner_par.setValue( "superimposer:max_scaling", superimposer_max_scaling )
+    
     aligner.setParameters(aligner_par)
     aligner.setReference(feature_maps[0])
 
@@ -756,7 +759,7 @@ def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mz
     feature_maps = []
     feature_folder = clean_dir(run_dir, "features")
 
-    for file in os.listdir(in_dir):
+    for file in tqdm(os.listdir(in_dir)):
         if file.endswith(file_ending):
             experiment_file = os.path.join(in_dir, file)
             feature_file = os.path.join(feature_folder, f"{file[:-len(file_ending)]}.featureXML")
@@ -776,7 +779,7 @@ def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mz
 
 ## Targeted
 def feature_detection_targeted(filepath: str, metab_table:list, experiment: oms.MSExperiment = None,
-                               mz_window:float=5.0, rt_window:float=None, n_isotopes:int=2, isotope_pmin:float=0.0,
+                               mz_window:float=5.0, rt_window:float=None, n_isotopes:int=2, isotope_pmin:float=0.01,
                                peak_width:float=60.0) -> oms.FeatureMap:
     """
     Feature detection with a given metabolic table
@@ -808,8 +811,8 @@ def feature_detection_targeted(filepath: str, metab_table:list, experiment: oms.
     return feature_map
 
 def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compound_library_file:str, 
-                               mz_window:float=5.0, rt_window:float=None, peak_width:float=60.0,
-                               mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
+                               mz_window:float=5.0, rt_window:float=None, n_isotopes:int=2, isotope_pmin:float=0.01,
+                               peak_width:float=60.0, mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
     """
     @mz_window: ppm
     @rt_window: s
@@ -822,15 +825,18 @@ def targeted_feature_detection(filepath: str, experiment:oms.MSExperiment, compo
     metab_table = define_metabolite_table(compound_library_file, mass_range)
     print("Metabolite table defined...")
     
-    feature_map = feature_detection_targeted("", metab_table, experiment, mz_window, rt_window, peak_width)
+    feature_map = feature_detection_targeted("", metab_table=metab_table, experiment=experiment, 
+                                             mz_window=mz_window, rt_window=rt_window, peak_width=peak_width,
+                                             n_isotopes=n_isotopes, isotope_pmin=isotope_pmin,
+                                             mass_range=mass_range)
     print("Feature map created.")
     
     return feature_map
 
 
 def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compound_library_file:str, 
-                                mz_window:float=5.0, rt_window:float=20.0, peak_width:float=60.0,
-                                mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
+                                mz_window:float=5.0, rt_window:float=20.0, n_isotopes:int=2, isotope_pmin:float=0.01,
+                                peak_width:float=60.0, mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
     """
     @mz_window: ppm
     @rt_window: s
@@ -844,17 +850,13 @@ def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compo
 
     feature_folder = clean_dir(run_dir, "features_targeted")
     feature_maps = []
-    for file in os.listdir(in_dir):
+    for file in tqdm(os.listdir(in_dir)):
         if file.endswith(file_ending):
             experiment_file = os.path.join(in_dir, file)
             feature_file = os.path.join(feature_folder, f"{file[:-len(file_ending)]}.featureXML")
-            feature_map = feature_detection_targeted(filepath=experiment_file,
-                                                        metab_table=metab_table, 
-                                                        experiment=None,
-                                                        mz_window=mz_window,
-                                                        rt_window=rt_window,
-                                                        peak_width=peak_width)
-            print("Feature map created.")
+            feature_map = feature_detection_targeted(filepath=experiment_file, metab_table=metab_table, experiment=None,
+                                                     mz_window=mz_window, rt_window=rt_window, n_isotopes=n_isotopes,
+                                                     isotope_pmin=isotope_pmin, peak_width=peak_width)
             feature_maps.append(feature_map)
           
     return feature_maps

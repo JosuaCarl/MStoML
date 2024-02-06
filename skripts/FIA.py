@@ -537,7 +537,7 @@ def elution_peak_detection(mass_traces: list, width_filtering: str = "fixed") ->
 
 def feature_detection_untargeted(filepath: str, experiment: oms.MSExperiment = None,
                                  mass_traces_deconvol: list = None, isotope_filtering_model="none",
-                                 charge_lower_bound:int=1, charge_upper_bound:int=3, 
+                                 charge_lower_bound:int=1, charge_upper_bound:int=3, negative:str="false",
                                  remove_single_traces: str = "true", mz_scoring_by_elements: str = "false",
                                  report_convex_hulls: str = "true") -> oms.FeatureMap:
     """
@@ -554,6 +554,7 @@ def feature_detection_untargeted(filepath: str, experiment: oms.MSExperiment = N
     print(type(charge_lower_bound))
     ffm_par.setValue("charge_lower_bound", charge_lower_bound)
     ffm_par.setValue("charge_upper_bound", charge_upper_bound)
+    ffm_par.setValue("negative", negative)
     ffm_par.setValue("isotope_filtering_model", isotope_filtering_model)
     ffm_par.setValue("remove_single_traces", remove_single_traces)  # remove mass traces without satellite isotopic traces
     ffm_par.setValue("mz_scoring_by_elements", mz_scoring_by_elements)

@@ -3,7 +3,7 @@ import shutil
 import requests
 from copy import deepcopy
 from tqdm import tqdm
-from numpy import *
+import numpy as np
 import pandas as pd
 import pyopenms as oms
 import matplotlib.pyplot as plt
@@ -109,7 +109,7 @@ def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
     metabo_table = []
     df = pd.read_csv(path_to_library_file, quotechar='"', sep="\t")
     print(f"Read in {len(df.index)} metabolites.")
-    df = df.loc[[False in isin(list(map(int, row["Charge"][1:-1].split(","))), zeros(len(row["Charge"]))) for i, row in df.iterrows()]]
+    df = df.loc[[False in np.isin(list(map(int, row["Charge"][1:-1].split(","))), np.zeros(len(row["Charge"]))) for i, row in df.iterrows()]]
     print(f"{len(df.index)} remaining after excluding zero charged metabolites.")
     df.apply(lambda row: 
         metabo_table.append(
@@ -148,9 +148,9 @@ def mnx_to_oms(df: pd.DataFrame) -> pd.DataFrame:
                                  df["formula"].values,
                                  df["mass"].values,
                                  df["charge"].values,
-                                 ones(len(df.index)),
-                                 zeros(len(df.index)),
-                                 zeros(len(df.index)))),
+                                 np.ones(len(df.index)),
+                                 np.zeros(len(df.index)),
+                                 np.zeros(len(df.index)))),
                         columns=["CompoundName", "SumFormula", "Mass", "Charge", "RetentionTime", "RetentionTimeRange",
                                  "IsotopeDistribution"])
 
@@ -184,8 +184,8 @@ def annotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.D
         mass_search_df["description"],
     ):
         indices = id_df.index[
-            isclose(id_df["mz"], float(mz), atol=1e-05)
-            & isclose(id_df["RT"], float(rt), atol=1e-05)
+            np.isclose(id_df["mz"], float(mz), atol=1e-05)
+            & np.isclose(id_df["RT"], float(rt), atol=1e-05)
         ].tolist()
         for index in indices:
             if description != "null":
@@ -266,7 +266,7 @@ def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upp
     """
     mzs, intensities = spectrum.get_peaks()
 
-    lim = [searchsorted(mzs, mz_lower_limit, side='right'), searchsorted(mzs, mz_upper_limit, side='left')]
+    lim = [np.searchsorted(mzs, mz_lower_limit, side='right'), np.searchsorted(mzs, mz_upper_limit, side='left')]
 
     mzs = mzs[lim[0]:lim[1]]
     intensities = intensities[lim[0]:lim[1]]
@@ -274,7 +274,7 @@ def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upp
     idxs = range(len(mzs))
     new_spectrum = oms.MSSpectrum()
     if len(mzs) > sample_size:
-        idxs = random.choice(idxs, size=sample_size, replace=False)
+        idxs = np.random.choice(idxs, size=sample_size, replace=False)
     new_spectrum.set_peaks((mzs[idxs], intensities[idxs]))
 
     return new_spectrum
@@ -304,7 +304,7 @@ def limit_experiment(filepath:str, experiment: oms.MSExperiment = None, mz_lower
 
 
 # Smoothing
-def smooth_spectra(experiment: oms.MSExperiment, gaussian_width: float, deepcopy: bool = False) -> oms.MSExperiment:
+def smooth_spectra(filepath:str, experiment: oms.MSExperiment, gaussian_width: float, deepcopy: bool = False) -> oms.MSExperiment:
     """
     Apply a Gaussian filter to all spectra in an experiment
     @experiment: pyopenms.MSExperiment
@@ -622,7 +622,7 @@ def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,ma
     Returns the aligned map at the first position
     """
     print("Searching feature map with larges number of features:")
-    ref_index = argmax([fm.size() for fm in feature_maps])
+    ref_index = np.argmax([fm.size() for fm in feature_maps])
     feature_maps.insert(0, feature_maps.pop(ref_index))
 
 
@@ -997,7 +997,7 @@ def plot_feature_map_rt_alignment(ordered_feature_maps:list, legend:bool=False) 
     ax.scatter(
         [feature.getRT() for feature in ordered_feature_maps[0]],
         [feature.getMZ() for feature in ordered_feature_maps[0]],
-        alpha=asarray([feature.getIntensity() for feature in ordered_feature_maps[0]])
+        alpha=np.asarray([feature.getIntensity() for feature in ordered_feature_maps[0]])
         / max([feature.getIntensity() for feature in ordered_feature_maps[0]]),
     )
 
@@ -1005,7 +1005,7 @@ def plot_feature_map_rt_alignment(ordered_feature_maps:list, legend:bool=False) 
         ax.scatter(
             [feature.getMetaValue("original_RT") for feature in fm],
             [feature.getMZ() for feature in fm],
-            alpha=asarray([feature.getIntensity() for feature in fm])
+            alpha=np.asarray([feature.getIntensity() for feature in fm])
             / max([feature.getIntensity() for feature in fm]),
         )
 
@@ -1017,7 +1017,7 @@ def plot_feature_map_rt_alignment(ordered_feature_maps:list, legend:bool=False) 
         ax.scatter(
             [feature.getRT() for feature in fm],
             [feature.getMZ() for feature in fm],
-            alpha=asarray([feature.getIntensity() for feature in fm])
+            alpha=np.asarray([feature.getIntensity() for feature in fm])
             / max([feature.getIntensity() for feature in fm]),
         )
 
@@ -1030,18 +1030,18 @@ def plot_feature_map_rt_alignment(ordered_feature_maps:list, legend:bool=False) 
         
     plt.show()
 
-def extract_feature_coord(feature:oms.Feature, mzs:array, retention_times:array, intensities:array, labels:array, sub_feat:oms.Feature) -> list:
+def extract_feature_coord(feature:oms.Feature, mzs:np.array, retention_times:np.array, intensities:np.array, labels:np.array, sub_feat:oms.Feature) -> list:
     if sub_feat:
         for i, hull_point in enumerate(sub_feat.getConvexHulls()[0].getHullPoints()):
-            mzs = append(mzs, sub_feat.getMZ())
-            retention_times = append(retention_times, hull_point[0])
-            intensities = append(intensities, hull_point[1])
-            labels = append(labels, feature.getMetaValue('label'))
+            mzs = np.append(mzs, sub_feat.getMZ())
+            retention_times = np.append(retention_times, hull_point[0])
+            intensities = np.append(intensities, hull_point[1])
+            labels = np.append(labels, feature.getMetaValue('label'))
     else:    
-        mzs = append(mzs, feature.getMZ())
-        retention_times = append(retention_times, feature.getRT())
-        intensities = append(intensities, feature.getIntensity())
-        labels = append(labels, feature.getMetaValue("label"))
+        mzs = np.append(mzs, feature.getMZ())
+        retention_times = np.append(retention_times, feature.getRT())
+        intensities = np.append(intensities, feature.getIntensity())
+        labels = np.append(labels, feature.getMetaValue("label"))
         
 
     return [mzs, retention_times, intensities, labels]
@@ -1050,10 +1050,10 @@ def plot_features_3D(feature_map:oms.FeatureMap, plottype:str=None) -> None:
     """
     Represents found features in 3D
     """
-    mzs = empty([0])
-    retention_times = empty([0])
-    intensities = empty([0])
-    labels = empty([0])
+    mzs = np.empty([0])
+    retention_times = np.empty([0])
+    intensities = np.empty([0])
+    labels = np.empty([0])
 
     for feature in feature_map:
         if feature.getSubordinates():

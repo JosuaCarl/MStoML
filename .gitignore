@@ -4,7 +4,12 @@ databases/
 reports/
 runs/
 .idea/
-skripts/FIA_data_analysis/
+skripts/FIA/App2_FIAexplorer_V2_1/
+skripts/FIA/Step 1 Load/
+skripts/FIA/Z_fia_allions/
+skripts/FIA/Z_fia_annotate/
+skripts/KNIME/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

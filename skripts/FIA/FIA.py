@@ -499,24 +499,53 @@ def deisotope_experiment(experiment: Union[oms.MSExperiment, str], fragment_tole
 
 ### Feature detection ###
 def mass_trace_detection(experiment: Union[oms.MSExperiment, str],
-                         mass_error_ppm: float = 10.0, noise_threshold_int: float = 3000.0) -> list:
+                         mass_error_ppm: float = 10.0, noise_threshold_int: float = 1000.0, reestimate_mt_sd:str="true",
+                         quant_method:str="median", trace_termination_criterion:str="outlier", trace_termination_outliers:int=3,
+                         min_trace_length:float=5.0, max_trace_length:float=-1.0) -> list:
     """
     Mass trace detection
     """
     experiment = load_experiment(experiment)
     
-    mass_traces = ([])
+    mass_traces = []
     mtd = oms.MassTraceDetection()
     mtd_par = mtd.getDefaults()
     mtd_par.setValue("mass_error_ppm", mass_error_ppm)
     mtd_par.setValue("noise_threshold_int", noise_threshold_int)
+    mtd_par.setValue("reestimate_mt_sd", reestimate_mt_sd)              # Dynamic re-estimation of m/z variance
+    mtd_par.setValue("quant_method", quant_method)                      # Method of quantification for mass traces. "median" is recommended for direct injection
+    mtd_par.setValue("trace_termination_criterion", trace_termination_criterion)
+    mtd_par.setValue("trace_termination_outliers", trace_termination_outliers) 
+    mtd_par.setValue("min_trace_length", min_trace_length)
+    mtd_par.setValue("max_trace_length", max_trace_length)
     mtd.setParameters(mtd_par)
     mtd.run(experiment, mass_traces, 0)
 
     return mass_traces
 
+def mass_trace_detection_batch(experiments: Optional[List[oms.MSExperiment|str]] = [], in_dir:str=".", file_ending:str=".mzML", 
+                               mass_error_ppm: float = 10.0, noise_threshold_int: float = 1000.0, reestimate_mt_sd:str="true",
+                               quant_method:str="median", trace_termination_criterion:str="outlier", trace_termination_outliers:int=3,
+                               min_trace_length:float=5.0, max_trace_length:float=-1.0) -> list:
+    """
+    Mass trace detection
+    """
+    mass_traces_all = []
+    if not experiments:
+        experiments = [os.path.join(in_dir, file) for file in os.listdir(in_dir) if file.endswith(file_ending)]
+    for experiment in tqdm(experiments):
+        mass_traces_all.append(
+            mass_trace_detection(experiment=experiment, mass_error_ppm=mass_error_ppm, noise_threshold_int=noise_threshold_int,
+                                reestimate_mt_sd=reestimate_mt_sd, quant_method=quant_method, trace_termination_criterion=trace_termination_criterion,
+                                trace_termination_outliers=trace_termination_outliers, min_trace_length=min_trace_length, max_trace_length=max_trace_length)
+        )
+            
+    return mass_traces_all
 
-def elution_peak_detection(mass_traces: list, width_filtering: str = "fixed") -> list:
+
+def elution_peak_detection(mass_traces: list, chrom_fwhm:float=10.0, chrom_peak_snr:float=2.0,
+                           width_filtering: str = "fixed", min_fwhm:float=1.0, max_fwhm:float=60.0,
+                           masstrace_snr_filtering:str="false") -> list:
     """
     Elution peak detection
     """
@@ -524,7 +553,12 @@ def elution_peak_detection(mass_traces: list, width_filtering: str = "fixed") ->
     epd = oms.ElutionPeakDetection()
     epd_par = epd.getDefaults()
     # The fixed setting filters out mass traces outside the [min_fwhm: 1.0, max_fwhm: 60.0] interval
-    epd_par.setValue("width_filtering", width_filtering)
+    epd_par.setValue("chrom_fwhm", chrom_fwhm)              # full-width-at-half-maximum of chromatographic peaks (s)
+    epd_par.setValue("chrom_peak_snr", chrom_peak_snr)     # Signal to noise minimum
+    epd_par.setValue("width_filtering", width_filtering)    # auto=excludes 5% on edges, fixed: uses min_fwhm and max_fwhm
+    epd_par.setValue("min_fwhm", min_fwhm)           # ignored when width_filtering="auto"
+    epd_par.setValue("max_fwhm", max_fwhm)           # ignored when width_filtering="auto"
+    epd_par.setValue("masstrace_snr_filtering", masstrace_snr_filtering)
     epd.setParameters(epd_par)
     epd.detectPeaks(mass_traces, mass_traces_deconvol)
     if epd.getParameters().getValue("width_filtering") == "auto":
@@ -534,6 +568,22 @@ def elution_peak_detection(mass_traces: list, width_filtering: str = "fixed") ->
         mass_traces_final = mass_traces_deconvol
 
     return mass_traces_final
+
+def elution_peak_detection_batch(mass_traces_all: list[list], chrom_fwhm:float=10.0, chrom_peak_snr:float=2.0,
+                                 width_filtering: str = "fixed", min_fwhm:float=1.0, max_fwhm:float=60.0,
+                                 masstrace_snr_filtering:str="false") -> list[list]:
+    """
+    Elution peak detection
+    """
+    mass_traces_all_final = []
+    for mass_traces in tqdm(mass_traces_all):
+        mass_traces_all_final.append(
+            elution_peak_detection(mass_traces=mass_traces, chrom_fwhm=chrom_fwhm, chrom_peak_snr=chrom_peak_snr,
+                                   width_filtering=width_filtering, min_fwhm=min_fwhm, max_fwhm=max_fwhm,
+                                   masstrace_snr_filtering=masstrace_snr_filtering)
+        )
+
+    return mass_traces_all_final
 
 
 def feature_detection_untargeted(experiment: Union[oms.MSExperiment, str],
@@ -727,7 +777,7 @@ def untargeted_feature_detection(experiment: Union[oms.MSExperiment, str],
     mass_traces = mass_trace_detection(experiment, mass_error_ppm, noise_threshold_int)
 
     # Elution Peak Detection
-    mass_traces_deconvol = elution_peak_detection(mass_traces, width_filtering)
+    mass_traces_deconvol = elution_peak_detection(mass_traces, width_filtering=width_filtering)
 
     # Feature finding
     feature_map = feature_detection_untargeted(experiment=experiment,

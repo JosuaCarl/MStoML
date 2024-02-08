@@ -62,14 +62,14 @@ def read_experiment(experiment_path: str) -> oms.MSExperiment:
     return experiment
 
 
-def load_experiment(experiment_path:str, experiment:Optional[oms.MSExperiment]=None) -> oms.MSExperiment:
+def load_experiment(experiment:Union[oms.MSExperiment, str]) -> oms.MSExperiment:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
-    if experiment:
+    if isinstance(experiment, oms.MSExperiment):
         return experiment
     else:
-        return read_experiment(experiment_path)
+        return read_experiment(experiment)
     
 
 def read_mnx(filepath: str) -> pd.DataFrame:
@@ -281,7 +281,7 @@ def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upp
     return new_spectrum
 
 
-def limit_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment]=None, mz_lower_limit: int | float=0, mz_upper_limit: int | float=10000,
+def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: int | float=0, mz_upper_limit: int | float=10000,
                      sample_size:int=100000, deepcopy: bool = False) -> oms.MSExperiment:
     """
     Limits the range of all spectra in an experiment to <mz_lower_limit> and <mz_upper_limit>. 
@@ -293,7 +293,7 @@ def limit_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment]
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     Returns: pyopenms.MSExperiment 
     """
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
 
     if deepcopy:
         lim_exp = copy_experiment(experiment)
@@ -305,7 +305,7 @@ def limit_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment]
 
 
 # Smoothing
-def smooth_spectra(experiment_path:str, experiment: oms.MSExperiment, gaussian_width: float, deepcopy: bool = False) -> oms.MSExperiment:
+def smooth_spectra(experiment: Union[oms.MSExperiment, str], gaussian_width: float, deepcopy: bool = False) -> oms.MSExperiment:
     """
     Apply a Gaussian filter to all spectra in an experiment
     @experiment: pyopenms.MSExperiment
@@ -313,7 +313,7 @@ def smooth_spectra(experiment_path:str, experiment: oms.MSExperiment, gaussian_w
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: oms.MSExperiment
     """
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
 
     if deepcopy:
         smooth_exp = copy_experiment(experiment)
@@ -329,14 +329,14 @@ def smooth_spectra(experiment_path:str, experiment: oms.MSExperiment, gaussian_w
 
 
 # Centroiding
-def centroid_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment] = None, deepcopy: bool = False) -> oms.MSExperiment:
+def centroid_experiment(experiment: Union[oms.MSExperiment, str], deepcopy: bool = False) -> oms.MSExperiment:
     """
     Reduce dataset to centroids
     @experiment: pyopenms.MSExperiment
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: 
     """
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
 
     accu_exp = oms.MSExperiment()
     oms.PeakPickerHiRes().pickExperiment(experiment, accu_exp, True)
@@ -365,7 +365,7 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", deepcopy:bo
 
 
 # Merging
-def merge_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment] = None, block_size: Optional[int] = None,
+def merge_experiment(experiment: Union[oms.MSExperiment, str], block_size: Optional[int] = None,
                      mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", average_gaussian_cutoff:float=0.01,
                      deepcopy: bool = False) -> oms.MSExperiment:
     """
@@ -375,7 +375,7 @@ def merge_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment]
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: 
     """
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
 
     if block_size is None:
         block_size = experiment.getNrSpectra()
@@ -420,7 +420,7 @@ def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", block_size: Op
     return cleaned_dir
 
 # Normalization
-def normalize_spectra(experiment_path:str, experiment: Optional[oms.MSExperiment] = None, normalization_method: str = "to_one",
+def normalize_spectra(experiment: Union[oms.MSExperiment, str], normalization_method: str = "to_one",
                       deepcopy: bool = False) -> oms.MSExperiment:
     """
     Normalizes spectra
@@ -428,7 +428,7 @@ def normalize_spectra(experiment_path:str, experiment: Optional[oms.MSExperiment
     @normalization_method: "to_TIC" | "to_one" 
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     """
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
 
     if deepcopy:
         norm_exp = copy_experiment(experiment)
@@ -474,7 +474,7 @@ def deisotope_spectrum(spectrum: oms.MSSpectrum, fragment_tolerance: float = 0.1
     return spectrum
 
 
-def deisotope_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment] = None, fragment_tolerance: float = 0.1, fragment_unit_ppm: bool = False,
+def deisotope_experiment(experiment: Union[oms.MSExperiment, str], fragment_tolerance: float = 0.1, fragment_unit_ppm: bool = False,
                          min_charge: int = 1, max_charge: int = 3,
                          keep_only_deisotoped: bool = True, min_isopeaks: int = 2, max_isopeaks: int = 10,
                          make_single_charged: bool = True, annotate_charge: bool = True,
@@ -482,7 +482,7 @@ def deisotope_experiment(experiment_path:str, experiment: Optional[oms.MSExperim
                          start_intensity_check: bool = False, add_up_intensity: bool = False,
                          deepcopy: bool = False):
 
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
 
     if deepcopy:
         deisotop_exp = copy_experiment(experiment)
@@ -498,12 +498,12 @@ def deisotope_experiment(experiment_path:str, experiment: Optional[oms.MSExperim
 
 
 ### Feature detection ###
-def mass_trace_detection(experiment_path: str, experiment: Optional[oms.MSExperiment] = None,
+def mass_trace_detection(experiment: Union[oms.MSExperiment, str],
                          mass_error_ppm: float = 10.0, noise_threshold_int: float = 3000.0) -> list:
     """
     Mass trace detection
     """
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
     
     mass_traces = ([])
     mtd = oms.MassTraceDetection()
@@ -536,7 +536,7 @@ def elution_peak_detection(mass_traces: list, width_filtering: str = "fixed") ->
     return mass_traces_final
 
 
-def feature_detection_untargeted(experiment_path: str, experiment: Optional[oms.MSExperiment] = None,
+def feature_detection_untargeted(experiment: Union[oms.MSExperiment, str],
                                  mass_traces_deconvol: list = [], isotope_filtering_model="none",
                                  charge_lower_bound:int=1, charge_upper_bound:int=3, negative:str="false",
                                  remove_single_traces: str = "true", mz_scoring_by_elements: str = "false",
@@ -544,12 +544,14 @@ def feature_detection_untargeted(experiment_path: str, experiment: Optional[oms.
     """
     Untargeted feature detection
     """
-
-    experiment = load_experiment(experiment_path, experiment)
-
     feature_map = oms.FeatureMap()  # output features
     chrom_out = []  # output chromatograms
     ffm = oms.FeatureFindingMetabo()
+
+    if isinstance(experiment, str):
+        feature_map.setPrimaryMSRunPath([experiment.encode()])
+
+    experiment = load_experiment(experiment)
 
     ffm_par = ffm.getDefaults()
     ffm_par.setValue("charge_lower_bound", charge_lower_bound)
@@ -563,7 +565,6 @@ def feature_detection_untargeted(experiment_path: str, experiment: Optional[oms.
 
     ffm.run(mass_traces_deconvol, feature_map, chrom_out)
     feature_map.setUniqueIds()  # Assigns a new, valid unique id per feature
-    feature_map.setPrimaryMSRunPath([experiment_path.encode()])
 
     return feature_map
 
@@ -698,8 +699,7 @@ def consensus_features_linking(feature_maps: list, feature_grouper_type:str="QT"
     
 
 # Untargeted
-def untargeted_feature_detection(experiment_path: str,
-                                 experiment: Optional[oms.MSExperiment] = None,
+def untargeted_feature_detection(experiment: Union[oms.MSExperiment, str],
                                  feature_filepath: Optional[str] = None,
                                  mass_error_ppm: float = 5.0,
                                  noise_threshold_int: float = 3000.0,
@@ -720,18 +720,17 @@ def untargeted_feature_detection(experiment_path: str,
     @deepcopy
     return
     """
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
     experiment.sortSpectra(True)
 
     # Mass trace detection
-    mass_traces = mass_trace_detection(experiment_path, experiment, mass_error_ppm, noise_threshold_int)
+    mass_traces = mass_trace_detection(experiment, mass_error_ppm, noise_threshold_int)
 
     # Elution Peak Detection
     mass_traces_deconvol = elution_peak_detection(mass_traces, width_filtering)
 
     # Feature finding
-    feature_map = feature_detection_untargeted(experiment_path=experiment_path,
-                                               experiment=experiment,
+    feature_map = feature_detection_untargeted(experiment=experiment,
                                                mass_traces_deconvol=mass_traces_deconvol,
                                                isotope_filtering_model=isotope_filtering_model,
                                                charge_lower_bound=charge_lower_bound,
@@ -764,7 +763,7 @@ def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mz
         if file.endswith(file_ending):
             experiment_file = os.path.join(in_dir, file)
             feature_file = os.path.join(feature_folder, f"{file[:-len(file_ending)]}.featureXML")
-            feature_map = untargeted_feature_detection(experiment_path=experiment_file, experiment=None,
+            feature_map = untargeted_feature_detection(experiment=experiment_file,
                                                         feature_filepath=feature_file,
                                                         mass_error_ppm=mass_error_ppm, noise_threshold_int=noise_threshold_int,
                                                         charge_lower_bound=charge_lower_bound, charge_upper_bound=charge_upper_bound, 
@@ -779,14 +778,14 @@ def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mz
         
 
 ## Targeted
-def feature_detection_targeted(experiment_path: str, metab_table:list, experiment: Optional[oms.MSExperiment] = None,
+def feature_detection_targeted(experiment: Union[oms.MSExperiment, str], metab_table:list, feature_filepath:Optional[str]=None,
                                mz_window:float=5.0, rt_window:Optional[float]=None, n_isotopes:int=2, isotope_pmin:float=0.01,
                                peak_width:float=60.0) -> oms.FeatureMap:
     """
     Feature detection with a given metabolic table
     """
 
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
 
     # FeatureMap to store results
     feature_map = oms.FeatureMap()
@@ -804,14 +803,19 @@ def feature_detection_targeted(experiment_path: str, metab_table:list, experimen
     ff.setParameters(ff_par)
     
     # run the FeatureFinderMetaboIdent with the metabo_table and mzML file path -> store results in fm
-    ff.run(metab_table, feature_map, experiment_path)
+    if isinstance(experiment, str):
+        ff.run(metab_table, feature_map, experiment)
+    else:
+        ff.run(metab_table, feature_map, "")
     
     feature_map.setUniqueIds()  # Assigns a new, valid unique id per feature
-    feature_map.setPrimaryMSRunPath([experiment_path.encode()])
+
+    if feature_filepath:
+        oms.FeatureXMLFile().store(feature_filepath, feature_map)
     
     return feature_map
 
-def targeted_feature_detection(experiment_path: str, experiment:oms.MSExperiment, compound_library_file:str, 
+def targeted_feature_detection(experiment: Union[oms.MSExperiment, str], compound_library_file:str,
                                mz_window:float=5.0, rt_window:Optional[float]=None, n_isotopes:int=2, isotope_pmin:float=0.01,
                                peak_width:float=60.0, mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
     """
@@ -820,13 +824,13 @@ def targeted_feature_detection(experiment_path: str, experiment:oms.MSExperiment
     @peak_width: s
     returns: pyopenms.FeatureMap
     """
-    experiment = load_experiment(experiment_path, experiment)
+    experiment = load_experiment(experiment)
     
     print("Defining metabolite table...")
     metab_table = define_metabolite_table(compound_library_file, mass_range)
     print("Metabolite table defined...")
     
-    feature_map = feature_detection_targeted("", metab_table=metab_table, experiment=experiment, 
+    feature_map = feature_detection_targeted(experiment=experiment, metab_table=metab_table, 
                                              mz_window=mz_window, rt_window=rt_window, peak_width=peak_width,
                                              n_isotopes=n_isotopes, isotope_pmin=isotope_pmin)
     print("Feature map created.")
@@ -853,8 +857,8 @@ def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compo
     for file in tqdm(os.listdir(in_dir)):
         if file.endswith(file_ending):
             experiment_file = os.path.join(in_dir, file)
-            feature_file = os.path.join(feature_folder, f"{file[:-len(file_ending)]}.featureXML")
-            feature_map = feature_detection_targeted(experiment_path=experiment_file, metab_table=metab_table, experiment=None,
+            feature_filepath = os.path.join(feature_folder, f"{file[:-len(file_ending)]}.featureXML")
+            feature_map = feature_detection_targeted(experiment=experiment_file, metab_table=metab_table, feature_filepath=feature_filepath,
                                                      mz_window=mz_window, rt_window=rt_window, n_isotopes=n_isotopes,
                                                      isotope_pmin=isotope_pmin, peak_width=peak_width)
             feature_maps.append(feature_map)

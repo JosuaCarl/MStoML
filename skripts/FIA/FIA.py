@@ -213,6 +213,23 @@ def store_experiment(experiment_path:str, experiment: oms.MSExperiment) -> None:
     else:
         oms.MzMLFile().store(experiment_path, experiment)
 
+def store_feature_maps(feature_maps: list, out_dir:str, names: Union[list[str], str]=[], file_ending:str=".mzML") -> None:
+    # Store the feature maps as featureXML files!
+    clean_dir(out_dir)
+    print("Storing feature maps:")
+    if isinstance(names, str):
+        names = [os.path.basename(file)[:-len(file_ending)] for file in os.listdir(names) if file.endswith(file_ending)]
+    for i, feature_map in enumerate(tqdm(feature_maps)):
+        if names:
+            name = names[i]
+        else:
+            if feature_map.getMetaValue("spectra_data"):
+                name = os.path.basename(feature_map.getMetaValue("spectra_data")[0].decode())[:-len(file_ending)]
+            else:
+                name = f"features_{i}"
+        oms.FeatureXMLFile().store(os.path.join(out_dir, name + ".featureXML"), feature_map)
+
+
 # Printing
 
 def print_params(p):
@@ -741,14 +758,6 @@ def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,ma
         transformer.transformRetentionTimes(feature_map, trafo, True)
 
     return feature_maps
-
-def store_feature_maps(feature_maps: list, out_dir:str, file_ending:str) -> None:
-    # Store the feature maps as featureXML files!
-    clean_dir(out_dir)
-    print("Storing feature maps:")
-    for feature_map in tqdm(feature_maps):
-        oms.FeatureXMLFile().store(os.path.join(out_dir, os.path.basename(feature_map.getMetaValue("spectra_data")[0].decode())[:-len(file_ending)] + ".featureXML"),
-                                   feature_map)
 
 def separate_feature_maps_pos_neg(feature_maps:list) -> list:
     """

@@ -174,26 +174,19 @@ def join_df_by(df: pd.DataFrame, joiner: str, combiner: str) -> pd.DataFrame:
     return comb
 
 # Annotation
-def annotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.DataFrame, result_path:str) -> pd.DataFrame:
-    id_df = consensus_map_df
+def annotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.DataFrame, result_path:str=".",
+                              mz_tolerance:float=1e-05) -> pd.DataFrame:
+    id_df = consensus_map_df[["mz", "centroided_intensity"]].copy()
 
-    id_df["identifications"] = pd.Series(["" for x in range(len(id_df.index))])
+    id_df["identifier"] = pd.Series([""]*len(id_df.index))
 
-    for rt, mz, description in zip(
-        mass_search_df["retention_time"],
-        mass_search_df["exp_mass_to_charge"],
-        mass_search_df["description"],
-    ):
-        indices = id_df.index[
-            np.isclose(id_df["mz"], float(mz), atol=1e-05)
-            & np.isclose(id_df["RT"], float(rt), atol=1e-05)
-        ].tolist()
+    for mz, identifier in zip(mass_search_df["exp_mass_to_charge"],
+                              mass_search_df["identifier"],):
+        indices = id_df.index[np.isclose(id_df["mz"], float(mz), mz_tolerance)].tolist()
         for index in indices:
-            if description != "null":
-                id_df.loc[index, "identifications"] = str(id_df.loc[index, "identifications"]) + str(description) + ";"
-    id_df["identifications"] = [
-        item[:-1] if ";" in item else "" for item in id_df["identifications"]
-    ]
+            id_df.loc[index, "identifier"] += str(identifier) + ";"             # type: ignore
+    id_df["identifier"] = [item[:-1] if ";" in item else "" for item in id_df["identifier"]]
+
     id_df.to_csv(result_path, sep="\t", index=False)
     return id_df
 
@@ -621,8 +614,8 @@ def feature_detection_untargeted(experiment: Union[oms.MSExperiment, str],
     ffm = oms.FeatureFindingMetabo()
 
     if isinstance(experiment, str):
-        feature_map.setPrimaryMSRunPath([experiment.encode()])
-
+        name = experiment.encode()
+    
     experiment = load_experiment(experiment)
 
     ffm_par = ffm.getDefaults()
@@ -645,6 +638,7 @@ def feature_detection_untargeted(experiment: Union[oms.MSExperiment, str],
 
     ffm.run(mass_traces_deconvol, feature_map, chrom_out)
     feature_map.setUniqueIds()  # Assigns a new, valid unique id per feature
+    feature_map.setPrimaryMSRunPath([name])
 
     return feature_map
 
@@ -884,7 +878,10 @@ def feature_detection_targeted(experiment: Union[oms.MSExperiment, str], metab_t
     """
     Feature detection with a given metabolic table
     """
-
+    if isinstance(experiment, str):
+        name = experiment
+    else:
+        name = ""
     experiment = load_experiment(experiment)
 
     # FeatureMap to store results
@@ -903,10 +900,7 @@ def feature_detection_targeted(experiment: Union[oms.MSExperiment, str], metab_t
     ff.setParameters(ff_par)
     
     # run the FeatureFinderMetaboIdent with the metabo_table and mzML file path -> store results in fm
-    if isinstance(experiment, str):
-        ff.run(metab_table, feature_map, experiment)
-    else:
-        ff.run(metab_table, feature_map, "")
+    ff.run(metab_table, feature_map, name)
     
     feature_map.setUniqueIds()  # Assigns a new, valid unique id per feature
 
@@ -1018,16 +1012,16 @@ def consensus_map_to_df(consensus_map:oms.ConsensusMap) -> pd.DataFrame:
 
 # Consensus map filtering
 def filter_consensus_map_df(consensus_map_df:pd.DataFrame, max_missing_values:int=1,
-                            min_feature_quality:float=0.8) -> pd.DataFrame:
+                            min_feature_quality:Optional[float]=0.8) -> pd.DataFrame:
     """
     Filter consensus map DataFrame according to min
     """
     to_drop = []
     cm_df = deepcopy(consensus_map_df)
-
     for i, row in cm_df.iterrows():
-        if row.isna().sum() > max_missing_values or row["quality"] < min_feature_quality:
-            to_drop.append(i)
+        if row.isna().sum() > max_missing_values:
+            if min_feature_quality and row["quality"] < min_feature_quality:
+                    to_drop.append(i)
 
     cm_df.drop(index=cm_df.index[to_drop], inplace=True)
     return cm_df

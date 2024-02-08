@@ -506,7 +506,8 @@ def mass_trace_detection(experiment: Union[oms.MSExperiment, str],
     Mass trace detection
     """
     experiment = load_experiment(experiment)
-    
+    experiment.sortSpectra(True)
+
     mass_traces = []
     mtd = oms.MassTraceDetection()
     mtd_par = mtd.getDefaults()
@@ -523,7 +524,7 @@ def mass_trace_detection(experiment: Union[oms.MSExperiment, str],
 
     return mass_traces
 
-def mass_trace_detection_batch(experiments: Optional[List[oms.MSExperiment|str]] = [], in_dir:str=".", file_ending:str=".mzML", 
+def mass_trace_detection_batch(experiments: Union[List[oms.MSExperiment|str], str], file_ending:str=".mzML", 
                                mass_error_ppm: float = 10.0, noise_threshold_int: float = 1000.0, reestimate_mt_sd:str="true",
                                quant_method:str="median", trace_termination_criterion:str="outlier", trace_termination_outliers:int=3,
                                min_trace_length:float=5.0, max_trace_length:float=-1.0) -> list:
@@ -531,8 +532,8 @@ def mass_trace_detection_batch(experiments: Optional[List[oms.MSExperiment|str]]
     Mass trace detection
     """
     mass_traces_all = []
-    if not experiments:
-        experiments = [os.path.join(in_dir, file) for file in os.listdir(in_dir) if file.endswith(file_ending)]
+    if isinstance(experiments, str):
+            experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if file.endswith(file_ending)]
     for experiment in tqdm(experiments):
         mass_traces_all.append(
             mass_trace_detection(experiment=experiment, mass_error_ppm=mass_error_ppm, noise_threshold_int=noise_threshold_int,
@@ -587,10 +588,14 @@ def elution_peak_detection_batch(mass_traces_all: list[list], chrom_fwhm:float=1
 
 
 def feature_detection_untargeted(experiment: Union[oms.MSExperiment, str],
-                                 mass_traces_deconvol: list = [], isotope_filtering_model="none",
-                                 charge_lower_bound:int=1, charge_upper_bound:int=3, negative:str="false",
-                                 remove_single_traces: str = "true", mz_scoring_by_elements: str = "false",
-                                 report_convex_hulls: str = "true") -> oms.FeatureMap:
+                                 mass_traces_deconvol: list = [], isotope_filtering_model="metabolites (2% RMS)",
+                                 local_rt_range:float=3.0, local_mz_range:float=5.0, 
+                                 charge_lower_bound:int=1, charge_upper_bound:int=3,
+                                 chrom_fwhm:float=10.0, report_summed_ints:str="true",
+                                 enable_RT_filtering:str="false", mz_scoring_13C:str="false",
+                                 use_smoothed_intensities:str="false", report_convex_hulls: str = "true",
+                                 report_chromatograms:str="false", remove_single_traces: str = "true",
+                                 mz_scoring_by_elements: str = "false", elements:str="CHNOPS") -> oms.FeatureMap:
     """
     Untargeted feature detection
     """
@@ -604,19 +609,55 @@ def feature_detection_untargeted(experiment: Union[oms.MSExperiment, str],
     experiment = load_experiment(experiment)
 
     ffm_par = ffm.getDefaults()
+    ffm_par.setValue("local_rt_range", local_rt_range)          # rt range for coeluting mass traces (can be set low (3.0s ~ 2 frames/spectra), because only one peak is expected)
+    ffm_par.setValue("local_mz_range", local_mz_range)          # mz range for isotopic traces
     ffm_par.setValue("charge_lower_bound", charge_lower_bound)
     ffm_par.setValue("charge_upper_bound", charge_upper_bound)
-    ffm_par.setValue("negative", negative)
-    ffm_par.setValue("isotope_filtering_model", isotope_filtering_model)
-    ffm_par.setValue("remove_single_traces", remove_single_traces)  # remove mass traces without satellite isotopic traces
-    ffm_par.setValue("mz_scoring_by_elements", mz_scoring_by_elements)
+    ffm_par.setValue("chrom_fwhm", chrom_fwhm)                  # Set expected chromatographic width according to elution detection parameter
+    ffm_par.setValue("report_summed_ints", report_summed_ints)  # Sum intesity over all traces or use monoisotopic peak intensity ? (amplyfies signal with detected isotopes)
+    ffm_par.setValue("enable_RT_filtering", enable_RT_filtering) # Require RT overlap. 'false' for direct injection
+    ffm_par.setValue("isotope_filtering_model", isotope_filtering_model) # metabolites (2% RMS) = Support Vector Machine, with Root mean square deviation of 2% (for precise machines)
+    ffm_par.setValue("mz_scoring_13C", mz_scoring_13C)  # Disable for general metabolomics
+    ffm_par.setValue("use_smoothed_intensities", use_smoothed_intensities)  # Use Locally Weighted Scatterplot Smoothed intensities (useful, if intensity is mass-dependent (Orbitraps)) ?
     ffm_par.setValue("report_convex_hulls", report_convex_hulls)
+    ffm_par.setValue("report_chromatograms", report_chromatograms)  # 'false', was not performed in Flow-injection
+    ffm_par.setValue("remove_single_traces", remove_single_traces)  # 'false', there will be valuable single traces, because we have long traces, that may not match
+    ffm_par.setValue("mz_scoring_by_elements", mz_scoring_by_elements) # 'true' to use expected element peaks to detect isotopes 
+    ffm_par.setValue("elements", elements) # Elements, that are present in sample: "CHNOPS"  
     ffm.setParameters(ffm_par)
 
     ffm.run(mass_traces_deconvol, feature_map, chrom_out)
     feature_map.setUniqueIds()  # Assigns a new, valid unique id per feature
 
     return feature_map
+
+def feature_detection_untargeted_batch(experiments:Union[List[oms.MSExperiment|str], str], file_ending:str=".mzML",
+                                       mass_traces_deconvol_all: list[list] = [], isotope_filtering_model="metabolites (2% RMS)",
+                                       local_rt_range:float=3.0, local_mz_range:float=5.0, 
+                                       charge_lower_bound:int=1, charge_upper_bound:int=3,
+                                       chrom_fwhm:float=10.0, report_summed_ints:str="true",
+                                       enable_RT_filtering:str="false", mz_scoring_13C:str="false",
+                                       use_smoothed_intensities:str="false", report_convex_hulls: str = "true",
+                                       report_chromatograms:str="false", remove_single_traces: str = "true",
+                                       mz_scoring_by_elements: str = "false", elements:str="CHNOPS") -> list[oms.FeatureMap]:
+    feature_maps = []
+    if isinstance(experiments, str):
+        experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if file.endswith(file_ending)]
+    for i, experiment in enumerate(tqdm(experiments)):
+        feature_maps.append(
+            feature_detection_untargeted(experiment=experiment,
+                                         mass_traces_deconvol=mass_traces_deconvol_all[i], 
+                                         isotope_filtering_model=isotope_filtering_model,
+                                         local_rt_range=local_rt_range, local_mz_range=local_mz_range, 
+                                         charge_lower_bound=charge_lower_bound, charge_upper_bound=charge_upper_bound,
+                                         chrom_fwhm=chrom_fwhm, report_summed_ints=report_summed_ints,
+                                         enable_RT_filtering=enable_RT_filtering, mz_scoring_13C=mz_scoring_13C,
+                                         use_smoothed_intensities=use_smoothed_intensities, report_convex_hulls=report_convex_hulls,
+                                         report_chromatograms=report_chromatograms, remove_single_traces=remove_single_traces,
+                                         mz_scoring_by_elements=mz_scoring_by_elements, elements=elements)
+        )
+
+    return feature_maps
 
 
 def assign_feature_maps_polarity(feature_maps:list, scan_polarity:Optional[str]=None) -> list:
@@ -701,12 +742,12 @@ def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,ma
 
     return feature_maps
 
-def store_feature_maps(feature_maps: list, out_dir:str, ending:str) -> None:
+def store_feature_maps(feature_maps: list, out_dir:str, file_ending:str) -> None:
     # Store the feature maps as featureXML files!
     clean_dir(out_dir)
     print("Storing feature maps:")
     for feature_map in tqdm(feature_maps):
-        oms.FeatureXMLFile().store(os.path.join(out_dir, os.path.basename(feature_map.getMetaValue("spectra_data")[0].decode())[:-len(ending)] + ".featureXML"),
+        oms.FeatureXMLFile().store(os.path.join(out_dir, os.path.basename(feature_map.getMetaValue("spectra_data")[0].decode())[:-len(file_ending)] + ".featureXML"),
                                    feature_map)
 
 def separate_feature_maps_pos_neg(feature_maps:list) -> list:
@@ -775,10 +816,10 @@ def untargeted_feature_detection(experiment: Union[oms.MSExperiment, str],
 
     # Mass trace detection
     mass_traces = mass_trace_detection(experiment, mass_error_ppm, noise_threshold_int)
-
+     
     # Elution Peak Detection
     mass_traces_deconvol = elution_peak_detection(mass_traces, width_filtering=width_filtering)
-
+    
     # Feature finding
     feature_map = feature_detection_untargeted(experiment=experiment,
                                                mass_traces_deconvol=mass_traces_deconvol,

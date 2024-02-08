@@ -1,6 +1,7 @@
 import os
-from typing import overload, Any, List, Dict, Tuple, Set, Sequence, Union
+from typing import overload, Any, List, Dict, Tuple, Set, Sequence, Union, Optional
 import shutil
+from click import Option
 import requests
 from copy import deepcopy
 from tqdm import tqdm
@@ -32,7 +33,7 @@ def build_directory(dir_path:str) -> None:
     if not os.path.isdir(os.path.join(os.getcwd(), dir_path)):
         os.mkdir(os.path.join(os.getcwd(), dir_path))
 
-def clean_dir(dir_path:str, subfolder:str=None) -> str: 
+def clean_dir(dir_path:str, subfolder:Optional[str]=None) -> str: 
     if subfolder:
         dir_path = os.path.join(dir_path, subfolder)
     if os.path.exists(dir_path):
@@ -61,7 +62,7 @@ def read_experiment(experiment_path: str) -> oms.MSExperiment:
     return experiment
 
 
-def load_experiment(experiment_path:str, experiment:oms.MSExperiment=None) -> oms.MSExperiment:
+def load_experiment(experiment_path:str, experiment:Optional[oms.MSExperiment]=None) -> oms.MSExperiment:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
@@ -112,17 +113,16 @@ def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
     print(f"Read in {len(df.index)} metabolites.")
     df = df.loc[[False in np.isin(list(map(int, row["Charge"][1:-1].split(","))), np.zeros(len(row["Charge"]))) for i, row in df.iterrows()]]
     print(f"{len(df.index)} remaining after excluding zero charged metabolites.")
-    df.apply(lambda row: 
-             metabo_table.append(
-                        oms.FeatureFinderMetaboIdentCompound(
-                            row["CompoundName"], row["SumFormula"], row["Mass"],
-                            list(map(int, row["Charge"][1:-1].split(","))), 
-                            list(map(float, row["RetentionTime"][1:-1].split(","))),
-                            list(map(float, row["RetentionTimeRange"][1:-1].split(","))),
-                            list(map(float, row["IsotopeDistribution"][1:-1].split(",")))
-                        )
-                    ), 
-             axis=1)
+    for i, row in df.iterrows(): 
+        metabo_table.append(
+            oms.FeatureFinderMetaboIdentCompound(
+                row["CompoundName"], row["SumFormula"], row["Mass"],
+                list(map(int, row["Charge"][1:-1].split(","))), 
+                list(map(float, row["RetentionTime"][1:-1].split(","))),
+                list(map(float, row["RetentionTimeRange"][1:-1].split(","))),
+                list(map(float, row["IsotopeDistribution"][1:-1].split(",")))
+            )
+        )
     print("Finished metabolite table.")
   
     return metabo_table
@@ -190,7 +190,7 @@ def annotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.D
         ].tolist()
         for index in indices:
             if description != "null":
-                id_df.loc[index, "identifications"] += str(description) + ";"
+                id_df.loc[index, "identifications"] = str(id_df.loc[index, "identifications"]) + str(description) + ";"
     id_df["identifications"] = [
         item[:-1] if ";" in item else "" for item in id_df["identifications"]
     ]
@@ -265,7 +265,7 @@ def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upp
     Uniformly samples <sample_size> number of peaks from the spectrum (without replacement).
     Returns: openms spectrum
     """
-    mzs, intensities = spectrum.get_peaks()
+    mzs, intensities = spectrum.get_peaks() # type: ignore
 
     lim = [np.searchsorted(mzs, mz_lower_limit, side='right'), np.searchsorted(mzs, mz_upper_limit, side='left')]
 
@@ -276,12 +276,12 @@ def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upp
     new_spectrum = oms.MSSpectrum()
     if len(mzs) > sample_size:
         idxs = np.random.choice(idxs, size=sample_size, replace=False)
-    new_spectrum.set_peaks((mzs[idxs], intensities[idxs]))
+    new_spectrum.set_peaks((mzs[idxs], intensities[idxs])) # type: ignore
 
     return new_spectrum
 
 
-def limit_experiment(experiment_path:str, experiment: oms.MSExperiment=None, mz_lower_limit: int | float=0, mz_upper_limit: int | float=10000,
+def limit_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment]=None, mz_lower_limit: int | float=0, mz_upper_limit: int | float=10000,
                      sample_size:int=100000, deepcopy: bool = False) -> oms.MSExperiment:
     """
     Limits the range of all spectra in an experiment to <mz_lower_limit> and <mz_upper_limit>. 
@@ -329,7 +329,7 @@ def smooth_spectra(experiment_path:str, experiment: oms.MSExperiment, gaussian_w
 
 
 # Centroiding
-def centroid_experiment(experiment_path:str, experiment: oms.MSExperiment = None, deepcopy: bool = False) -> oms.MSExperiment:
+def centroid_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment] = None, deepcopy: bool = False) -> oms.MSExperiment:
     """
     Reduce dataset to centroids
     @experiment: pyopenms.MSExperiment
@@ -349,7 +349,7 @@ def centroid_experiment(experiment_path:str, experiment: oms.MSExperiment = None
     return centroid_exp
 
 
-def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML") -> str:
+def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", deepcopy:bool=False) -> str:
     """
     Centroids a batch of experiments, extracted from files in a given directory with a given file ending (i.e. .mzML or .mzXML).
     Returns the new directors as path/centroids.
@@ -365,7 +365,7 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML") -> str:
 
 
 # Merging
-def merge_experiment(experiment_path:str, experiment: oms.MSExperiment = None, block_size: int = None,
+def merge_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment] = None, block_size: Optional[int] = None,
                      mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", average_gaussian_cutoff:float=0.01,
                      deepcopy: bool = False) -> oms.MSExperiment:
     """
@@ -397,7 +397,7 @@ def merge_experiment(experiment_path:str, experiment: oms.MSExperiment = None, b
     return merge_exp
 
 
-def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", block_size: int = None, 
+def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", block_size: Optional[int] = None, 
                 mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", average_gaussian_cutoff:float=0.01,
                 deepcopy: bool = False) -> str:
     """
@@ -420,7 +420,7 @@ def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", block_size: in
     return cleaned_dir
 
 # Normalization
-def normalize_spectra(experiment_path:str, experiment: oms.MSExperiment = None, normalization_method: str = "to_one",
+def normalize_spectra(experiment_path:str, experiment: Optional[oms.MSExperiment] = None, normalization_method: str = "to_one",
                       deepcopy: bool = False) -> oms.MSExperiment:
     """
     Normalizes spectra
@@ -474,7 +474,7 @@ def deisotope_spectrum(spectrum: oms.MSSpectrum, fragment_tolerance: float = 0.1
     return spectrum
 
 
-def deisotope_experiment(experiment_path:str, experiment: oms.MSExperiment = None, fragment_tolerance: float = 0.1, fragment_unit_ppm: bool = False,
+def deisotope_experiment(experiment_path:str, experiment: Optional[oms.MSExperiment] = None, fragment_tolerance: float = 0.1, fragment_unit_ppm: bool = False,
                          min_charge: int = 1, max_charge: int = 3,
                          keep_only_deisotoped: bool = True, min_isopeaks: int = 2, max_isopeaks: int = 10,
                          make_single_charged: bool = True, annotate_charge: bool = True,
@@ -498,7 +498,7 @@ def deisotope_experiment(experiment_path:str, experiment: oms.MSExperiment = Non
 
 
 ### Feature detection ###
-def mass_trace_detection(experiment_path: str, experiment: oms.MSExperiment = None,
+def mass_trace_detection(experiment_path: str, experiment: Optional[oms.MSExperiment] = None,
                          mass_error_ppm: float = 10.0, noise_threshold_int: float = 3000.0) -> list:
     """
     Mass trace detection
@@ -507,7 +507,7 @@ def mass_trace_detection(experiment_path: str, experiment: oms.MSExperiment = No
     
     mass_traces = ([])
     mtd = oms.MassTraceDetection()
-    mtd_par = (mtd.getDefaults())
+    mtd_par = mtd.getDefaults()
     mtd_par.setValue("mass_error_ppm", mass_error_ppm)
     mtd_par.setValue("noise_threshold_int", noise_threshold_int)
     mtd.setParameters(mtd_par)
@@ -536,8 +536,8 @@ def elution_peak_detection(mass_traces: list, width_filtering: str = "fixed") ->
     return mass_traces_final
 
 
-def feature_detection_untargeted(experiment_path: str, experiment: oms.MSExperiment = None,
-                                 mass_traces_deconvol: list = None, isotope_filtering_model="none",
+def feature_detection_untargeted(experiment_path: str, experiment: Optional[oms.MSExperiment] = None,
+                                 mass_traces_deconvol: list = [], isotope_filtering_model="none",
                                  charge_lower_bound:int=1, charge_upper_bound:int=3, negative:str="false",
                                  remove_single_traces: str = "true", mz_scoring_by_elements: str = "false",
                                  report_convex_hulls: str = "true") -> oms.FeatureMap:
@@ -552,7 +552,6 @@ def feature_detection_untargeted(experiment_path: str, experiment: oms.MSExperim
     ffm = oms.FeatureFindingMetabo()
 
     ffm_par = ffm.getDefaults()
-    print(type(charge_lower_bound))
     ffm_par.setValue("charge_lower_bound", charge_lower_bound)
     ffm_par.setValue("charge_upper_bound", charge_upper_bound)
     ffm_par.setValue("negative", negative)
@@ -569,7 +568,7 @@ def feature_detection_untargeted(experiment_path: str, experiment: oms.MSExperim
     return feature_map
 
 
-def assign_feature_maps_polarity(feature_maps:list, scan_polarity:str=None) -> list:
+def assign_feature_maps_polarity(feature_maps:list, scan_polarity:Optional[str]=None) -> list:
     """
     Assigns the polarity to a list of feature maps, depending on "pos"/"neg" in file name.
     """
@@ -591,7 +590,7 @@ def assign_feature_maps_polarity(feature_maps:list, scan_polarity:str=None) -> l
     return feature_maps
 
 
-def detect_adducts(feature_maps: list, potential_adducts:Union[list[str], None]=None, q_try:str="feature", mass_max_diff:float=10.0, unit:str="ppm", max_minority_bound:int=3,
+def detect_adducts(feature_maps: list, potential_adducts:Sequence[str | bytes]=[], q_try:str="feature", mass_max_diff:float=10.0, unit:str="ppm", max_minority_bound:int=3,
                    verbose_level:int=0) -> list:
     """
     Assigning adducts to peaks
@@ -673,13 +672,13 @@ def separate_feature_maps_pos_neg(feature_maps:list) -> list:
             negative_features.append(fm)
     return [positive_features, negative_features]
 
-def consensus_features_linking(feature_maps: list, feature_grouper:str="QT") -> oms.ConsensusMap:
-    if feature_grouper == "KD":
+def consensus_features_linking(feature_maps: list, feature_grouper_type:str="QT") -> oms.ConsensusMap:
+    if feature_grouper_type == "KD":
         feature_grouper = oms.FeatureGroupingAlgorithmKD()
-    elif feature_grouper == "QT":
+    elif feature_grouper_type == "QT":
         feature_grouper = oms.FeatureGroupingAlgorithmQT()
     else:
-        raise ValueError(f"{feature_grouper} is not in list of implemented feature groupers. Choose from ['KD','QT'].")
+        raise ValueError(f"{feature_grouper_type} is not in list of implemented feature groupers. Choose from ['KD','QT'].")
 
     consensus_map = oms.ConsensusMap()
     file_descriptions = consensus_map.getColumnHeaders()
@@ -700,8 +699,8 @@ def consensus_features_linking(feature_maps: list, feature_grouper:str="QT") -> 
 
 # Untargeted
 def untargeted_feature_detection(experiment_path: str,
-                                 experiment: oms.MSExperiment = None,
-                                 feature_filepath: str = None,
+                                 experiment: Optional[oms.MSExperiment] = None,
+                                 feature_filepath: Optional[str] = None,
                                  mass_error_ppm: float = 5.0,
                                  noise_threshold_int: float = 3000.0,
                                  charge_lower_bound:int=1,
@@ -780,8 +779,8 @@ def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mz
         
 
 ## Targeted
-def feature_detection_targeted(experiment_path: str, metab_table:list, experiment: oms.MSExperiment = None,
-                               mz_window:float=5.0, rt_window:float=None, n_isotopes:int=2, isotope_pmin:float=0.01,
+def feature_detection_targeted(experiment_path: str, metab_table:list, experiment: Optional[oms.MSExperiment] = None,
+                               mz_window:float=5.0, rt_window:Optional[float]=None, n_isotopes:int=2, isotope_pmin:float=0.01,
                                peak_width:float=60.0) -> oms.FeatureMap:
     """
     Feature detection with a given metabolic table
@@ -813,7 +812,7 @@ def feature_detection_targeted(experiment_path: str, metab_table:list, experimen
     return feature_map
 
 def targeted_feature_detection(experiment_path: str, experiment:oms.MSExperiment, compound_library_file:str, 
-                               mz_window:float=5.0, rt_window:float=None, n_isotopes:int=2, isotope_pmin:float=0.01,
+                               mz_window:float=5.0, rt_window:Optional[float]=None, n_isotopes:int=2, isotope_pmin:float=0.01,
                                peak_width:float=60.0, mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
     """
     @mz_window: ppm
@@ -829,8 +828,7 @@ def targeted_feature_detection(experiment_path: str, experiment:oms.MSExperiment
     
     feature_map = feature_detection_targeted("", metab_table=metab_table, experiment=experiment, 
                                              mz_window=mz_window, rt_window=rt_window, peak_width=peak_width,
-                                             n_isotopes=n_isotopes, isotope_pmin=isotope_pmin,
-                                             mass_range=mass_range)
+                                             n_isotopes=n_isotopes, isotope_pmin=isotope_pmin)
     print("Feature map created.")
     
     return feature_map
@@ -838,7 +836,7 @@ def targeted_feature_detection(experiment_path: str, experiment:oms.MSExperiment
 
 def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compound_library_file:str, 
                                 mz_window:float=5.0, rt_window:float=20.0, n_isotopes:int=2, isotope_pmin:float=0.01,
-                                peak_width:float=60.0, mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
+                                peak_width:float=60.0, mass_range:list=[50.0, 10000.0]) -> list[oms.FeatureMap]:
     """
     @mz_window: ppm
     @rt_window: s
@@ -942,12 +940,12 @@ def impute_consensus_map_df(consensus_map_df:pd.DataFrame, n_nearest_neighbours:
                 ( "pandarizer", FunctionTransformer( lambda x: pd.DataFrame(x, columns=consensus_map_df.columns) ) )
             ]
         )
-        consensus_map_df = imputer.fit_transform(consensus_map_df)
+        consensus_map_df = pd.DataFrame(imputer.fit_transform(consensus_map_df))
     return consensus_map_df
 
 
 ### Plotting ###
-def quick_plot(spectrum: oms.MSSpectrum, xlim: [int | float, int | float] = None, plottype: str = "line") -> None:
+def quick_plot(spectrum: oms.MSSpectrum, xlim: List[int | float] = [0, 1000], plottype: str = "line") -> None:
     """
     Shows a plot of a spectrum between the defined borders
     @spectrum: pyopenms.MSSpectrum
@@ -956,11 +954,11 @@ def quick_plot(spectrum: oms.MSSpectrum, xlim: [int | float, int | float] = None
     returns: None, but displays plot
     """
     if plottype == "line":
-        ax = sns.lineplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1])
+        ax = sns.lineplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1]) # type: ignore
     elif plottype == "scatter":
-        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1])
+        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1])  # type: ignore
     else:
-        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1])
+        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1])  # type: ignore
 
     if xlim:
         ax.set_xlim(xlim[0], xlim[1])
@@ -1031,7 +1029,8 @@ def plot_feature_map_rt_alignment(ordered_feature_maps:list, legend:bool=False) 
         
     plt.show()
 
-def extract_feature_coord(feature:oms.Feature, mzs:np.array, retention_times:np.array, intensities:np.array, labels:np.array, sub_feat:oms.Feature) -> list:
+def extract_feature_coord(feature:oms.Feature, mzs:np.ndarray, retention_times:np.ndarray, intensities:np.ndarray,
+                          labels:np.ndarray, sub_feat:Optional[oms.Feature]=None) -> list:
     if sub_feat:
         for i, hull_point in enumerate(sub_feat.getConvexHulls()[0].getHullPoints()):
             mzs = np.append(mzs, sub_feat.getMZ())
@@ -1047,7 +1046,7 @@ def extract_feature_coord(feature:oms.Feature, mzs:np.array, retention_times:np.
 
     return [mzs, retention_times, intensities, labels]
 
-def plot_features_3D(feature_map:oms.FeatureMap, plottype:str=None) -> None:
+def plot_features_3D(feature_map:oms.FeatureMap, plottype:str="scatter") -> pd.DataFrame:
     """
     Represents found features in 3D
     """
@@ -1078,6 +1077,8 @@ def plot_features_3D(feature_map:oms.FeatureMap, plottype:str=None) -> None:
         fig = px.line_3d(data_frame=df, x="m/z", y="rt", z="intensity", color="labels")
     elif plottype == "scatter":
         fig = px.scatter_3d(data_frame=df, x="m/z", y="rt", z="intensity", color="labels", size_max=1)
+    else:
+        raise ValueError(f"{plottype} is not a valid type of plot. Use ['surface','scatter','line']")
  
     if plottype:
         fig.update_traces(showlegend=False)        

@@ -1042,6 +1042,23 @@ def impute_consensus_map_df(consensus_map_df:pd.DataFrame, n_nearest_neighbours:
     return consensus_map_df
 
 
+# Merging
+def find_close(df1, df1_col, df2, df2_col, tolerance=0.001):
+    for index, value in df1[df1_col].items():
+        indices = df2.index[np.isclose(df2[df2_col].values, value, atol=tolerance)]
+        s = pd.DataFrame(data={'idx1': index, 'idx2': indices.values})
+        yield s
+
+
+def merge_by_mz(id_df_1:pd.DataFrame, id_df_2:pd.DataFrame, mz_tolerance=1e-04):
+    id_df = id_df_1.copy()
+    df_idx = pd.concat(find_close(id_df_1, "mz", id_df_2, "mz", tolerance=mz_tolerance), ignore_index=True)
+    for i, row in df_idx.iterrows():
+        id_df.at[row["idx1"], "centroided_intensity"] = (id_df_1.at[row["idx1"], "centroided_intensity"] + id_df_2.at[row["idx2"], "centroided_intensity"]) / 2
+    not_merged = [i for i in id_df_2.index if i not in df_idx["idx2"]]
+    return pd.concat([id_df, id_df_2.loc[not_merged]]).reset_index(drop=True)
+
+
 ### Plotting ###
 def quick_plot(spectrum: oms.MSSpectrum, xlim: List[int | float] = [0, 1000], plottype: str = "line") -> None:
     """

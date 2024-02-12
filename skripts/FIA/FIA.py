@@ -384,7 +384,17 @@ def smooth_spectra(experiment: Union[oms.MSExperiment, str], gaussian_width: flo
 
 
 # Centroiding
-def centroid_experiment(experiment: Union[oms.MSExperiment, str], deepcopy: bool = False) -> oms.MSExperiment:
+# Centroiding
+def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str="Orbitrap",
+                        signal_to_noise:float=1.0, spacing_difference_gap:float=4.0,
+                        spacing_difference:float=1.5, missing:int=1, ms_levels:List[int]=[],
+                        report_FWHM:str="true", report_FWHM_unit:str="relative", max_intensity:float=-1,
+                        auto_max_stdev_factor:float=3.0, auto_max_percentile:int=95, auto_mode:int=0,
+                        win_len:float=200.0, bin_count:int=30, min_required_elements:int=10, 
+                        noise_for_empty_window:float=1e+20, write_log_messages:str="true",
+                        sn_bin_count:int=30, nr_iterations:int=5, sn_win_len:float=20.0,
+                        check_width_internally:str="false", ms1_only:str="true", clear_meta_data:str="false",
+                        deepcopy: bool = False) -> oms.MSExperiment:
     """
     Reduce dataset to centroids
     @experiment: pyopenms.MSExperiment
@@ -394,17 +404,59 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], deepcopy: bool
     experiment = load_experiment(experiment)
 
     accu_exp = oms.MSExperiment()
-    oms.PeakPickerHiRes().pickExperiment(experiment, accu_exp, True)
-    if deepcopy:
-        centroid_exp = copy_experiment(experiment)
+    if instrument in ["FT-ICR-MS", "Orbitrap"]:
+        pphr = oms.PeakPickerHiRes()
+        params = pphr.getDefaults()
+        params.setValue("signal_to_noise", signal_to_noise)
+        params.setValue("spacing_difference_gap", spacing_difference_gap)
+        params.setValue("spacing_difference", spacing_difference)
+        params.setValue("missing", missing)
+        params.setValue("ms_levels", ms_levels)
+        params.setValue("report_FWHM", report_FWHM)
+        params.setValue("report_FWHM_unit", report_FWHM_unit)
+        params.setValue("SignalToNoise:max_intensity", max_intensity)
+        params.setValue("SignalToNoise:auto_max_stdev_factor", auto_max_stdev_factor)
+        params.setValue("SignalToNoise:auto_max_percentile", auto_max_percentile)
+        params.setValue("SignalToNoise:auto_mode", auto_mode)
+        params.setValue("SignalToNoise:win_len", win_len)
+        params.setValue("SignalToNoise:bin_count", bin_count)
+        params.setValue("SignalToNoise:min_required_elements", min_required_elements)
+        params.setValue("SignalToNoise:noise_for_empty_window", noise_for_empty_window)
+        params.setValue("SignalToNoise:write_log_messages", write_log_messages)
+        pphr.pickExperiment(experiment, accu_exp, True)
+    elif instrument in ["TOF-MS"]:
+        ppi = oms.PeakPickerIterative()
+        params = ppi.getDefaults()
+        params.setValue("signal_to_noise", signal_to_noise)
+        params.setValue("peak_width", "peak_width")
+        params.setValue("spacing_difference", spacing_difference)
+        params.setValue("sn_bin_count_", sn_bin_count)
+        params.setValue("nr_iterations_", nr_iterations)
+        params.setValue("sn_win_len_", sn_win_len)
+        params.setValue("check_width_internally", check_width_internally)
+        params.setValue("ms1_only", ms1_only)
+        params.setValue("clear_meta_data", clear_meta_data)
+        ppi.pickExperiment(experiment, accu_exp)
     else:
-        centroid_exp = experiment
+        oms.PeakPickerHiRes().pickExperiment(experiment, accu_exp, True)
+
+    centroid_exp = copy_experiment(experiment) if deepcopy else experiment
     centroid_exp.setSpectra(accu_exp.getSpectra())
 
     return centroid_exp
 
 
-def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", deepcopy:bool=False) -> str:
+def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML",
+                   instrument:str="Orbitrap",
+                   signal_to_noise:float=1.0, spacing_difference_gap:float=4.0,
+                   spacing_difference:float=1.5, missing:int=1, ms_levels:List[int]=[],
+                   report_FWHM:str="true", report_FWHM_unit:str="relative", max_intensity:float=-1,
+                   auto_max_stdev_factor:float=3.0, auto_max_percentile:int=95, auto_mode:int=0,
+                   win_len:float=200.0, bin_count:int=30, min_required_elements:int=10,
+                   noise_for_empty_window:float=1e+20, write_log_messages:str="true",
+                   sn_bin_count:int=30, nr_iterations:int=5, sn_win_len:float=20.0,
+                   check_width_internally:str="false", ms1_only:str="true", clear_meta_data:str="false",
+                   deepcopy:bool=False) -> str:
     """
     Centroids a batch of experiments, extracted from files in a given directory with a given file ending (i.e. .mzML or .mzXML).
     Returns the new directors as path/centroids.
@@ -413,7 +465,18 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", deepcopy:bo
 
     for file in tqdm(os.listdir(in_dir)):
         if file.endswith(file_ending):
-            centroided_exp = centroid_experiment(os.path.join(in_dir, file), deepcopy=deepcopy)
+            centroided_exp = centroid_experiment(os.path.join(in_dir, file),
+                                                 instrument=instrument,
+                                                 signal_to_noise=signal_to_noise, spacing_difference_gap=spacing_difference_gap,
+                                                 spacing_difference=spacing_difference, missing=missing, ms_levels=ms_levels,
+                                                 report_FWHM=report_FWHM, report_FWHM_unit=report_FWHM_unit, max_intensity=max_intensity,
+                                                 auto_max_stdev_factor=auto_max_stdev_factor, auto_max_percentile=auto_max_percentile,
+                                                 auto_mode=auto_mode, win_len=win_len, bin_count=bin_count,
+                                                 min_required_elements=min_required_elements, noise_for_empty_window=noise_for_empty_window,
+                                                 write_log_messages=write_log_messages, sn_bin_count=sn_bin_count,
+                                                 nr_iterations=nr_iterations, sn_win_len=sn_win_len,check_width_internally=check_width_internally,
+                                                 ms1_only=ms1_only, clear_meta_data=clear_meta_data,
+                                                 deepcopy=deepcopy)
             oms.MzMLFile().store(os.path.join(cleaned_dir, f"{file.split('.')[0]}.mzML"), centroided_exp)
 
     return cleaned_dir

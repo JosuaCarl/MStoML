@@ -7,9 +7,9 @@ cluster_cutoff = 0.007^2;  % 0.0055^2
 
 %peak picking
 for k = 1:size(int,1)
-    [pks,locs] = findpeaks(int(k,:),'MinPeakHeight',HeightFilter,'MinPeakProminence',PromFilter);
-    pmz        = mz(locs);
-    peaks(k,1) = {[pmz',pks']};
+    [pks,locs] = findpeaks(int(k,:),'MinPeakHeight',HeightFilter,'MinPeakProminence',PromFilter); % Picks peaks according to Minimal Height and Prominence
+    pmz        = mz(locs);              % extracts m/z values
+    peaks(k,1) = {[pmz',pks']};         % Assignment to the out_variable of
 end
 
 peak_selection = [];

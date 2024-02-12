@@ -392,7 +392,7 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
                         auto_max_stdev_factor:float=3.0, auto_max_percentile:int=95, auto_mode:int=0,
                         win_len:float=200.0, bin_count:int=30, min_required_elements:int=10, 
                         noise_for_empty_window:float=1e+20, write_log_messages:str="true",
-                        sn_bin_count:int=30, nr_iterations:int=5, sn_win_len:float=20.0,
+                        peak_width:float=0.0, sn_bin_count:int=30, nr_iterations:int=5, sn_win_len:float=20.0,
                         check_width_internally:str="false", ms1_only:str="true", clear_meta_data:str="false",
                         deepcopy: bool = False) -> oms.MSExperiment:
     """
@@ -428,7 +428,7 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
         ppi = oms.PeakPickerIterative()
         params = ppi.getDefaults()
         params.setValue("signal_to_noise", signal_to_noise)
-        params.setValue("peak_width", "peak_width")
+        params.setValue("peak_width", peak_width)
         params.setValue("spacing_difference", spacing_difference)
         params.setValue("sn_bin_count_", sn_bin_count)
         params.setValue("nr_iterations_", nr_iterations)
@@ -454,7 +454,7 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML",
                    auto_max_stdev_factor:float=3.0, auto_max_percentile:int=95, auto_mode:int=0,
                    win_len:float=200.0, bin_count:int=30, min_required_elements:int=10,
                    noise_for_empty_window:float=1e+20, write_log_messages:str="true",
-                   sn_bin_count:int=30, nr_iterations:int=5, sn_win_len:float=20.0,
+                   peak_width:float=0.0, sn_bin_count:int=30, nr_iterations:int=5, sn_win_len:float=20.0,
                    check_width_internally:str="false", ms1_only:str="true", clear_meta_data:str="false",
                    deepcopy:bool=False) -> str:
     """
@@ -473,7 +473,8 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML",
                                                  auto_max_stdev_factor=auto_max_stdev_factor, auto_max_percentile=auto_max_percentile,
                                                  auto_mode=auto_mode, win_len=win_len, bin_count=bin_count,
                                                  min_required_elements=min_required_elements, noise_for_empty_window=noise_for_empty_window,
-                                                 write_log_messages=write_log_messages, sn_bin_count=sn_bin_count,
+                                                 write_log_messages=write_log_messages,
+                                                 peak_width=peak_width, sn_bin_count=sn_bin_count,
                                                  nr_iterations=nr_iterations, sn_win_len=sn_win_len,check_width_internally=check_width_internally,
                                                  ms1_only=ms1_only, clear_meta_data=clear_meta_data,
                                                  deepcopy=deepcopy)

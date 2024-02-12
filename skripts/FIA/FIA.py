@@ -1,4 +1,6 @@
 import os
+import stat
+import time
 from typing import overload, Any, List, Dict, Tuple, Set, Sequence, Union, Optional
 import shutil
 from click import Option
@@ -7,6 +9,7 @@ from copy import deepcopy
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
+import scipy as sci
 import pyopenms as oms
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -43,6 +46,10 @@ def clean_dir(dir_path:str, subfolder:Optional[str]=None) -> str:
 
 
 ### FILES ###
+# Checking
+def check_ending_experiment(file:str):
+    return file.endswith(".mzML") or file.endswith(".MzML") or file.endswith(".mzXML") or file.endswith(".MzXML")
+
 # Loading
 def read_experiment(experiment_path: str) -> oms.MSExperiment:
     """
@@ -71,6 +78,35 @@ def load_experiment(experiment:Union[oms.MSExperiment, str]) -> oms.MSExperiment
     else:
         return read_experiment(experiment)
     
+def load_experiment_batch(experiments:Union[List[oms.MSExperiment|str], str], file_ending:Optional[str]=None) -> List[oms.MSExperiment]:
+    """
+    If no experiment is given, loads and returns it from either .mzML or .mzXML file.
+    """
+    if isinstance(experiments, str):
+        if file_ending:
+            return [load_experiment(os.path.join(experiments, file)) for file in tqdm(os.listdir(experiments)) if file.endswith(file_ending)]
+        else:
+            return [load_experiment(os.path.join(experiments, file)) for file in tqdm(os.listdir(experiments)) if check_ending_experiment(file)]
+    else:
+        return [load_experiment(experiment) for experiment in experiments]
+
+def load_names_batch(directory:str, file_ending:str=".mzML") -> List[str]:
+    """
+    If no experiment is given, loads and returns it from either .mzML or .mzXML file.
+    """
+    return [file[0:-len(file_ending)] for file in tqdm(os.listdir(directory)) if file.endswith(file_ending)]
+    
+def load_fia_df(data_dir:str, file_ending:str):
+    print("Loading experiments:")
+    experiments = load_experiment_batch(data_dir)
+    print("Loading names:")
+    names = load_names_batch(data_dir, file_ending)
+    samples = [name.split("_")[0] for name in names]
+    polarities = [{"pos": 1, "neg": -1}.get(name.split("_")[-1]) for name in names]
+    fia_df = pd.DataFrame([samples, polarities, experiments])
+    fia_df = fia_df.transpose()
+    fia_df.columns = ["sample", "polarity", "experiment"]
+    return fia_df
 
 def read_mnx(filepath: str) -> pd.DataFrame:
     """
@@ -269,30 +305,39 @@ def merge_compounds(path_to_tsv:str) -> pd.DataFrame:
 ### MS DATA TRANSFORMATION ###
 # Limiting
 def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upper_limit: int | float,
-                   sample_size: int) -> oms.MSSpectrum:
+                   sample_size: int, statistic:str="sum") -> oms.MSSpectrum:
     """
     Limits the range of the Spectrum to <mz_lower_limit> and <mz_upper_limit>. 
     Uniformly samples <sample_size> number of peaks from the spectrum (without replacement).
     Returns: openms spectrum
     """
+    new_spectrum = oms.MSSpectrum()
     mzs, intensities = spectrum.get_peaks() # type: ignore
 
-    lim = [np.searchsorted(mzs, mz_lower_limit, side='right'), np.searchsorted(mzs, mz_upper_limit, side='left')]
+    if statistic:
+        statistic, bin_edges, bin_nrs = sci.stats.binned_statistic(mzs, intensities,
+                                                                   statistic=statistic, 
+                                                                   bins=sample_size,
+                                                                   range=(mz_lower_limit, mz_upper_limit))
+        statistic = np.nan_to_num(statistic)
+        bin_means = np.mean([bin_edges[1:], bin_edges[:-1]], axis=0)
+        new_spectrum.set_peaks( (bin_means, statistic) ) # type: ignore
+    else:
+        lim = [np.searchsorted(mzs, mz_lower_limit, side='right'), np.searchsorted(mzs, mz_upper_limit, side='left')]
+        mzs = mzs[lim[0]:lim[1]]
+        intensities = intensities[lim[0]:lim[1]]
 
-    mzs = mzs[lim[0]:lim[1]]
-    intensities = intensities[lim[0]:lim[1]]
-
-    idxs = range(len(mzs))
-    new_spectrum = oms.MSSpectrum()
-    if len(mzs) > sample_size:
-        idxs = np.random.choice(idxs, size=sample_size, replace=False)
-    new_spectrum.set_peaks((mzs[idxs], intensities[idxs])) # type: ignore
-
+        idxs = range(len(mzs))
+        if len(mzs) > sample_size:
+            idxs = np.random.choice(idxs, size=sample_size, replace=False)
+            new_spectrum.set_peaks( (mzs[idxs], intensities[idxs]) ) # type: ignore
+        else:
+            new_spectrum = spectrum
     return new_spectrum
 
 
 def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: int | float=0, mz_upper_limit: int | float=10000,
-                     sample_size:int=100000, deepcopy: bool = False) -> oms.MSExperiment:
+                     sample_size:int=100000, statistic:str="sum", deepcopy: bool = False) -> oms.MSExperiment:
     """
     Limits the range of all spectra in an experiment to <mz_lower_limit> and <mz_upper_limit>. 
     Uniformly samples <sample_size> number of peaks from the spectrum (without replacement).
@@ -310,7 +355,7 @@ def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: i
     else:
         lim_exp = experiment
     lim_exp.setSpectra(
-        [limit_spectrum(spectrum, mz_lower_limit, mz_upper_limit, sample_size) for spectrum in experiment.getSpectra()])
+        [limit_spectrum(spectrum, mz_lower_limit, mz_upper_limit, sample_size, statistic) for spectrum in experiment.getSpectra()])
     return lim_exp
 
 
@@ -1098,6 +1143,19 @@ def dynamic_plot(experiment: oms.MSExperiment, mode: str = "lines") -> None:
     fig.update_layout(title='Superplot MSExperiment')
     fig.show()
 
+def plot_mass_traces(mass_traces, sel=[0,100], x:str="rt", y:str="mz", z:str="int", threed:bool=True):
+    dfs = []
+    for i in range(sel[0], sel[1]):
+        peak = len(mass_traces[i].getConvexhull().getHullPoints()) / 2 + 1
+        hp = mass_traces[i].getConvexhull().getHullPoints()[0:int(peak)]
+        hp = np.insert(hp, 2, mass_traces[i].getSmoothedIntensities(), axis=1)
+        hp = np.insert(hp, 3, i, axis=1)
+        dfs.append(pd.DataFrame(hp, columns=["rt", "mz", "int", "id"]))
+    ch_df = pd.concat(dfs)
+    if threed:
+        return px.line_3d(ch_df, x=x, y=y, z=z, color="id")
+    else:
+        return px.line(ch_df, x=x, y=y, color="id", hover_data=z)
 
 def plot_feature_map_rt_alignment(ordered_feature_maps:list, legend:bool=False) -> None:
     fig = plt.figure(figsize=(10, 5))

@@ -3,7 +3,6 @@ import stat
 import time
 from typing import overload, Any, List, Dict, Tuple, Set, Sequence, Union, Optional
 import shutil
-from click import Option
 import requests
 from copy import deepcopy
 from tqdm import tqdm
@@ -1201,6 +1200,7 @@ def quick_plot(spectrum: oms.MSSpectrum, xlim: Optional[List[float]] = None, yli
         ax.set_xlim(xlim[0], xlim[1])
     if ylim:
         ax.set_ylim(ylim[0], ylim[1])
+    plt.yscale('log')
     plt.show()
 
 

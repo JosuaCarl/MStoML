@@ -358,6 +358,18 @@ def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: i
     return lim_exp
 
 
+def mow_threshold(experiment:oms.MSExperiment, threshold:float=0.05):
+    """
+    Removes point below an absolute intensity theshold
+    """
+    tm = oms.ThresholdMower()
+    params = tm.getDefaults()
+    params.setValue("threshold", threshold)
+    tm.setParameters(params)
+    tm.filterPeakMap(experiment)
+    return experiment
+
+
 # Combination
 def combine_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
     spectrum = experiment.getSpectra()[0]
@@ -397,7 +409,7 @@ def smooth_spectra(experiment: Union[oms.MSExperiment, str], gaussian_width: flo
 
 # Centroiding
 # Centroiding
-def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str="Orbitrap",
+def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str="TOF",
                         signal_to_noise:float=1.0, spacing_difference_gap:float=4.0,
                         spacing_difference:float=1.5, missing:int=1, ms_levels:List[int]=[],
                         report_FWHM:str="true", report_FWHM_unit:str="relative", max_intensity:float=-1,
@@ -412,6 +424,20 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
     @experiment: pyopenms.MSExperiment
     @deepcopy: make a deep copy of the Experiment, so it is an independent object
     return: 
+
+    Usecase
+    fia_df["cent_experiment"] = fia_df["experiment"].apply(lambda experiment: centroid_experiment(experiment, instrument="TOF",                                      # For All
+                                                                                                signal_to_noise=2.0, spacing_difference=1.5,
+                                                                                                                        
+                                                                                                spacing_difference_gap=4.0, missing=1, ms_levels=[1],                   # For Orbitrap
+                                                                                                report_FWHM="true", report_FWHM_unit="relative", max_intensity=-1,
+                                                                                                auto_max_stdev_factor=3.0, auto_max_percentile=95, auto_mode=0,
+                                                                                                win_len=200.0, bin_count=30, min_required_elements=10, 
+                                                                                                noise_for_empty_window=1e+20, write_log_messages="true",
+
+                                                                                                peak_width=0.0, sn_bin_count=30, nr_iterations=5, sn_win_len=20.0,      # For TOF
+                                                                                                check_width_internally="false", ms1_only="true", clear_meta_data="false",
+                                                                                                deepcopy=False))
     """
     experiment = load_experiment(experiment)
 
@@ -459,7 +485,7 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
 
 
 def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML",
-                   instrument:str="Orbitrap",
+                   instrument:str="TOF",
                    signal_to_noise:float=1.0, spacing_difference_gap:float=4.0,
                    spacing_difference:float=1.5, missing:int=1, ms_levels:List[int]=[],
                    report_FWHM:str="true", report_FWHM_unit:str="relative", max_intensity:float=-1,
@@ -496,59 +522,85 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML",
 
 
 # Merging
-def merge_experiment(experiment: Union[oms.MSExperiment, str], block_size: Optional[int] = None,
-                     mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", average_gaussian_cutoff:float=0.01,
+def merge_experiment(experiment: Union[oms.MSExperiment, str], method:str="block_method",
+                     mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", ms_levels:List[int]=[1], sort_blocks:str="RT_ascending",
+                     rt_block_size: Optional[int] = None, rt_max_length:float=0.0,
+                     spectrum_type:str="automatic", rt_range:Optional[float]=5.0, rt_unit:str="scans", 
+                     rt_FWHM:float=5.0, cutoff:float=0.01, precursor_mass_tol:float=0.0, precursor_max_charge:int=1,
                      deepcopy: bool = False) -> oms.MSExperiment:
     """
     Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals)
-    @experiment: pyopenms.MSExperiment
-    @block_size: int
-    @deepcopy: make a deep copy of the Experiment, so it is an independent object
-    return: 
     """
     experiment = load_experiment(experiment)
 
-    if block_size is None:
-        block_size = experiment.getNrSpectra()
+    if rt_block_size is None:
+        rt_block_size = experiment.getNrSpectra()
 
     if deepcopy:
         merge_exp = copy_experiment(experiment)
     else:
         merge_exp = experiment
-    merge_exp.setSpectra(experiment.getSpectra())
+
     merger = oms.SpectraMerger()
     param = merger.getParameters()
     param.setValue("mz_binning_width", mz_binning_width)
     param.setValue("mz_binning_width_unit", mz_binning_width_unit)
-    param.setValue("average_gaussian:cutoff", average_gaussian_cutoff)
-    param.setValue("block_method:rt_block_size", block_size)
+    param.setValue("sort_blocks", sort_blocks)
+    if method == "block_method":
+        param.setValue("block_method:ms_levels", ms_levels)
+        param.setValue("block_method:rt_block_size", rt_block_size)
+        param.setValue("block_method:rt_max_length", rt_max_length)
+    elif method == "average_tophat":
+        param.setValue("average_tophat:ms_level", ms_levels[-1])
+        param.setValue("average_tophat:spectrum_type", spectrum_type)
+        param.setValue("average_tophat:rt_unit", rt_unit)
+        if rt_unit == "scans" and not rt_range:
+            rt_range = float(experiment.getNrSpectra())
+        param.setValue("average_tophat:rt_range", rt_range)
+    elif method == "average_gaussian":
+        param.setValue("average_gaussian:ms_level", ms_levels[-1])
+        param.setValue("average_gaussian:spectrum_type", spectrum_type)
+        param.setValue("average_gaussian:rt_FWHM", rt_FWHM)
+        param.setValue("average_gaussian:cutoff", cutoff)
+        param.setValue("average_gaussian:precursor_mass_tol", precursor_mass_tol)
+        param.setValue("average_gaussian:precursor_max_charge", precursor_max_charge)
+    else:
+        raise ValueError(f"method needs to be one of block_method|average_tophat|average_gaussian")
     
     merger.setParameters(param)
-    merger.mergeSpectraBlockWise(merge_exp)
+
+    if method in ["average_tophat", "average_gaussian"]:
+        merger.average(merge_exp, method.split("_")[-1])
+    else:
+        merger.mergeSpectraBlockWise(merge_exp)
+
     return merge_exp
 
 
-def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", block_size: Optional[int] = None, 
-                mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", average_gaussian_cutoff:float=0.01,
+def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", method:str="block_method",
+                mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", ms_levels:List[int]=[1], sort_blocks:str="RT_ascending",
+                rt_block_size: Optional[int] = None, rt_max_length:float=0.0,
+                spectrum_type:str="automatic", rt_range:Optional[float]=5.0, rt_unit:str="scans", 
+                rt_FWHM:float=5.0, cutoff:float=0.01, precursor_mass_tol:float=0.0, precursor_max_charge:int=1,
                 deepcopy: bool = False) -> str:
     """
     Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
-    @experiment: pyopenms.MSExperiment
-    @block_size: int
-    @deepcopy: make a deep copy of the Experiment, so it is an independent object
-    return: 
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "merged") )
 
     for file in tqdm(os.listdir(in_dir)):
         if file.endswith(file_ending):
-            merged_exp = merge_experiment(os.path.join(in_dir, file), block_size=block_size, 
+            merged_exp = merge_experiment(os.path.join(in_dir, file), method=method,
                                           mz_binning_width=mz_binning_width, mz_binning_width_unit=mz_binning_width_unit,
-                                          average_gaussian_cutoff=average_gaussian_cutoff,
+                                          ms_levels=ms_levels, sort_blocks=sort_blocks,
+                                          rt_block_size=rt_block_size, rt_max_length=rt_max_length,
+                                          spectrum_type=spectrum_type, rt_range=rt_range, rt_unit=rt_unit,
+                                          rt_FWHM=rt_FWHM, cutoff=cutoff, precursor_mass_tol=precursor_mass_tol, precursor_max_charge=precursor_max_charge,
                                           deepcopy=deepcopy)
-            oms.MzMLFile().store(os.path.join(cleaned_dir, file), merged_exp)
+            oms.MzMLFile().store(os.path.join(cleaned_dir, file[:-len(file_ending)] + ".mzML"), merged_exp)
 
     return cleaned_dir
+
 
 # Normalization
 def normalize_spectra(experiment: Union[oms.MSExperiment, str], normalization_method: str = "to_one",
@@ -1181,7 +1233,8 @@ def merge_by_mz(id_df_1:pd.DataFrame, id_df_2:pd.DataFrame, mz_tolerance=1e-04):
 
 
 ### Plotting ###
-def quick_plot(spectrum: oms.MSSpectrum, xlim: Optional[List[float]] = None, ylim: Optional[List[float]] = None, plottype: str = "line") -> None:
+def quick_plot(spectrum: oms.MSSpectrum, xlim: Optional[List[float]] = None, ylim: Optional[List[float]] = None,
+               plottype: str = "line", log:List[str]=[]) -> None:
     """
     Shows a plot of a spectrum between the defined borders
     @spectrum: pyopenms.MSSpectrum
@@ -1192,19 +1245,22 @@ def quick_plot(spectrum: oms.MSSpectrum, xlim: Optional[List[float]] = None, yli
     if plottype == "line":
         ax = sns.lineplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1]) # type: ignore
     elif plottype == "scatter":
-        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(40, 40))  # type: ignore
+        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(20, 20))  # type: ignore
     else:
-        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(40, 40))  # type: ignore
+        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(20, 20))  # type: ignore
 
     if xlim:
         ax.set_xlim(xlim[0], xlim[1])
     if ylim:
         ax.set_ylim(ylim[0], ylim[1])
-    plt.yscale('log')
+    if "y" in log:
+        plt.yscale('log')
+    if "x" in log:
+        plt.xscale('log')
     plt.show()
 
 
-def dynamic_plot(experiment: oms.MSExperiment, mode: str = "lines") -> None:
+def dynamic_plot(experiment: oms.MSExperiment, mode: str = "lines", log:List[str]=["x"]) -> None:
     """
     Shows an interactive plot of all spectra in the experiment. May take a long time for large datasets.
     Recommended after centroiding, or data reduction.
@@ -1219,6 +1275,10 @@ def dynamic_plot(experiment: oms.MSExperiment, mode: str = "lines") -> None:
                            mode=mode,
                            name=spectrum.getRT())
         fig.add_trace(trace)
+    if "y" in log:
+        fig.update_yaxes(type="log")
+    if "x" in log:
+        fig.update_xaxes(type="log")
     fig.update_layout(title='Superplot MSExperiment')
     fig.show()
 

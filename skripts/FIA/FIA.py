@@ -359,6 +359,19 @@ def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: i
     return lim_exp
 
 
+# Combination
+def combine_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
+    spectrum = experiment.getSpectra()[0]
+    intensities_all = np.zeros(spectrum.size())
+    mzs_all = spectrum.get_peaks()[0]
+    for spectrum in experiment.getSpectra():
+        mzs, intensities = spectrum.get_peaks()
+        intensities_all = np.sum([intensities_all, intensities], axis=0) # type: ignore
+    comb_spectrum = oms.MSSpectrum()
+    comb_spectrum.set_peaks( (mzs_all, intensities_all) ) # type: ignore
+    return comb_spectrum
+
+
 # Smoothing
 def smooth_spectra(experiment: Union[oms.MSExperiment, str], gaussian_width: float, deepcopy: bool = False) -> oms.MSExperiment:
     """
@@ -1169,7 +1182,7 @@ def merge_by_mz(id_df_1:pd.DataFrame, id_df_2:pd.DataFrame, mz_tolerance=1e-04):
 
 
 ### Plotting ###
-def quick_plot(spectrum: oms.MSSpectrum, xlim: List[int | float] = [0, 1000], plottype: str = "line") -> None:
+def quick_plot(spectrum: oms.MSSpectrum, xlim: Optional[List[float]] = None, ylim: Optional[List[float]] = None, plottype: str = "line") -> None:
     """
     Shows a plot of a spectrum between the defined borders
     @spectrum: pyopenms.MSSpectrum
@@ -1180,12 +1193,14 @@ def quick_plot(spectrum: oms.MSSpectrum, xlim: List[int | float] = [0, 1000], pl
     if plottype == "line":
         ax = sns.lineplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1]) # type: ignore
     elif plottype == "scatter":
-        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1])  # type: ignore
+        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(40, 40))  # type: ignore
     else:
-        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1])  # type: ignore
+        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(40, 40))  # type: ignore
 
     if xlim:
         ax.set_xlim(xlim[0], xlim[1])
+    if ylim:
+        ax.set_ylim(ylim[0], ylim[1])
     plt.show()
 
 

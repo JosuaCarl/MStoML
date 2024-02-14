@@ -3,6 +3,7 @@ import stat
 import time
 from typing import overload, Any, List, Dict, Tuple, Set, Sequence, Union, Optional
 import shutil
+from pyparsing import Opt
 import requests
 from copy import deepcopy
 from tqdm import tqdm
@@ -49,6 +50,7 @@ def clean_dir(dir_path:str, subfolder:Optional[str]=None) -> str:
 def check_ending_experiment(file:str):
     return file.endswith(".mzML") or file.endswith(".MzML") or file.endswith(".mzXML") or file.endswith(".MzXML")
 
+
 # Loading
 def read_experiment(experiment_path: str) -> oms.MSExperiment:
     """
@@ -67,7 +69,6 @@ def read_experiment(experiment_path: str) -> oms.MSExperiment:
         raise ValueError(f'Invalid ending of {experiment_path}. Must be in [".MzXML", ".mzXML", ".MzML", ".mzML"]')
     return experiment
 
-
 def load_experiment(experiment:Union[oms.MSExperiment, str]) -> oms.MSExperiment:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
@@ -77,27 +78,49 @@ def load_experiment(experiment:Union[oms.MSExperiment, str]) -> oms.MSExperiment
     else:
         return read_experiment(experiment)
     
-def load_experiment_batch(experiments:Union[List[oms.MSExperiment|str], str], file_ending:Optional[str]=None) -> List[oms.MSExperiment]:
+def load_experiments(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:Optional[str]=None) -> List[oms.MSExperiment]:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
     if isinstance(experiments, str):
         if file_ending:
-            return [load_experiment(os.path.join(experiments, file)) for file in tqdm(os.listdir(experiments)) if file.endswith(file_ending)]
+            experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if file.endswith(file_ending)]
         else:
-            return [load_experiment(os.path.join(experiments, file)) for file in tqdm(os.listdir(experiments)) if check_ending_experiment(file)]
-    else:
-        return [load_experiment(experiment) for experiment in experiments]
+            experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if check_ending_experiment(file)]
+    experiments = [load_experiment(experiment) for experiment in experiments]
+    return experiments
 
-def load_names_batch(directory:str, file_ending:str=".mzML") -> List[str]:
+
+def load_name(experiment:Union[oms.MSExperiment, str], alt_name:Optional[str]=None) -> str:
+    if isinstance(experiment, str):
+        return "".join(experiment.split(".")[:-1])
+    else:
+        if experiment.getLoadedFilePath():
+            return "".join(os.path.basename(experiment.getLoadedFilePath()).split(".")[:-1])
+        elif alt_name:
+            return alt_name
+        else:
+            raise ValueError(f"No file path found in experiment. Please provide alt_name.")
+
+def load_names_batch(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:str=".mzML") -> List[str]:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
-    return [file[0:-len(file_ending)] for file in tqdm(os.listdir(directory)) if file.endswith(file_ending)]
+    if isinstance(experiments, str):
+        if file_ending:
+            return [load_name(file) for file in os.listdir(experiments) if file.endswith(file_ending)]
+        else:
+            return [load_name(file) for file in os.listdir(experiments) if check_ending_experiment(file)]
+    else:
+        if isinstance(experiments[0], str):
+            return [load_name(experiment) for experiment in experiments] 
+        else:
+            return [load_name(experiment, str(i)) for i, experiment in enumerate(experiments)]
     
+
 def load_fia_df(data_dir:str, file_ending:str):
     print("Loading experiments:")
-    experiments = load_experiment_batch(data_dir)
+    experiments = load_experiments(data_dir, file_ending)
     print("Loading names:")
     names = load_names_batch(data_dir, file_ending)
     samples = [name.split("_")[0] for name in names]
@@ -106,6 +129,7 @@ def load_fia_df(data_dir:str, file_ending:str):
     fia_df = fia_df.transpose()
     fia_df.columns = ["sample", "polarity", "experiment"]
     return fia_df
+
 
 def read_mnx(filepath: str) -> pd.DataFrame:
     """
@@ -163,6 +187,7 @@ def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
     return metabo_table
 
 
+
 # Copying
 def copy_experiment(experiment: oms.MSExperiment) -> oms.MSExperiment:
     """
@@ -171,6 +196,7 @@ def copy_experiment(experiment: oms.MSExperiment) -> oms.MSExperiment:
     return: pyopenms.MSExperiment
     """
     return deepcopy(experiment)
+
 
 
 # Formatting
@@ -208,6 +234,8 @@ def join_df_by(df: pd.DataFrame, joiner: str, combiner: str) -> pd.DataFrame:
     comb = comb.set_index(combiner)
     return comb
 
+
+
 # Annotation
 def annotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.DataFrame, result_path:str=".",
                               mz_tolerance:float=1e-05) -> pd.DataFrame:
@@ -226,6 +254,7 @@ def annotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.D
     return id_df
 
 
+
 # Storing
 def store_experiment(experiment_path:str, experiment: oms.MSExperiment) -> None:
     """
@@ -240,6 +269,7 @@ def store_experiment(experiment_path:str, experiment: oms.MSExperiment) -> None:
         oms.MzMLFile().store(experiment_path, experiment)
     else:
         oms.MzMLFile().store(experiment_path, experiment)
+
 
 def store_feature_maps(feature_maps: list, out_dir:str, names: Union[list[str], str]=[], file_ending:str=".mzML") -> None:
     # Store the feature maps as featureXML files!
@@ -258,17 +288,6 @@ def store_feature_maps(feature_maps: list, out_dir:str, names: Union[list[str], 
         oms.FeatureXMLFile().store(os.path.join(out_dir, name + ".featureXML"), feature_map)
 
 
-# Printing
-
-def print_params(p):
-    """
-    Print all parameters
-    """
-    if p.size():
-        for i in p.keys():
-            print( "Param:", i, "Value:", p[i], "Description:", p.getDescription(i) )
-    else:
-        print("no data available")
 
 ### Compound tables transformation ###
 def merge_compounds(path_to_tsv:str) -> pd.DataFrame:
@@ -358,7 +377,8 @@ def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: i
     return lim_exp
 
 
-def mow_threshold(experiment:oms.MSExperiment, threshold:float=0.05):
+
+def trim_threshold(experiment:oms.MSExperiment, threshold:float=0.05):
     """
     Removes point below an absolute intensity theshold
     """
@@ -368,6 +388,21 @@ def mow_threshold(experiment:oms.MSExperiment, threshold:float=0.05):
     tm.setParameters(params)
     tm.filterPeakMap(experiment)
     return experiment
+
+def trim_threshold_batch(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir:str, file_ending:str=".mzML", threshold:float=0.05, deepcopy:bool=False):
+    """
+    Removes point below an absolute intensity theshold
+    """
+    cleaned_dir = os.path.normpath( clean_dir(run_dir, "trimmed") )
+
+    if deepcopy:
+        experiments = [copy_experiment(experiment) for experiment in experiments]
+    names = load_names_batch(experiments, file_ending)
+    experiments = load_experiments(experiments, file_ending)
+    for i, experiment in enumerate(tqdm(experiments)):
+        trimmed_exp = trim_threshold(experiment, threshold)
+        oms.MzMLFile().store(os.path.join(cleaned_dir, names[i] + ".mzML"), trimmed_exp)
+    return cleaned_dir
 
 
 # Combination
@@ -381,6 +416,12 @@ def combine_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
     comb_spectrum = oms.MSSpectrum()
     comb_spectrum.set_peaks( (mzs_all, intensities_all) ) # type: ignore
     return comb_spectrum
+
+def combine_spectra_experiments(experiments:List[oms.MSExperiment]) -> oms.MSExperiment:
+    experiment_all = oms.MSExperiment()
+    for experiment in experiments:
+        experiment_all.setSpectra(experiment.getSpectra())
+    return experiment_all
 
 
 # Smoothing
@@ -484,7 +525,7 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
     return centroid_exp
 
 
-def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML",
+def centroid_batch(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir:str, file_ending:str=".mzML",
                    instrument:str="TOF",
                    signal_to_noise:float=1.0, spacing_difference_gap:float=4.0,
                    spacing_difference:float=1.5, missing:int=1, ms_levels:List[int]=[],
@@ -500,23 +541,23 @@ def centroid_batch(in_dir:str, run_dir:str, file_ending:str=".mzML",
     Returns the new directors as path/centroids.
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "centroids") )
-
-    for file in tqdm(os.listdir(in_dir)):
-        if file.endswith(file_ending):
-            centroided_exp = centroid_experiment(os.path.join(in_dir, file),
-                                                 instrument=instrument,
-                                                 signal_to_noise=signal_to_noise, spacing_difference_gap=spacing_difference_gap,
-                                                 spacing_difference=spacing_difference, missing=missing, ms_levels=ms_levels,
-                                                 report_FWHM=report_FWHM, report_FWHM_unit=report_FWHM_unit, max_intensity=max_intensity,
-                                                 auto_max_stdev_factor=auto_max_stdev_factor, auto_max_percentile=auto_max_percentile,
-                                                 auto_mode=auto_mode, win_len=win_len, bin_count=bin_count,
-                                                 min_required_elements=min_required_elements, noise_for_empty_window=noise_for_empty_window,
-                                                 write_log_messages=write_log_messages,
-                                                 peak_width=peak_width, sn_bin_count=sn_bin_count,
-                                                 nr_iterations=nr_iterations, sn_win_len=sn_win_len,check_width_internally=check_width_internally,
-                                                 ms1_only=ms1_only, clear_meta_data=clear_meta_data,
-                                                 deepcopy=deepcopy)
-            oms.MzMLFile().store(os.path.join(cleaned_dir, f"{file.split('.')[0]}.mzML"), centroided_exp)
+    names = load_names_batch(experiments, file_ending)
+    experiments = load_experiments(experiments, file_ending)
+    for i, experiment in enumerate(tqdm(experiments)):
+        centroided_exp = centroid_experiment(experiment,
+                                            instrument=instrument,
+                                            signal_to_noise=signal_to_noise, spacing_difference_gap=spacing_difference_gap,
+                                            spacing_difference=spacing_difference, missing=missing, ms_levels=ms_levels,
+                                            report_FWHM=report_FWHM, report_FWHM_unit=report_FWHM_unit, max_intensity=max_intensity,
+                                            auto_max_stdev_factor=auto_max_stdev_factor, auto_max_percentile=auto_max_percentile,
+                                            auto_mode=auto_mode, win_len=win_len, bin_count=bin_count,
+                                            min_required_elements=min_required_elements, noise_for_empty_window=noise_for_empty_window,
+                                            write_log_messages=write_log_messages,
+                                            peak_width=peak_width, sn_bin_count=sn_bin_count,
+                                            nr_iterations=nr_iterations, sn_win_len=sn_win_len,check_width_internally=check_width_internally,
+                                            ms1_only=ms1_only, clear_meta_data=clear_meta_data,
+                                            deepcopy=deepcopy)
+        oms.MzMLFile().store(os.path.join(cleaned_dir, names[i] + ".mzML"), centroided_exp)
 
     return cleaned_dir
 
@@ -577,7 +618,7 @@ def merge_experiment(experiment: Union[oms.MSExperiment, str], method:str="block
     return merge_exp
 
 
-def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", method:str="block_method",
+def merge_batch(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir:str, file_ending:str=".mzML", method:str="block_method",
                 mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", ms_levels:List[int]=[1], sort_blocks:str="RT_ascending",
                 rt_block_size: Optional[int] = None, rt_max_length:float=0.0,
                 spectrum_type:str="automatic", rt_range:Optional[float]=5.0, rt_unit:str="scans", 
@@ -587,19 +628,44 @@ def merge_batch(in_dir:str, run_dir:str, file_ending:str=".mzML", method:str="bl
     Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "merged") )
-
-    for file in tqdm(os.listdir(in_dir)):
-        if file.endswith(file_ending):
-            merged_exp = merge_experiment(os.path.join(in_dir, file), method=method,
-                                          mz_binning_width=mz_binning_width, mz_binning_width_unit=mz_binning_width_unit,
-                                          ms_levels=ms_levels, sort_blocks=sort_blocks,
-                                          rt_block_size=rt_block_size, rt_max_length=rt_max_length,
-                                          spectrum_type=spectrum_type, rt_range=rt_range, rt_unit=rt_unit,
-                                          rt_FWHM=rt_FWHM, cutoff=cutoff, precursor_mass_tol=precursor_mass_tol, precursor_max_charge=precursor_max_charge,
-                                          deepcopy=deepcopy)
-            oms.MzMLFile().store(os.path.join(cleaned_dir, file[:-len(file_ending)] + ".mzML"), merged_exp)
+    names = load_names_batch(experiments, file_ending)
+    experiments = load_experiments(experiments, file_ending)
+    for i, experiment in enumerate(tqdm(experiments)):
+        merged_exp = merge_experiment(experiment, method=method,
+                                        mz_binning_width=mz_binning_width, mz_binning_width_unit=mz_binning_width_unit,
+                                        ms_levels=ms_levels, sort_blocks=sort_blocks,
+                                        rt_block_size=rt_block_size, rt_max_length=rt_max_length,
+                                        spectrum_type=spectrum_type, rt_range=rt_range, rt_unit=rt_unit,
+                                        rt_FWHM=rt_FWHM, cutoff=cutoff, precursor_mass_tol=precursor_mass_tol, precursor_max_charge=precursor_max_charge,
+                                        deepcopy=deepcopy)
+        oms.MzMLFile().store(os.path.join(cleaned_dir, names[i] + ".mzML"), merged_exp)
 
     return cleaned_dir
+
+def merge_experiments(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir:str, file_ending:str=".mzML", method:str="block_method",
+                    mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", ms_levels:List[int]=[1], sort_blocks:str="RT_ascending",
+                    rt_block_size: Optional[int] = None, rt_max_length:float=0.0,
+                    spectrum_type:str="automatic", rt_range:Optional[float]=5.0, rt_unit:str="scans", 
+                    rt_FWHM:float=5.0, cutoff:float=0.01, precursor_mass_tol:float=0.0, precursor_max_charge:int=1,
+                    deepcopy: bool = False) -> str:
+    """
+    Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
+    """
+    experiments = load_experiments(experiments, file_ending)
+    experiment_all = combine_spectra_experiments(experiments)
+    merged_exp = merge_experiment(experiment_all, method=method,
+                                    mz_binning_width=mz_binning_width, mz_binning_width_unit=mz_binning_width_unit,
+                                    ms_levels=ms_levels, sort_blocks=sort_blocks,
+                                    rt_block_size=rt_block_size, rt_max_length=rt_max_length,
+                                    spectrum_type=spectrum_type, rt_range=rt_range, rt_unit=rt_unit,
+                                    rt_FWHM=rt_FWHM, cutoff=cutoff, precursor_mass_tol=precursor_mass_tol, precursor_max_charge=precursor_max_charge,
+                                    deepcopy=deepcopy)
+    
+    merged_exp.setLoadedFilePath(os.path.join(run_dir, "merged_all.mzML"))
+    oms.MzMLFile().store(os.path.join(run_dir, "merged_all.mzML"), merged_exp)
+
+    return merged_exp
+
 
 
 # Normalization
@@ -707,7 +773,7 @@ def mass_trace_detection(experiment: Union[oms.MSExperiment, str],
 
     return mass_traces
 
-def mass_trace_detection_batch(experiments: Union[List[oms.MSExperiment|str], str], file_ending:str=".mzML", 
+def mass_trace_detection_batch(experiments: Union[Sequence[oms.MSExperiment|str], str], file_ending:str=".mzML", 
                                mass_error_ppm: float = 10.0, noise_threshold_int: float = 1000.0, reestimate_mt_sd:str="true",
                                quant_method:str="median", trace_termination_criterion:str="outlier", trace_termination_outliers:int=3,
                                min_trace_length:float=5.0, max_trace_length:float=-1.0) -> list:
@@ -715,8 +781,7 @@ def mass_trace_detection_batch(experiments: Union[List[oms.MSExperiment|str], st
     Mass trace detection
     """
     mass_traces_all = []
-    if isinstance(experiments, str):
-            experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if file.endswith(file_ending)]
+    experiments = load_experiments(experiments, file_ending)
     for experiment in tqdm(experiments):
         mass_traces_all.append(
             mass_trace_detection(experiment=experiment, mass_error_ppm=mass_error_ppm, noise_threshold_int=noise_threshold_int,
@@ -815,7 +880,7 @@ def feature_detection_untargeted(experiment: Union[oms.MSExperiment, str],
 
     return feature_map
 
-def feature_detection_untargeted_batch(experiments:Union[List[oms.MSExperiment|str], str], file_ending:str=".mzML",
+def feature_detection_untargeted_batch(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:str=".mzML",
                                        mass_traces_deconvol_all: list[list] = [], isotope_filtering_model="metabolites (2% RMS)",
                                        local_rt_range:float=3.0, local_mz_range:float=5.0, 
                                        charge_lower_bound:int=1, charge_upper_bound:int=3,
@@ -825,8 +890,7 @@ def feature_detection_untargeted_batch(experiments:Union[List[oms.MSExperiment|s
                                        report_chromatograms:str="false", remove_single_traces: str = "true",
                                        mz_scoring_by_elements: str = "false", elements:str="CHNOPS") -> list[oms.FeatureMap]:
     feature_maps = []
-    if isinstance(experiments, str):
-        experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if file.endswith(file_ending)]
+    experiments = load_experiments(experiments, file_ending)
     for i, experiment in enumerate(tqdm(experiments)):
         feature_maps.append(
             feature_detection_untargeted(experiment=experiment,
@@ -1230,6 +1294,20 @@ def merge_by_mz(id_df_1:pd.DataFrame, id_df_2:pd.DataFrame, mz_tolerance=1e-04):
         id_df.at[row["idx1"], "centroided_intensity"] = (id_df_1.at[row["idx1"], "centroided_intensity"] + id_df_2.at[row["idx2"], "centroided_intensity"]) / 2
     not_merged = [i for i in id_df_2.index if i not in df_idx["idx2"]]
     return pd.concat([id_df, id_df_2.loc[not_merged]]).reset_index(drop=True)
+
+
+
+# Printing
+def print_params(p):
+    """
+    Print all parameters
+    """
+    if p.size():
+        for i in p.keys():
+            print( "Param:", i, "Value:", p[i], "Description:", p.getDescription(i) )
+    else:
+        print("no data available")
+
 
 
 ### Plotting ###

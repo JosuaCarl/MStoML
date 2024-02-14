@@ -406,7 +406,7 @@ def trim_threshold_batch(experiments: Union[Sequence[oms.MSExperiment|str], str]
 
 
 # Combination
-def combine_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
+def sum_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
     spectrum = experiment.getSpectra()[0]
     intensities_all = np.zeros(spectrum.size())
     mzs_all = spectrum.get_peaks()[0]
@@ -417,10 +417,14 @@ def combine_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
     comb_spectrum.set_peaks( (mzs_all, intensities_all) ) # type: ignore
     return comb_spectrum
 
-def combine_spectra_experiments(experiments:List[oms.MSExperiment]) -> oms.MSExperiment:
+def combine_spectra_experiments(spectra_container:Sequence[oms.MSExperiment|oms.MSSpectrum]) -> oms.MSExperiment:
     experiment_all = oms.MSExperiment()
-    for experiment in experiments:
-        experiment_all.setSpectra(experiment.getSpectra())
+    for sc in spectra_container:
+        if isinstance(sc, oms.MSSpectrum):
+            experiment_all.addSpectrum(sc)
+        else:
+            for spectrum in sc.getSpectra():            # type: ignore
+                experiment_all.addSpectrum(spectrum)
     return experiment_all
 
 

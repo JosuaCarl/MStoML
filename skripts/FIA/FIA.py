@@ -87,7 +87,7 @@ def load_experiments(experiments:Union[Sequence[oms.MSExperiment|str], str], fil
             experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if file.endswith(file_ending)]
         else:
             experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if check_ending_experiment(file)]
-    experiments = [load_experiment(experiment) for experiment in experiments]
+    experiments = [load_experiment(experiment) for experiment in tqdm(experiments)]
     return experiments
 
 
@@ -108,14 +108,14 @@ def load_names_batch(experiments:Union[Sequence[oms.MSExperiment|str], str], fil
     """
     if isinstance(experiments, str):
         if file_ending:
-            return [load_name(file) for file in os.listdir(experiments) if file.endswith(file_ending)]
+            return [load_name(file) for file in tqdm(os.listdir(experiments)) if file.endswith(file_ending)]
         else:
-            return [load_name(file) for file in os.listdir(experiments) if check_ending_experiment(file)]
+            return [load_name(file) for file in tqdm(os.listdir(experiments)) if check_ending_experiment(file)]
     else:
         if isinstance(experiments[0], str):
-            return [load_name(experiment) for experiment in experiments] 
+            return [load_name(experiment) for experiment in tqdm(experiments)] 
         else:
-            return [load_name(experiment, str(i)) for i, experiment in enumerate(experiments)]
+            return [load_name(experiment, str(i)) for i, experiment in enumerate(tqdm(experiments))]
     
 
 def load_fia_df(data_dir:str, file_ending:str):
@@ -1342,6 +1342,36 @@ def quick_plot(spectrum: oms.MSSpectrum, xlim: Optional[List[float]] = None, yli
     if "x" in log:
         plt.xscale('log')
     plt.show()
+
+
+def sns_plot(x, y, hue=None, size=None, xlim: Optional[List[float]] = None, ylim: Optional[List[float]] = None,
+            plottype: str = "line", log:List[str]=[], sizes:Optional[Tuple[int, int]]=(20,20), palette:str="hls",
+            figsize:Optional[Tuple[int,int]] = (18, 5)) -> None:
+    """
+    Shows a plot of a spectrum between the defined borders
+    @spectrum: pyopenms.MSSpectrum
+    @xlim: list of two positions
+    @plottype: "line" | "scatter"
+    returns: None, but displays plot
+    """
+    plt.figure(figsize = figsize)
+    if plottype == "line":
+        sns.lineplot(x=y, y=y, hue=hue, size=size) # type: ignore
+    elif plottype == "scatter":
+        sns.scatterplot(x=x, y=y, hue=hue, size=size, sizes=sizes, palette=palette)  # type: ignore
+    else:
+        sns.scatterplot(x=x, y=y, hue=hue, size=size, sizes=sizes, palette=palette)  # type: ignore
+
+    if xlim:
+        plt.xlim(xlim[0], xlim[1])
+    if ylim:
+        plt.ylim(ylim[0], ylim[1])
+    if "y" in log:
+        plt.yscale('log')
+    if "x" in log:
+        plt.xscale('log')
+    plt.show()
+
 
 
 def dynamic_plot(experiment: oms.MSExperiment, mode: str = "lines", log:List[str]=["x"]) -> None:

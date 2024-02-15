@@ -419,11 +419,13 @@ def sum_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
 
 def combine_spectra_experiments(spectra_container:Sequence[oms.MSExperiment|oms.MSSpectrum]) -> oms.MSExperiment:
     experiment_all = oms.MSExperiment()
-    for sc in spectra_container:
+    for i, sc in enumerate(spectra_container):
         if isinstance(sc, oms.MSSpectrum):
+            sc.setRT(float(i))
             experiment_all.addSpectrum(sc)
         else:
             for spectrum in sc.getSpectra():            # type: ignore
+                spectrum.setRT(float(i))
                 experiment_all.addSpectrum(spectrum)
     return experiment_all
 

@@ -1,6 +1,7 @@
 import os
 import stat
 import time
+import math
 from typing import overload, Any, List, Dict, Tuple, Set, Sequence, Union, Optional
 import shutil
 from pyparsing import Opt
@@ -15,6 +16,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
 import plotly.express as px
+from scipy.signal import find_peaks
+from scipy.spatial.distance import pdist
+from scipy.cluster.hierarchy import fcluster, linkage
 from sklearn.impute import KNNImputer
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.pipeline import Pipeline
@@ -405,8 +409,12 @@ def trim_threshold_batch(experiments: Union[Sequence[oms.MSExperiment|str], str]
     return cleaned_dir
 
 
+
 # Combination
 def sum_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
+    """
+    Sum up spectra in one experiment
+    """
     spectrum = experiment.getSpectra()[0]
     intensities_all = np.zeros(spectrum.size())
     mzs_all = spectrum.get_peaks()[0]
@@ -417,7 +425,11 @@ def sum_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
     comb_spectrum.set_peaks( (mzs_all, intensities_all) ) # type: ignore
     return comb_spectrum
 
+
 def combine_spectra_experiments(spectra_container:Sequence[oms.MSExperiment|oms.MSSpectrum]) -> oms.MSExperiment:
+    """
+    Combines all spectra/experiements, into different spectra in one experiment
+    """
     experiment_all = oms.MSExperiment()
     for i, sc in enumerate(spectra_container):
         if isinstance(sc, oms.MSSpectrum):
@@ -428,6 +440,7 @@ def combine_spectra_experiments(spectra_container:Sequence[oms.MSExperiment|oms.
                 spectrum.setRT(float(i))
                 experiment_all.addSpectrum(spectrum)
     return experiment_all
+
 
 
 # Smoothing
@@ -671,6 +684,41 @@ def merge_experiments(experiments: Union[Sequence[oms.MSExperiment|str], str], r
     oms.MzMLFile().store(os.path.join(run_dir, "merged_all.mzML"), merged_exp)
 
     return merged_exp
+
+
+def merge_mz_tolerance(comb_df:pd.DataFrame, charge:int=1, tolerance:float=1e-3, binned:bool=False) -> pd.DataFrame:
+    """
+    Weighted average of m/z values that are within absolute tolerance of a row in the primary dataframe
+    """
+    df1 = comb_df.loc[comb_df["polarity"] == charge, "clustered_experiment"].item().get_df(long=True)[["mz", "inty"]]
+    df2 = comb_df.loc[comb_df["polarity"] == -charge, "clustered_experiment"].item().get_df(long=True)[["mz", "inty"]]
+    df_comb = pd.concat([df1, df2]).sort_values("mz").reset_index(drop=True)
+
+    mzs = []
+    intys = []
+    if binned:
+        bin_count = math.ceil( (df_comb["mz"].tail(1).item() - df_comb["mz"].head(1).item()) / tolerance )
+        bins = np.linspace(df_comb["mz"].tail(1).item(), df_comb["mz"].head(1).item(), bin_count)
+        digitized = np.digitize(df_comb["mz"], bins)
+
+        for i in tqdm(np.unique(digitized)):
+            mzs.append(np.average(df_comb.loc[digitized == i]["mz"], weights=df_comb.loc[digitized == i]["inty"]))
+            intys.append(np.mean(df_comb.loc[digitized == i]["inty"]))
+    else:
+        with tqdm(total=len(df_comb)) as progress_bar:
+            while not df_comb.empty:
+                mz_comp = df_comb.at[df_comb.index[0], "mz"]
+                inty_comp = df_comb.at[df_comb.index[0], "inty"]
+                comb = np.isclose(mz_comp, df_comb["mz"], rtol=0.0, atol=tolerance)
+
+                mzs.append(np.average(np.append(df_comb.loc[comb]["mz"], mz_comp), weights=np.append(df_comb.loc[comb]["inty"], inty_comp)))
+                intys.append(np.average(np.append(df_comb.loc[comb]["inty"], mz_comp)))
+                
+                df_comb = df_comb.loc[~comb]
+                progress_bar.update(sum(comb))
+
+    merged_df = pd.DataFrame({"mz": mzs, "inty": intys})
+    return merged_df.sort_values("mz").reset_index(drop=True)
 
 
 
@@ -1201,6 +1249,62 @@ def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compo
             feature_maps.append(feature_map)
           
     return feature_maps
+
+### Clustering
+def extract_from_clustering(df, clustering):
+    """
+    accumarray(clusters, (peak_selection(:,1)) .* (peak_selection(:,2)).^5) ./ accumarray(clusters, peak_selection(:,2).^5);
+    accumarray(clusters, peak_selection(:,2),[],@max);   
+    """
+    mzs = []
+    intys = []
+    for c in np.unique(clustering):
+        indices = clustering == c
+        intys_clust = df["inty"][indices].values
+        mzs_clust = df["mz"][indices].values
+        inty = np.max(intys_clust)
+        mz = np.sum(mzs_clust * intys_clust**3) / np.sum(intys_clust**3)
+        mzs.append(mz)
+        intys.append(inty)
+    return np.array( [mzs, intys] )    
+
+
+def cluster_matlab(df:pd.DataFrame, height_lim:int=1000, prominence_lim:int=1000, threshold:float=(7e-2)**2):
+    """
+    Clusters according to FIA matlab routine
+    """
+    # Peak detection
+    peaks, *_ = find_peaks(df["inty"], height=height_lim, prominence=prominence_lim)
+    peaked_df = df.loc[df.index[peaks]]
+
+    # Distance calculation @(x,y) (x(:,1)-y(:,1)).^2  + (x(:,2)==y(:,2))*10^6; 
+    distances = pdist(peaked_df["mz"].values.reshape(-1,1), metric="cityblock")**2 + pdist(peaked_df["RT"].values.reshape(-1,1), metric="hamming")*1e6  # type: ignore  
+    tree = linkage(distances, method="complete")
+    clustering =  fcluster(tree, t=threshold, criterion="distance")
+    return extract_from_clustering(peaked_df, clustering)
+
+
+def cluster_sliding_window(comb_experiment:oms.MSExperiment, height_lim:int=1000, prominence_lim:int=1000, window_len:int=2000, window_shift=1000, threshold:float=(7e-2)**2):
+    """
+    Applies clustering over sliding window in an experiment. The result may contain duplicates or close to duplicates.
+    """
+    n = len(comb_experiment.getSpectra()[0].get_peaks()[0])
+    df = comb_experiment.get_df(long=True)
+    peaks = []
+    for i in tqdm(range(0, n - window_len, window_shift)):
+        clust_exp = cluster_matlab(df.loc[i:i + window_len], height_lim=height_lim, prominence_lim=prominence_lim, threshold=threshold)
+        peaks.append(clust_exp)
+    clust_exp = cluster_matlab(df.loc[n-window_len:n], height_lim=height_lim, prominence_lim=prominence_lim, threshold=threshold)
+    peaks = np.column_stack(peaks)
+    peaks = np.unique(peaks, axis=1)
+
+    # Packaging
+    clustered_experiment = oms.MSExperiment()
+    clustered_spectrum = oms.MSSpectrum()
+    clustered_spectrum.set_peaks((peaks[0], peaks[1]))         # type: ignore
+    clustered_experiment.addSpectrum(clustered_spectrum)
+    return clustered_experiment
+
 
 
 

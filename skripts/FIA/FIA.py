@@ -354,7 +354,7 @@ def bin_df_stepwise_batch(experiments:pd.DataFrame,
         if binned_dfs.empty:
             binned_dfs = binned_df
         else:
-            binned_dfs.join(binned_df)
+            binned_dfs = binned_dfs.join(binned_df)
         binned_dfs.rename(columns={binned_var: row[sample_var]}, inplace=True)
     return binned_dfs
 
@@ -696,12 +696,18 @@ def merge_batch(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir
 
     return cleaned_dir
 
+
+def make_merge_dict(dir:str, file_ending:str=".mzML") -> dict:
+    names = load_names_batch(dir)
+    samples = {"_".join(name.split("_")[:-1]) for name in names}
+    return {sample: [os.path.join(dir, file) for file in os.listdir(dir) if file.startswith(sample) and file.endswith(file_ending)] for sample in samples}
+
 def merge_experiments(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir:str, file_ending:str=".mzML", method:str="block_method",
                     mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", ms_levels:List[int]=[1], sort_blocks:str="RT_ascending",
                     rt_block_size: Optional[int] = None, rt_max_length:float=0.0,
                     spectrum_type:str="automatic", rt_range:Optional[float]=5.0, rt_unit:str="scans", 
                     rt_FWHM:float=5.0, cutoff:float=0.01, precursor_mass_tol:float=0.0, precursor_max_charge:int=1,
-                    deepcopy: bool = False) -> str:
+                    deepcopy: bool = False) -> oms.MSExperiment:
     """
     Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
     """
@@ -715,9 +721,6 @@ def merge_experiments(experiments: Union[Sequence[oms.MSExperiment|str], str], r
                                     rt_FWHM=rt_FWHM, cutoff=cutoff, precursor_mass_tol=precursor_mass_tol, precursor_max_charge=precursor_max_charge,
                                     deepcopy=deepcopy)
     
-    merged_exp.setLoadedFilePath(os.path.join(run_dir, "merged_all.mzML"))
-    oms.MzMLFile().store(os.path.join(run_dir, "merged_all.mzML"), merged_exp)
-
     return merged_exp
 
 

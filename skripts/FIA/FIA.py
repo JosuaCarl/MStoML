@@ -56,11 +56,9 @@ def check_ending_experiment(file:str):
 
 
 # Loading
-def read_experiment(experiment_path: str) -> oms.MSExperiment:
+def read_experiment(experiment_path: str, separator:str="\t") -> oms.MSExperiment:
     """
-    Read in MzXML or MzML File as a pyopenms experiment
-    @path: String
-    return: pyopenms.MSExperiment
+    Read in MzXML or MzML File as a pyopenms experiment. If the file is in tabular format, assumes that is is in long form with two columns ["mz", "inty"]
     """
     experiment = oms.MSExperiment()
     if experiment_path.endswith(".mzML") or experiment_path.endswith(".MzML"):
@@ -69,20 +67,26 @@ def read_experiment(experiment_path: str) -> oms.MSExperiment:
     elif experiment_path.endswith(".mzXML") or experiment_path.endswith(".MzXML"):
         file = oms.MzXMLFile()
         file.load(experiment_path, experiment)
+    elif experiment_path.endswith(".tsv") or experiment_path.endswith(".csv") or experiment_path.endswith(".txt"):
+        exp_df = pd.read_csv(experiment_path, sep=separator)
+        spectrum = oms.MSSpectrum()
+        spectrum.set_peaks( (exp_df["mz"], exp_df["inty"]) ) # type: ignore
+        experiment.addSpectrum(spectrum)
     else: 
-        raise ValueError(f'Invalid ending of {experiment_path}. Must be in [".MzXML", ".mzXML", ".MzML", ".mzML"]')
+        raise ValueError(f'Invalid ending of {experiment_path}. Must be in [".MzXML", ".mzXML", ".MzML", ".mzML", ".tsv", ".csv", ".txt"]')
     return experiment
 
-def load_experiment(experiment:Union[oms.MSExperiment, str]) -> oms.MSExperiment:
+
+def load_experiment(experiment:Union[oms.MSExperiment, str], separator:str="\t") -> oms.MSExperiment:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
     if isinstance(experiment, oms.MSExperiment):
         return experiment
     else:
-        return read_experiment(experiment)
+        return read_experiment(experiment, separator=separator)
     
-def load_experiments(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:Optional[str]=None) -> List[oms.MSExperiment]:
+def load_experiments(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:Optional[str]=None, separator:str="\t") -> List[oms.MSExperiment]:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
@@ -91,11 +95,11 @@ def load_experiments(experiments:Union[Sequence[oms.MSExperiment|str], str], fil
             experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if file.endswith(file_ending)]
         else:
             experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if check_ending_experiment(file)]
-    experiments = [load_experiment(experiment) for experiment in tqdm(experiments)]
+    experiments = [load_experiment(experiment, separator=separator) for experiment in tqdm(experiments)]
     return experiments
 
 
-def load_name(experiment:Union[oms.MSExperiment, str], alt_name:Optional[str]=None) -> str:
+def load_name(experiment:Union[oms.MSExperiment, str], alt_name:Optional[str]=None, file_ending:Optional[str]=None) -> str:
     if isinstance(experiment, str):
         return "".join(experiment.split(".")[:-1])
     else:
@@ -122,9 +126,9 @@ def load_names_batch(experiments:Union[Sequence[oms.MSExperiment|str], str], fil
             return [load_name(experiment, str(i)) for i, experiment in enumerate(tqdm(experiments))]
     
 
-def load_fia_df(data_dir:str, file_ending:str):
+def load_fia_df(data_dir:str, file_ending:str, separator:str="\t") -> pd.DataFrame:
     print("Loading experiments:")
-    experiments = load_experiments(data_dir, file_ending)
+    experiments = load_experiments(data_dir, file_ending, separator=separator)
     print("Loading names:")
     names = load_names_batch(data_dir, file_ending)
     samples = [name.split("_")[0] for name in names]
@@ -325,6 +329,37 @@ def merge_compounds(path_to_tsv:str) -> pd.DataFrame:
 
 
 ### MS DATA TRANSFORMATION ###
+# Binning
+def bin_df_stepwise(df:pd.DataFrame, binning_var="mz", binned_var="inty", statistic="sum", start:float=0.0, stop:float=2000.0, step:float=0.001) -> pd.DataFrame:
+    bins = np.append(np.arange(start, stop, step), stop)
+    statistic, bin_edges, bin_nrs = sci.stats.binned_statistic(df[binning_var], df[binned_var],
+                                                               statistic=statistic, bins=bins, range=(start, stop))
+    bin_means = np.mean([bins[1:], bins[:-1]], axis=0)
+                         
+    binned_df = pd.DataFrame({"mz": bin_means, "inty": statistic})
+    binned_df.set_index("mz", inplace=True)
+    return binned_df
+
+def bin_df_stepwise_batch(experiments:pd.DataFrame,
+                          sample_var:str="sample", experiment_var:str="experiment",
+                          binning_var="mz", binned_var="inty", statistic="sum",
+                          start:float=0.0, stop:float=2000.0, step:float=0.001) -> pd.DataFrame:
+    binned_dfs = pd.DataFrame()
+    for i, row in tqdm(experiments.iterrows(), total=len(experiments)):
+        experiment = row[experiment_var]
+        if not isinstance(experiment, pd.DataFrame):
+            experiment = experiment.get_df(long=True)
+        binned_df = bin_df_stepwise(experiment, binning_var=binning_var, binned_var=binned_var,
+                                    statistic=statistic, start=start, stop=stop, step=step)
+        if binned_dfs.empty:
+            binned_dfs = binned_df
+        else:
+            binned_dfs.join(binned_df)
+        binned_dfs.rename(columns={binned_var: row[sample_var]}, inplace=True)
+    return binned_dfs
+
+
+
 # Limiting
 def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upper_limit: int | float,
                    sample_size: int, statistic:str="sum") -> oms.MSSpectrum:
@@ -1274,7 +1309,7 @@ def cluster_matlab(df:pd.DataFrame, height_lim:int=1000, prominence_lim:int=1000
     Clusters according to FIA matlab routine
     """
     # Peak detection
-    peaks, *_ = find_peaks(df["inty"], height=height_lim, prominence=prominence_lim)
+    peaks, *_ = find_peaks(df["inty"], height=height_lim, prominence=prominence_lim)    # type: ignore
     peaked_df = df.loc[df.index[peaks]]
 
     # Distance calculation @(x,y) (x(:,1)-y(:,1)).^2  + (x(:,2)==y(:,2))*10^6; 

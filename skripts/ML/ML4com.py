@@ -10,13 +10,14 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.model_selection import cross_val_predict
-from sklearn import tree
-from sklearn import svm
+from sklearn.utils.random import sample_without_replacement
+from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import StandardScaler, MaxAbsScaler, MinMaxScaler
 from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
+from sklearn import tree
+from sklearn import svm
 import seaborn as sns
 import matplotlib.pyplot as plt
-
 
 
 

@@ -86,7 +86,8 @@ def load_experiment(experiment:Union[oms.MSExperiment, str], separator:str="\t")
     else:
         return read_experiment(experiment, separator=separator)
     
-def load_experiments(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:Optional[str]=None, separator:str="\t") -> List[oms.MSExperiment]:
+def load_experiments(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:Optional[str]=None,
+                     separator:str="\t", data_load:bool=True) -> Sequence[oms.MSExperiment|str]:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
@@ -95,7 +96,8 @@ def load_experiments(experiments:Union[Sequence[oms.MSExperiment|str], str], fil
             experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if file.endswith(file_ending)]
         else:
             experiments = [os.path.join(experiments, file) for file in os.listdir(experiments) if check_ending_experiment(file)]
-    experiments = [load_experiment(experiment, separator=separator) for experiment in tqdm(experiments)]
+    if data_load:
+        experiments = [load_experiment(experiment, separator=separator) for experiment in tqdm(experiments)]
     return experiments
 
 
@@ -126,13 +128,13 @@ def load_names_batch(experiments:Union[Sequence[oms.MSExperiment|str], str], fil
             return [load_name(experiment, str(i)) for i, experiment in enumerate(tqdm(experiments))]
     
 
-def load_fia_df(data_dir:str, file_ending:str, separator:str="\t") -> pd.DataFrame:
-    print("Loading experiments:")
-    experiments = load_experiments(data_dir, file_ending, separator=separator)
+def load_fia_df(data_dir:str, file_ending:str, separator:str="\t", data_load:bool=True) -> pd.DataFrame:
     print("Loading names:")
     names = load_names_batch(data_dir, file_ending)
     samples = [name.split("_")[0] for name in names]
     polarities = [{"pos": 1, "neg": -1}.get(name.split("_")[-1]) for name in names]
+    print("Loading experiments:")
+    experiments = load_experiments(data_dir, file_ending, separator=separator, data_load=data_load)
     fia_df = pd.DataFrame([samples, polarities, experiments])
     fia_df = fia_df.transpose()
     fia_df.columns = ["sample", "polarity", "experiment"]
@@ -735,8 +737,7 @@ def merge_mz_tolerance(comb_df:pd.DataFrame, charge:int=1, tolerance:float=1e-3,
     mzs = []
     intys = []
     if binned:
-        bin_count = math.ceil( (df_comb["mz"].tail(1).item() - df_comb["mz"].head(1).item()) / tolerance )
-        bins = np.linspace(df_comb["mz"].tail(1).item(), df_comb["mz"].head(1).item(), bin_count)
+        bins = np.append(np.arange(df_comb["mz"].head(1).item(), df_comb["mz"].tail(1).item(), tolerance), df_comb["mz"].tail(1).item())
         digitized = np.digitize(df_comb["mz"], bins)
 
         for i in tqdm(np.unique(digitized)):

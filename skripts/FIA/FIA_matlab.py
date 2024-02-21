@@ -32,51 +32,47 @@ def __main__():
     step_time = time.time()
 
     # Load Data
-    fia_df = load_fia_df(data_dir, ".mzML")
+    fia_df = load_fia_df(data_dir, ".mzML", data_load=False)
     runtimes["trimming"] = [time.time() - step_time]
     step_time = time.time()
-
-    # Binning
-    # Computes mean, media or sum of binned peaks (median needs ~2* more time)
-    print("Binning experiments:")
-    fia_df["experiment"] = fia_df["experiment"].progress_apply(lambda experiment: limit_experiment(experiment, 51, 1699, 2*10**6, statistic="sum", deepcopy=True))
-    runtimes["binning"] = [time.time() - step_time]
-    step_time = time.time()
-
-    # Summing spectra
-    print("Summing spectra:")
-    fia_df["sum_spectra"] = fia_df["experiment"].progress_apply(lambda experiment: sum_spectra(experiment)) # type: ignore
-    runtimes["summing spectra"] = [time.time() - step_time]
-    step_time = time.time()
     
-
-    # Equal sample and polarity merging
-    print("Sample merging:")
-    merge_dict = make_merge_dict(data_dir, file_ending=".mzML")
-    comb_df = pd.DataFrame(columns=["polarity", "sample", "comb_experiment"])
     for sample in tqdm(fia_df["sample"].unique()):
-        for polarity in fia_df["polarity"].unique():    
-            uniq_samples = fia_df["polarity"] == polarity and fia_df["sample"] == sample
-            comb_df.loc[len(comb_df.index)] = [polarity, sample, combine_spectra_experiments(fia_df.loc[uniq_samples]["sum_spectra"].to_list())]
-    runtimes["sample merging"] = [time.time() - step_time]
-    step_time = time.time()
+        # For multi-step processing
+        if os.path.isfile(os.path.join(run_dir, f"{sample}.tsv")):
+            continue
+
+        fia_df_tmp = fia_df.loc[fia_df["sample"]==sample,:]
+        fia_df_tmp.loc[:,"experiment"] = fia_df_tmp["experiment"].apply(lambda experiment: load_experiment(experiment))
+        
+        # Binning
+        # Computes mean, media or sum of binned peaks (median needs ~2* more time)
+        print("Binning experiments:")
+        fia_df_tmp.loc[:,"experiment"] = fia_df_tmp["experiment"].apply(lambda experiment: limit_experiment(experiment, 51, 1699, 2*10**6, statistic="sum", deepcopy=True))
+
+        # Summing spectra
+        print("Summing spectra:")
+        fia_df_tmp.loc[:,"sum_spectra"] = fia_df_tmp["experiment"].apply(lambda experiment: sum_spectra(experiment)) # type: ignore
+
+        # Equal sample and polarity merging
+        print("Sample merging:")
+        merge_dict = make_merge_dict(data_dir, file_ending=".mzML")
+        comb_df = pd.DataFrame(columns=["polarity", "sample", "comb_experiment"])
+        for polarity in fia_df_tmp["polarity"].unique():    
+            uniq_samples = (fia_df_tmp["polarity"] == polarity) & (fia_df_tmp["sample"] == sample)
+            comb_df.loc[len(comb_df.index)] = [polarity, sample, combine_spectra_experiments(fia_df_tmp.loc[uniq_samples]["sum_spectra"].to_list())]
 
 
-    # Clustering
-    print("Clustering:")
-    comb_df["clustered_experiment"] = comb_df["comb_experiment"].progress_apply(lambda experiment: cluster_sliding_window(experiment, window_len=2000, window_shift=1000, threshold=0.07**2))
-    runtimes["clustering"] = [time.time() - step_time]
-    step_time = time.time()
+        # Clustering
+        print("Clustering:")
+        comb_df.loc[:,"clustered_experiment"] = comb_df["comb_experiment"].apply(lambda experiment: cluster_sliding_window(experiment, window_len=2000, window_shift=1000, threshold=0.07**2))
 
 
-    # Merging Polarities
-    print("Polarity merging:")
-    for sample in tqdm(fia_df["sample"].unique()):
-        uniq_samples = fia_df["polarity"] == polarity and fia_df["sample"] == sample
-        all_merged_df = merge_mz_tolerance(comb_df, charge=1, tolerance=1e-3)
-        all_merged_df.to_csv(os.path.join(run_dir, f"{sample}.tsv"), sep="\t", index=False)
-        runtimes["merging"] = [time.time() - step_time]
-        step_time = time.time()
+        # Merging Polarities
+        print("Polarity merging:")
+        for sample in fia_df_tmp["sample"].unique():
+            uniq_samples = (fia_df_tmp["polarity"] == polarity) & (fia_df_tmp["sample"] == sample)
+            all_merged_df = merge_mz_tolerance(comb_df, charge=1, tolerance=1e-3, binned=True)
+            all_merged_df.to_csv(os.path.join(run_dir, f"{sample}.tsv"), sep="\t", index=False)
 
 
     # Runtime

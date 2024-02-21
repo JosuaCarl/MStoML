@@ -13,8 +13,11 @@ from sklearn.model_selection import cross_val_predict
 from sklearn import tree
 from sklearn import svm
 from sklearn.preprocessing import StandardScaler, MaxAbsScaler, MinMaxScaler
+from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
 import seaborn as sns
 import matplotlib.pyplot as plt
+
+
 
 
 # Helpers
@@ -40,6 +43,17 @@ def mult_cv_model(model, X, ys, n_fold):
         confusion_matrices.append(confusion_matrix(y, y_pred))
         accuracies.append(accuracy_score(y,y_pred))
     return (accuracies, confusion_matrices)
+
+
+def grid_search_params_cv_model(classifier, param_grid, X, ys, targets, n_splits:int=5, n_jobs:int=1):
+    grids = {}
+    for i, y in enumerate(ys.transpose()):
+        # Model definition
+        cv = StratifiedShuffleSplit(n_splits=n_splits, test_size=1/n_splits, random_state=42)
+        grid = GridSearchCV(classifier(), param_grid=param_grid, cv=cv, n_jobs=n_jobs, verbose=2)
+        grid.fit(X.transpose(), y)
+        grids[targets[i].item()] = grid
+    return grids
 
 
 def train_cv_model(classifier, param_grid, X, ys, target_labels, outdir:str, suffix:str="", n_fold:int=5):

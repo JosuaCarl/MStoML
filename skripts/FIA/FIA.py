@@ -4,6 +4,7 @@ import time
 import math
 from typing import overload, Any, List, Dict, Tuple, Set, Sequence, Union, Optional
 import shutil
+from matplotlib.figure import Figure
 from pyparsing import Opt
 import requests
 from copy import deepcopy
@@ -1461,7 +1462,7 @@ def print_params(p):
 
 ### Plotting ###
 def quick_plot(spectrum: oms.MSSpectrum, xlim: Optional[List[float]] = None, ylim: Optional[List[float]] = None,
-               plottype: str = "line", log:List[str]=[]) -> None:
+               plottype: str = "line", log:List[str]=[]) -> Figure:
     """
     Shows a plot of a spectrum between the defined borders
     @spectrum: pyopenms.MSSpectrum
@@ -1469,22 +1470,23 @@ def quick_plot(spectrum: oms.MSSpectrum, xlim: Optional[List[float]] = None, yli
     @plottype: "line" | "scatter"
     returns: None, but displays plot
     """
+    fig, ax1 = plt.subplots()
     if plottype == "line":
-        ax = sns.lineplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1]) # type: ignore
+        ax2 = sns.lineplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], ax=ax1) # type: ignore
     elif plottype == "scatter":
-        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(20, 20))  # type: ignore
+        ax2 = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(20, 20), ax=ax1)  # type: ignore
     else:
-        ax = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(20, 20))  # type: ignore
+        ax2 = sns.scatterplot(x=spectrum.get_peaks()[0], y=spectrum.get_peaks()[1], sizes=(20, 20), ax=ax1)  # type: ignore
 
     if xlim:
-        ax.set_xlim(xlim[0], xlim[1])
+        ax2.set_xlim(xlim[0], xlim[1])
     if ylim:
-        ax.set_ylim(ylim[0], ylim[1])
+        ax2.set_ylim(ylim[0], ylim[1])
     if "y" in log:
         plt.yscale('log')
     if "x" in log:
         plt.xscale('log')
-    plt.show()
+    return fig
 
 
 def sns_plot(x, y, hue=None, size=None, xlim: Optional[List[float]] = None, ylim: Optional[List[float]] = None,

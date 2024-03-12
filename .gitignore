@@ -9,6 +9,7 @@ skripts/FIA/Step 1 Load/
 skripts/FIA/Z_fia_allions/
 skripts/FIA/Z_fia_annotate/
 skripts/KNIME/
+skripts/ML/hyperband_optimization/
 
 
 # Byte-compiled / optimized / DLL files

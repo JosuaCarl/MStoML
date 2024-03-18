@@ -8,7 +8,7 @@ from tqdm import tqdm
 from typing import List
 import numpy as np
 import pandas as pd
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.model_selection import cross_val_predict
 from sklearn.utils.random import sample_without_replacement
 from sklearn.model_selection import KFold, StratifiedKFold
@@ -20,6 +20,9 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
+# Normalization
+def total_ion_count_normalization(df):
+    return df / df.sum()
 
 # Helpers
 def dict_permutations(dictionary:dict) -> List[dict]:
@@ -80,6 +83,21 @@ def train_cv_model(classifier, param_grid, X, ys, target_labels, outdir:str, suf
 
     results.to_csv(os.path.join(outdir, f"accuracies_{suffix}.tsv"), sep="\t")
     return results
+
+
+# KERAS
+def extract_metrics(true_labels, prediction, run_label, cv_i,
+                    metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):
+    fpr, tpr, threshold = roc_curve(true_labels,  prediction)
+    auc = roc_auc_score(true_labels,  prediction)
+
+    prediction_labels = [0.0 if pred[0] < 0.5 else 1.0 for pred in prediction]
+    conf_mat = confusion_matrix(true_labels,  prediction_labels)
+    accuracy = accuracy_score(true_labels,  prediction_labels)
+
+    metrics_df.loc[len(metrics_df)] = [run_label, cv_i, accuracy, auc, tpr, fpr, threshold, conf_mat]
+
+    return metrics_df
 
 
 

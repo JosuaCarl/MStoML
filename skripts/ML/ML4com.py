@@ -39,13 +39,24 @@ def mult_cv_model(model, X, ys, n_fold):
     confusion_matrices = []
     
     # Perform cross-validation for each strain separately
+    kf = KFold(n_splits=n_fold)
     for y in ys.transpose():
+        validation_preds = np.array([])
+        accs = []
+        for train_index, val_index in kf.split(X, y):
+            model_test = model
+            training_data = X[train_index]
+            training_labels = y[train_index]
+            validation_data = X[val_index]
+            validation_labels = y[val_index]
 
-        # Predict the test set labels
-        y_pred = cross_val_predict(model, X.transpose(), y, cv=n_fold)
+            model_test.fit(training_data, training_labels)
+            validation_pred = model_test.predict(validation_data)
+            accs.append(accuracy_score(validation_labels, validation_pred))
+            validation_preds = np.append(validation_preds, validation_pred)
+        accuracies.append(accs)
+        confusion_matrices.append(confusion_matrix(y, validation_preds))
 
-        confusion_matrices.append(confusion_matrix(y, y_pred))
-        accuracies.append(accuracy_score(y,y_pred))
     return (accuracies, confusion_matrices)
 
 
@@ -55,8 +66,8 @@ def grid_search_params_cv_model(classifier, param_grid, X, ys, targets, n_splits
         # Model definition
         cv = StratifiedShuffleSplit(n_splits=n_splits, test_size=1/n_splits, random_state=42)
         grid = GridSearchCV(classifier(), param_grid=param_grid, cv=cv, n_jobs=n_jobs, verbose=2)
-        grid.fit(X.transpose(), y)
-        grids[targets[i].item()] = grid
+        grid.fit(X, y)
+        grids[targets[i]] = grid
     return grids
 
 
@@ -79,7 +90,7 @@ def train_cv_model(classifier, param_grid, X, ys, target_labels, outdir:str, suf
             
             param_dict_str = "_".join(["-".join([str(k), str(v)]) for k,v in param_dict.items()])
             name = f"{param_dict_str}_{suffix}"
-            plot_cv_confmat(ys=ys, target_labels=target_labels, accuracies=accuracies, confusion_matrices=confusion_matrices, outdir=outdir, name=name)
+            plot_cv_confmat(ys=ys, target_labels=target_labels, accuracies=np.mean(accuracies, axis=1), confusion_matrices=confusion_matrices, outdir=outdir, name=name)
 
     results.to_csv(os.path.join(outdir, f"accuracies_{suffix}.tsv"), sep="\t")
     return results
@@ -116,6 +127,7 @@ def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, n
         ax.set_title(f'{target_labels[i]}, Accuracy: {round(accuracies[i], 5)}')
         ax.axis('off')
     fig.tight_layout(rect=[0, 0, .9, 1])                # type: ignore
+    plt.title(f"Overall accuracy: {np.mean(accuracies)}")
     plt.savefig(os.path.join(outdir, f"{name}.png"))
     plt.close()
     

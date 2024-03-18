@@ -1,4 +1,4 @@
-
+import os
 import keras
 from keras import Model
 from keras.layers import Input, Dense, LeakyReLU, Lambda, Dropout, BatchNormalization
@@ -84,18 +84,13 @@ class mtVAE():
     def reconstruct(self, data):
         return self.decode(self.encode(data))
     
-    def save_model(self, save_folder):
-        vae_path     = save_folder + 'VAE.h5'
-        encoder_path = save_folder + 'VAE_encoder.h5'
-        decoder_path = save_folder + 'VAE_decoder.h5'
-        
-        self.vae.save(vae_path)
-        self.encoder.save(encoder_path)
-        self.decoder.save(decoder_path)
+    def save_model(self, save_folder, suffix:str=""):
+        self.vae.save(os.path.join(save_folder, f'VAE{suffix}.h5'))
+        self.encoder.save(os.path.join(save_folder, f'VAE_encoder{suffix}.h5'))
+        self.decoder.save(os.path.join(save_folder, f'VAE_decoder{suffix}.h5'))
         
     
     def load_vae(self, save_path):
-
         # The two functions below have to be redefined for the loading
         # of the model. They cannot be methods of the mtVAE class for
         # some reason.

@@ -88,7 +88,7 @@ def train_cv_model(classifier, param_grid, X, ys, target_labels, outdir:str, suf
 
             model_count += 1
             
-            param_dict_str = "_".join(["-".join([str(k), str(v)]) for k,v in param_dict.items()])
+            param_dict_str = "_".join(["-".join([str(k), str(v)]) for k,v in param_dict.items()]).replace(":", "")
             name = f"{param_dict_str}_{suffix}"
             plot_cv_confmat(ys=ys, target_labels=target_labels, accuracies=np.mean(accuracies, axis=1), confusion_matrices=confusion_matrices, outdir=outdir, name=name)
 
@@ -126,8 +126,8 @@ def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, n
                     cbar=i == 0, cbar_ax=None if i else cbar_ax)
         ax.set_title(f'{target_labels[i]}, Accuracy: {round(accuracies[i], 5)}')
         ax.axis('off')
+    plt.title(f"Overall accuracy: {round(np.mean(accuracies), 3)}")
     fig.tight_layout(rect=[0, 0, .9, 1])                # type: ignore
-    plt.title(f"Overall accuracy: {np.mean(accuracies)}")
     plt.savefig(os.path.join(outdir, f"{name}.png"))
     plt.close()
     

@@ -1,0 +1,158 @@
+{
+  "incumbent_ids": [],
+  "rejected_config_ids": [],
+  "incumbents_changed": 0,
+  "trajectory": [],
+  "state": {
+    "tracker": {
+      "0,0": [
+        [
+          0,
+          [
+            {
+              "activation_0": "relu",
+              "activation_1": "leakyrelu",
+              "activation_2": "leakyrelu",
+              "activation_3": "tanh",
+              "activation_4": "tanh",
+              "dropout_in": 0.45615741633430373,
+              "learning_rate": 0.000432392681428005,
+              "n_layer": 5,
+              "n_neurons_0": 42,
+              "n_neurons_1": 42,
+              "n_neurons_2": 223,
+              "n_neurons_3": 76,
+              "n_neurons_4": 278,
+              "solver": "nadam"
+            },
+            {
+              "activation_0": "relu",
+              "activation_1": "relu",
+              "activation_2": "leakyrelu",
+              "activation_3": "leakyrelu",
+              "activation_4": "tanh",
+              "dropout_in": 0.3508812107698563,
+              "learning_rate": 0.00027637615125314277,
+              "n_layer": 3,
+              "n_neurons_0": 65,
+              "n_neurons_1": 213,
+              "n_neurons_2": 33,
+              "n_neurons_3": 489,
+              "n_neurons_4": 98,
+              "solver": "nadam"
+            },
+            {
+              "activation_0": "relu",
+              "activation_1": "relu",
+              "activation_2": "tanh",
+              "activation_3": "tanh",
+              "activation_4": "relu",
+              "dropout_in": 0.790699070447381,
+              "learning_rate": 0.04220057397195014,
+              "n_layer": 5,
+              "n_neurons_0": 13,
+              "n_neurons_1": 18,
+              "n_neurons_2": 292,
+              "n_neurons_3": 247,
+              "n_neurons_4": 815,
+              "solver": "nadam"
+            }
+          ]
+        ],
+        [
+          0,
+          [
+            {
+              "activation_0": "relu",
+              "activation_1": "logistic",
+              "activation_2": "relu",
+              "activation_3": "relu",
+              "activation_4": "relu",
+              "dropout_in": 0.12904761430799702,
+              "learning_rate": 0.0029846999797850868,
+              "n_layer": 1,
+              "n_neurons_0": 33,
+              "n_neurons_1": 22,
+              "n_neurons_2": 139,
+              "n_neurons_3": 60,
+              "n_neurons_4": 160,
+              "solver": "nadam"
+            },
+            {
+              "activation_0": "tanh",
+              "activation_1": "logistic",
+              "activation_2": "logistic",
+              "activation_3": "relu",
+              "activation_4": "logistic",
+              "dropout_in": 0.5224866603723187,
+              "learning_rate": 0.19229718174853677,
+              "n_layer": 2,
+              "n_neurons_0": 109,
+              "n_neurons_1": 146,
+              "n_neurons_2": 150,
+              "n_neurons_3": 575,
+              "n_neurons_4": 10,
+              "solver": "nadam"
+            },
+            {
+              "activation_0": "leakyrelu",
+              "activation_1": "leakyrelu",
+              "activation_2": "leakyrelu",
+              "activation_3": "relu",
+              "activation_4": "logistic",
+              "dropout_in": 0.2026332820318257,
+              "learning_rate": 0.00024457108102318844,
+              "n_layer": 1,
+              "n_neurons_0": 15,
+              "n_neurons_1": 10,
+              "n_neurons_2": 136,
+              "n_neurons_3": 142,
+              "n_neurons_4": 39,
+              "solver": "nadam"
+            }
+          ]
+        ]
+      ],
+      "1,0": [
+        [
+          0,
+          [
+            {
+              "activation_0": "leakyrelu",
+              "activation_1": "leakyrelu",
+              "activation_2": "relu",
+              "activation_3": "leakyrelu",
+              "activation_4": "tanh",
+              "dropout_in": 0.37304861828504504,
+              "learning_rate": 0.22479136784899792,
+              "n_layer": 2,
+              "n_neurons_0": 139,
+              "n_neurons_1": 451,
+              "n_neurons_2": 27,
+              "n_neurons_3": 577,
+              "n_neurons_4": 206,
+              "solver": "nadam"
+            },
+            {
+              "activation_0": "tanh",
+              "activation_1": "leakyrelu",
+              "activation_2": "tanh",
+              "activation_3": "relu",
+              "activation_4": "tanh",
+              "dropout_in": 0.1955404736012822,
+              "learning_rate": 0.00024232243900608949,
+              "n_layer": 1,
+              "n_neurons_0": 720,
+              "n_neurons_1": 10,
+              "n_neurons_2": 803,
+              "n_neurons_3": 239,
+              "n_neurons_4": 37,
+              "solver": "nadam"
+            }
+          ]
+        ]
+      ]
+    },
+    "next_bracket": 0
+  }
+}

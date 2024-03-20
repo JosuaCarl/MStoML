@@ -1,0 +1,411 @@
+{
+  "type": "Scheduler",
+  "id": "Scheduler-fb942264-6956-415e-8ac3-6df795926467",
+  "address": "tcp://127.0.0.1:36557",
+  "services": {
+    "dashboard": 8787
+  },
+  "started": 1710868384.799498,
+  "workers": {
+    "tcp://127.0.0.1:34045": {
+      "type": "Worker",
+      "id": 5,
+      "host": "127.0.0.1",
+      "resources": {},
+      "local_directory": "/mnt/lustre/home/link/linca945/MStoML/skripts/ML/smac3_output/dask-worker-space/worker-mtygf5di",
+      "name": 5,
+      "nthreads": 1,
+      "memory_limit": 1005634048,
+      "last_seen": 1710868386.6189806,
+      "services": {
+        "dashboard": 42711
+      },
+      "metrics": {
+        "task_counts": {},
+        "bandwidth": {
+          "total": 100000000,
+          "workers": {},
+          "types": {}
+        },
+        "managed_bytes": 0,
+        "spilled_bytes": {
+          "memory": 0,
+          "disk": 0
+        },
+        "transfer": {
+          "incoming_bytes": 0,
+          "incoming_count": 0,
+          "incoming_count_total": 0,
+          "outgoing_bytes": 0,
+          "outgoing_count": 0,
+          "outgoing_count_total": 0
+        },
+        "event_loop_interval": 0.02,
+        "cpu": 0.0,
+        "memory": 56209408,
+        "time": 1710868386.1983955,
+        "host_net_io": {
+          "read_bps": 8015319.862171969,
+          "write_bps": 14757319.923454594
+        },
+        "host_disk_io": {
+          "read_bps": 0.0,
+          "write_bps": 0.0
+        },
+        "num_fds": 18
+      },
+      "status": "running",
+      "nanny": "tcp://127.0.0.1:42139"
+    },
+    "tcp://127.0.0.1:34881": {
+      "type": "Worker",
+      "id": 2,
+      "host": "127.0.0.1",
+      "resources": {},
+      "local_directory": "/mnt/lustre/home/link/linca945/MStoML/skripts/ML/smac3_output/dask-worker-space/worker-psias7t1",
+      "name": 2,
+      "nthreads": 1,
+      "memory_limit": 1005634048,
+      "last_seen": 1710868386.6384034,
+      "services": {
+        "dashboard": 42045
+      },
+      "metrics": {
+        "task_counts": {},
+        "bandwidth": {
+          "total": 100000000,
+          "workers": {},
+          "types": {}
+        },
+        "managed_bytes": 0,
+        "spilled_bytes": {
+          "memory": 0,
+          "disk": 0
+        },
+        "transfer": {
+          "incoming_bytes": 0,
+          "incoming_count": 0,
+          "incoming_count_total": 0,
+          "outgoing_bytes": 0,
+          "outgoing_count": 0,
+          "outgoing_count_total": 0
+        },
+        "event_loop_interval": 0.02,
+        "cpu": 0.0,
+        "memory": 56209408,
+        "time": 1710868386.1744103,
+        "host_net_io": {
+          "read_bps": 6111091.626927186,
+          "write_bps": 8743843.143090282
+        },
+        "host_disk_io": {
+          "read_bps": 0.0,
+          "write_bps": 0.0
+        },
+        "num_fds": 18
+      },
+      "status": "running",
+      "nanny": "tcp://127.0.0.1:41081"
+    },
+    "tcp://127.0.0.1:38079": {
+      "type": "Worker",
+      "id": 1,
+      "host": "127.0.0.1",
+      "resources": {},
+      "local_directory": "/mnt/lustre/home/link/linca945/MStoML/skripts/ML/smac3_output/dask-worker-space/worker-t1_22ate",
+      "name": 1,
+      "nthreads": 1,
+      "memory_limit": 1005634048,
+      "last_seen": 1710868386.622922,
+      "services": {
+        "dashboard": 42655
+      },
+      "metrics": {
+        "task_counts": {},
+        "bandwidth": {
+          "total": 100000000,
+          "workers": {},
+          "types": {}
+        },
+        "managed_bytes": 0,
+        "spilled_bytes": {
+          "memory": 0,
+          "disk": 0
+        },
+        "transfer": {
+          "incoming_bytes": 0,
+          "incoming_count": 0,
+          "incoming_count_total": 0,
+          "outgoing_bytes": 0,
+          "outgoing_count": 0,
+          "outgoing_count_total": 0
+        },
+        "event_loop_interval": 0.02,
+        "cpu": 0.0,
+        "memory": 56311808,
+        "time": 1710868386.1709578,
+        "host_net_io": {
+          "read_bps": 7655851.895600012,
+          "write_bps": 9082728.483926661
+        },
+        "host_disk_io": {
+          "read_bps": 0.0,
+          "write_bps": 0.0
+        },
+        "num_fds": 18
+      },
+      "status": "running",
+      "nanny": "tcp://127.0.0.1:38359"
+    },
+    "tcp://127.0.0.1:40955": {
+      "type": "Worker",
+      "id": 7,
+      "host": "127.0.0.1",
+      "resources": {},
+      "local_directory": "/mnt/lustre/home/link/linca945/MStoML/skripts/ML/smac3_output/dask-worker-space/worker-esaaht92",
+      "name": 7,
+      "nthreads": 1,
+      "memory_limit": 1005634048,
+      "last_seen": 1710868386.6338696,
+      "services": {
+        "dashboard": 38335
+      },
+      "metrics": {
+        "task_counts": {},
+        "bandwidth": {
+          "total": 100000000,
+          "workers": {},
+          "types": {}
+        },
+        "managed_bytes": 0,
+        "spilled_bytes": {
+          "memory": 0,
+          "disk": 0
+        },
+        "transfer": {
+          "incoming_bytes": 0,
+          "incoming_count": 0,
+          "incoming_count_total": 0,
+          "outgoing_bytes": 0,
+          "outgoing_count": 0,
+          "outgoing_count_total": 0
+        },
+        "event_loop_interval": 0.02,
+        "cpu": 0.0,
+        "memory": 56258560,
+        "time": 1710868386.1730084,
+        "host_net_io": {
+          "read_bps": 5518642.46885442,
+          "write_bps": 7997074.715345926
+        },
+        "host_disk_io": {
+          "read_bps": 0.0,
+          "write_bps": 0.0
+        },
+        "num_fds": 18
+      },
+      "status": "running",
+      "nanny": "tcp://127.0.0.1:39413"
+    },
+    "tcp://127.0.0.1:41289": {
+      "type": "Worker",
+      "id": 6,
+      "host": "127.0.0.1",
+      "resources": {},
+      "local_directory": "/mnt/lustre/home/link/linca945/MStoML/skripts/ML/smac3_output/dask-worker-space/worker-pyfrxn5n",
+      "name": 6,
+      "nthreads": 1,
+      "memory_limit": 1005634048,
+      "last_seen": 1710868386.6269457,
+      "services": {
+        "dashboard": 40769
+      },
+      "metrics": {
+        "task_counts": {},
+        "bandwidth": {
+          "total": 100000000,
+          "workers": {},
+          "types": {}
+        },
+        "managed_bytes": 0,
+        "spilled_bytes": {
+          "memory": 0,
+          "disk": 0
+        },
+        "transfer": {
+          "incoming_bytes": 0,
+          "incoming_count": 0,
+          "incoming_count_total": 0,
+          "outgoing_bytes": 0,
+          "outgoing_count": 0,
+          "outgoing_count_total": 0
+        },
+        "event_loop_interval": 0.02,
+        "cpu": 0.0,
+        "memory": 56217600,
+        "time": 1710868386.195289,
+        "host_net_io": {
+          "read_bps": 14405181.872749384,
+          "write_bps": 11404923.404724633
+        },
+        "host_disk_io": {
+          "read_bps": 0.0,
+          "write_bps": 0.0
+        },
+        "num_fds": 18
+      },
+      "status": "running",
+      "nanny": "tcp://127.0.0.1:41225"
+    },
+    "tcp://127.0.0.1:41441": {
+      "type": "Worker",
+      "id": 4,
+      "host": "127.0.0.1",
+      "resources": {},
+      "local_directory": "/mnt/lustre/home/link/linca945/MStoML/skripts/ML/smac3_output/dask-worker-space/worker-vl3tb31a",
+      "name": 4,
+      "nthreads": 1,
+      "memory_limit": 1005634048,
+      "last_seen": 1710868386.6288002,
+      "services": {
+        "dashboard": 39325
+      },
+      "metrics": {
+        "task_counts": {},
+        "bandwidth": {
+          "total": 100000000,
+          "workers": {},
+          "types": {}
+        },
+        "managed_bytes": 0,
+        "spilled_bytes": {
+          "memory": 0,
+          "disk": 0
+        },
+        "transfer": {
+          "incoming_bytes": 0,
+          "incoming_count": 0,
+          "incoming_count_total": 0,
+          "outgoing_bytes": 0,
+          "outgoing_count": 0,
+          "outgoing_count_total": 0
+        },
+        "event_loop_interval": 0.02,
+        "cpu": 0.0,
+        "memory": 56283136,
+        "time": 1710868386.198575,
+        "host_net_io": {
+          "read_bps": 10322572.02156454,
+          "write_bps": 14377282.68329079
+        },
+        "host_disk_io": {
+          "read_bps": 0.0,
+          "write_bps": 0.0
+        },
+        "num_fds": 18
+      },
+      "status": "running",
+      "nanny": "tcp://127.0.0.1:44345"
+    },
+    "tcp://127.0.0.1:42551": {
+      "type": "Worker",
+      "id": 0,
+      "host": "127.0.0.1",
+      "resources": {},
+      "local_directory": "/mnt/lustre/home/link/linca945/MStoML/skripts/ML/smac3_output/dask-worker-space/worker-ss2b2ht9",
+      "name": 0,
+      "nthreads": 1,
+      "memory_limit": 1005634048,
+      "last_seen": 1710868386.6248093,
+      "services": {
+        "dashboard": 44113
+      },
+      "metrics": {
+        "task_counts": {},
+        "bandwidth": {
+          "total": 100000000,
+          "workers": {},
+          "types": {}
+        },
+        "managed_bytes": 0,
+        "spilled_bytes": {
+          "memory": 0,
+          "disk": 0
+        },
+        "transfer": {
+          "incoming_bytes": 0,
+          "incoming_count": 0,
+          "incoming_count_total": 0,
+          "outgoing_bytes": 0,
+          "outgoing_count": 0,
+          "outgoing_count_total": 0
+        },
+        "event_loop_interval": 0.02,
+        "cpu": 0.0,
+        "memory": 56274944,
+        "time": 1710868386.1763911,
+        "host_net_io": {
+          "read_bps": 19720766.112967443,
+          "write_bps": 9364396.462498942
+        },
+        "host_disk_io": {
+          "read_bps": 0.0,
+          "write_bps": 0.0
+        },
+        "num_fds": 18
+      },
+      "status": "running",
+      "nanny": "tcp://127.0.0.1:38939"
+    },
+    "tcp://127.0.0.1:43137": {
+      "type": "Worker",
+      "id": 3,
+      "host": "127.0.0.1",
+      "resources": {},
+      "local_directory": "/mnt/lustre/home/link/linca945/MStoML/skripts/ML/smac3_output/dask-worker-space/worker-_vg7_5y0",
+      "name": 3,
+      "nthreads": 1,
+      "memory_limit": 1005634048,
+      "last_seen": 1710868386.6312032,
+      "services": {
+        "dashboard": 38237
+      },
+      "metrics": {
+        "task_counts": {},
+        "bandwidth": {
+          "total": 100000000,
+          "workers": {},
+          "types": {}
+        },
+        "managed_bytes": 0,
+        "spilled_bytes": {
+          "memory": 0,
+          "disk": 0
+        },
+        "transfer": {
+          "incoming_bytes": 0,
+          "incoming_count": 0,
+          "incoming_count_total": 0,
+          "outgoing_bytes": 0,
+          "outgoing_count": 0,
+          "outgoing_count_total": 0
+        },
+        "event_loop_interval": 0.02,
+        "cpu": 0.0,
+        "memory": 56311808,
+        "time": 1710868386.2022648,
+        "host_net_io": {
+          "read_bps": 10043461.526939213,
+          "write_bps": 4548370.8964212425
+        },
+        "host_disk_io": {
+          "read_bps": 0.0,
+          "write_bps": 0.0
+        },
+        "num_fds": 18
+      },
+      "status": "running",
+      "nanny": "tcp://127.0.0.1:42255"
+    }
+  }
+}

@@ -44,9 +44,10 @@ def build_classification_model(config:Configuration, multiclass:bool=False):
 
 
 class classifier:
-    def __init__(self, X, ys, test_size:float, configuration_space:ConfigurationSpace, model_builder):
+    def __init__(self, X, ys, test_size:float, configuration_space:ConfigurationSpace, model_builder, model_args):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
+        self.model_args = model_args
         self.training_data, self.test_data, self.training_labels, self.test_labels = train_test_split(X, ys, test_size=test_size)
 
     @property
@@ -55,7 +56,7 @@ class classifier:
 
     def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> float:
             keras.utils.set_random_seed(seed)
-            model = self.model_builder(config=config)
+            model = self.model_builder(config=config, **self.model_args)
     
             callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)	# Model will stop if no improvement
             model.fit(self.training_data, self.training_labels, epochs=int(budget), verbose=0, callbacks=[callback])

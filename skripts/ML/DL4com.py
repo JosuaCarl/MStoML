@@ -1,10 +1,13 @@
 # imports
 import sys
+import gc
+from tqdm import tqdm
 from pathlib import Path
 from sklearn.model_selection import train_test_split, KFold
 import tensorflow as tf
 import keras
-from keras import layers, activations
+from keras import layers, activations, backend
+import keras_tuner
 from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer
 from smac import MultiFidelityFacade, HyperparameterOptimizationFacade
 from smac import Scenario
@@ -13,12 +16,50 @@ from smac.intensifier.hyperband import Hyperband
 sys.path.append( '..' )
 from helpers import *
 
+# Models
+def build_classification_model_kt(hyperparameters, classes:int=8):
+    backend.clear_session()
+    gc.collect()
+    model = keras.Sequential(name="MS_community_classifier")
+    
+    model.add(keras.layers.Dropout(hyperparameters.Float("dropout_in", min_value=0.2, max_value=0.7, sampling="linear"),
+                                   noise_shape=None, seed=None))
+    model.add(keras.layers.BatchNormalization())
+    
+    # Middle layers
+    for i in range(hyperparameters.Int("num_layers", 1, 5)):
+        activation = hyperparameters.Choice(f"activation_{i}", ["relu", "leakyrelu"])
+        if activation == "leakyrelu":
+            activation = layers.LeakyReLU()
+        model.add(
+            layers.Dense(
+                units=hyperparameters.Int(f"units_{i}", min_value=10, max_value=1010, step=500),
+                activation=activation,
+            )
+        )
+        if hyperparameters.Boolean(f"dropout_{i}"):
+            model.add(keras.layers.Dropout(0.5, noise_shape=None, seed=None))
+        model.add(keras.layers.BatchNormalization())
 
-def build_classification_model(config:Configuration, multiclass:bool=False):
+    model.add(layers.Dense(classes,  activation=activations.sigmoid))
+    if classes == 1:
+        loss_function = keras.losses.BinaryCrossentropy()
+    else:
+        loss_function = keras.losses.CategoricalCrossentropy()
+    
+    loss_function = keras.losses.CategoricalCrossentropy()
+    optimizer = keras.optimizers.Nadam(learning_rate=1e-3)
+
+    model.compile(optimizer=optimizer, loss=loss_function, metrics=['accuracy'])
+    return model
+
+def build_classification_model(config:Configuration, classes:int=1):
+    backend.clear_session()
+    gc.collect()
     # Model definition
     model = keras.Sequential(name="MS_community_classifier")
-    model.add(keras.layers.Dropout( config.get("dropout_in") ))
-    model.add(keras.layers.BatchNormalization())
+    model.add( keras.layers.Dropout( config.get("dropout_in") ) )
+    model.add( keras.layers.BatchNormalization() )
     for i in range( config.get("n_layers") ):
         activation = config.get(f"activation_{i}")
         if activation == "leakyrelu":
@@ -28,12 +69,11 @@ def build_classification_model(config:Configuration, multiclass:bool=False):
             model.add(keras.layers.Dropout(0.5, noise_shape=None, seed=None))
         model.add(keras.layers.BatchNormalization())
 
-    if multiclass:
-        model.add(layers.Dense(8,  activation=activations.sigmoid))     # Interpretation layer
-        loss_function = keras.losses.CategoricalCrossentropy()
-    else:
-        model.add(layers.Dense(1,  activation=activations.sigmoid))     # Interpretation layer
+    model.add(layers.Dense(classes,  activation=activations.sigmoid))
+    if classes == 1:
         loss_function = keras.losses.BinaryCrossentropy()
+    else:
+        loss_function = keras.losses.CategoricalCrossentropy()
 
     if config.get("solver") == "nadam":
         optimizer = keras.optimizers.Nadam( learning_rate=config.get("learning_rate") )

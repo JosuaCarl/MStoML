@@ -19,6 +19,11 @@ def mat_to_tsv(folder, file):
             df = pd.DataFrame(v)
             df.to_csv(f"{folder}/{k}.tsv", sep="\t", index=False)
 
+def mat_to_tsv_batch(folder:str):
+    for file in parse_folder(folder):
+        if file.endswith(".mat"):
+            mat_to_tsv(folder, file)
+
 
 def send_mail(subject, message):
     port = 587    # For SSL

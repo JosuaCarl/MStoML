@@ -20,9 +20,27 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
+# Combination of pos/neg 
+def join_df_metNames(df):
+    """
+    Combines positively and negatively charged dataframes along their metabolite Names
+    """
+    cols = ["metNames"] + [f"MS{i+1}" for i in range(len(df.columns) - 6)]
+    comb = pd.DataFrame(columns=cols)
+    for pid in df["peakID"].unique():
+        comb_met_name = ""
+        for met_name in df.loc[df["peakID"] == pid]["MetName"]:
+            comb_met_name += met_name + "\n"
+        comb.loc[len(comb.index)] = [comb_met_name[:-2]] + list(df.loc[df["peakID"] == pid].iloc[0, 6:])
+    comb = comb.set_index('metNames')
+    return comb
+
 # Normalization
 def total_ion_count_normalization(df):
     return df / df.sum()
+
+def standard_normalization(df, axis=1):
+    return df.apply(lambda line: [(x - np.mean(line)) / np.var(line) for x in line], result_type="expand", axis=axis)
 
 # Helpers
 def dict_permutations(dictionary:dict) -> List[dict]:

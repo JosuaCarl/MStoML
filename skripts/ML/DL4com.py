@@ -1,4 +1,7 @@
 # imports
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['MALLOC_TRIM_THRESHOLD_'] = '0'
 import sys
 import gc
 from tqdm import tqdm
@@ -15,6 +18,7 @@ from smac.intensifier.hyperband import Hyperband
 
 sys.path.append( '..' )
 from helpers import *
+from ML4com import *
 
 # Models
 def build_classification_model_kt(hyperparameters, classes:int=8):
@@ -82,8 +86,7 @@ def build_classification_model(config:Configuration, classes:int=1):
 
     return model
 
-
-class classifier:
+class Classifier:
     def __init__(self, X, ys, test_size:float, configuration_space:ConfigurationSpace, model_builder, model_args):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
@@ -94,19 +97,26 @@ class classifier:
     def configspace(self) -> ConfigurationSpace:
         return self.configuration_space
 
-    def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> float:
+    def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> np.float64:
+        model = self.model_builder(config=config, **self.model_args)
+        losses = []
+        for y in self.training_labels.columns:
             keras.utils.set_random_seed(seed)
-            model = self.model_builder(config=config, **self.model_args)
     
-            callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)	# Model will stop if no improvement
-            model.fit(self.training_data, self.training_labels, epochs=int(budget), verbose=0, callbacks=[callback])
+            y_train = self.training_labels[y]
+            y_test= self.test_labels[y]
+            
+            callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)
+            model.fit(self.training_data, y_train, epochs=int(budget), verbose=0, callbacks=[callback])
 
-            val_loss, val_acc = model.evaluate(self.test_data,  self.test_labels, verbose=0)
+            val_loss, val_acc = model.evaluate(self.test_data,  y_test, verbose=0)
+            losses.append(val_loss)
+            keras.backend.clear_session()
 
-            return val_loss
+        return np.mean(losses)
     
 
-def cross_validate_model(X, y, model, fold=KFold(), patience=100, epochs=1000, verbosity=0):
+def cross_validate_model(X, ys, labels, model, fold=KFold(), patience=100, epochs=1000, verbosity=0):
 	"""
 	Cross-validate a model against the given hyperparameters for all organisms
 	"""
@@ -125,7 +135,7 @@ def cross_validate_model(X, y, model, fold=KFold(), patience=100, epochs=1000, v
 			model_acc.fit(training_data, training_labels, epochs=epochs, verbose=0, callbacks=[callback])
 
 			prediction = model_acc.predict(validation_data)
-			metrics_df = extract_metrics(validation_labels, prediction, strains.iloc[i].item(), cv_i+1, metrics_df)
+			metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
 			
 			if verbosity != 0:
 				model_acc.evaluate(validation_data,  validation_labels, verbose=verbosity)

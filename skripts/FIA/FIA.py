@@ -1024,7 +1024,7 @@ def assign_feature_maps_polarity(feature_maps:list, scan_polarity:Optional[str]=
     return feature_maps
 
 
-def detect_adducts(feature_maps: list, potential_adducts:Sequence[str | bytes]=[], q_try:str="feature", mass_max_diff:float=10.0, unit:str="ppm", max_minority_bound:int=3,
+def detect_adducts(feature_maps: list, potential_adducts:Union[str, bytes]="[]", q_try:str="feature", mass_max_diff:float=10.0, unit:str="ppm", max_minority_bound:int=3,
                    verbose_level:int=0) -> list:
     """
     Assigning adducts to peaks

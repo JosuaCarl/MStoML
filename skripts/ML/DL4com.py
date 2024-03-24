@@ -1,12 +1,16 @@
 # imports
+from ctypes import Union
 import os
+
+import sklearn
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['MALLOC_TRIM_THRESHOLD_'] = '0'
 import sys
 import gc
+from typing import Union
 from tqdm import tqdm
 from pathlib import Path
-from sklearn.model_selection import train_test_split, KFold
+from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 import tensorflow as tf
 import keras
 from keras import layers, activations, backend
@@ -64,7 +68,7 @@ def build_classification_model(config:Configuration, classes:int=1):
     model = keras.Sequential(name="MS_community_classifier")
     model.add( keras.layers.Dropout( config.get("dropout_in") ) )
     model.add( keras.layers.BatchNormalization() )
-    for i in range( config.get("n_layers") ):
+    for i in range( config["n_layers"] ):
         activation = config.get(f"activation_{i}")
         if activation == "leakyrelu":
             activation = layers.LeakyReLU()
@@ -80,7 +84,7 @@ def build_classification_model(config:Configuration, classes:int=1):
         loss_function = keras.losses.CategoricalCrossentropy()
 
     if config.get("solver") == "nadam":
-        optimizer = keras.optimizers.Nadam( learning_rate=config.get("learning_rate") )
+        optimizer = keras.optimizers.Nadam( learning_rate=config["learning_rate"] )
     
     model.compile(optimizer=optimizer, loss=loss_function, metrics=['accuracy'])
 
@@ -116,28 +120,29 @@ class Classifier:
         return np.mean(losses)
     
 
-def cross_validate_model(X, ys, labels, model, fold=KFold(), patience=100, epochs=1000, verbosity=0):
-	"""
-	Cross-validate a model against the given hyperparameters for all organisms
-	"""
-	metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+def cross_validate_model(X, ys, labels, config, classes=1, fold:Union[KFold, StratifiedKFold]=KFold(), patience:int=100, epochs:int=1000, verbosity=0):
+    """
+    Cross-validate a model against the given hyperparameters for all organisms
+    """
+    metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
 
-	for i, y in enumerate(tqdm(ys.columns)):
-		y = ys[y]
-		for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
-			model_acc = model		# Ensures model resetting for each cross-validation
-			training_data = X.iloc[train_index]
-			training_labels = y.iloc[train_index]
-			validation_data = X.iloc[val_index]
-			validation_labels = y.iloc[val_index]
+    for i, y in enumerate(tqdm(ys.columns)):
+        y = ys[y]
+        for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
+            model = build_classification_model(config, classes)		# Ensures model resetting for each cross-validation
+            training_data = X.iloc[train_index]
+            training_labels = y.iloc[train_index]
+            validation_data = X.iloc[val_index]
+            validation_labels = y.iloc[val_index]
+
+            callback = keras.callbacks.EarlyStopping(monitor='loss', patience=patience)
+            model.fit(training_data, training_labels, epochs=epochs, verbose=0, callbacks=[callback]) # type: ignore
+
+            prediction = model.predict(validation_data)
+            metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
 			
-			callback = keras.callbacks.EarlyStopping(monitor='loss', patience=patience)
-			model_acc.fit(training_data, training_labels, epochs=epochs, verbose=0, callbacks=[callback])
+            if verbosity != 0:
+                model.evaluate(validation_data,  validation_labels, verbose=verbosity) # type: ignore
 
-			prediction = model_acc.predict(validation_data)
-			metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
-			
-			if verbosity != 0:
-				model_acc.evaluate(validation_data,  validation_labels, verbose=verbosity)
-
-	return metrics_df
+            keras.backend.clear_session()
+    return metrics_df

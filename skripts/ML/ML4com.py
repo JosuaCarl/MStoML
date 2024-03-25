@@ -157,9 +157,9 @@ def cross_validate_model_sklearn(model_in, X, ys, labels, config, fold:Union[KFo
             validation_data = X.iloc[val_index]
             validation_labels = y.iloc[val_index]
 
-            model.fit(training_data, training_labels)
+            model.fit(np.array(training_data), np.array(training_labels))
 
-            prediction = model.predict(validation_data)
+            prediction = model.predict(np.array(validation_data))
             metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
 			
             if verbosity != 0:

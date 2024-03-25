@@ -16,7 +16,7 @@ import keras
 from keras import Model
 from keras.layers import Input, Dense, LeakyReLU, Lambda, Dropout, BatchNormalization
 from keras.losses import mse
-from keras.optimizers import Nadam
+from keras.optimizers.legacy import Nadam
 import keras.backend as backend
 import tensorflow as tf
 tf.compat.v1.disable_eager_execution()
@@ -42,7 +42,7 @@ def sample_z(args):
     return mu + backend.exp(sigma / 2) * eps
 
 
-def kl_reconstruction_loss(true, pred, mu, sigma, original_dim, kl_loss_scaler):
+def kl_reconstruction_loss(true, pred, sample_weight, mu, sigma, original_dim, kl_loss_scaler):
         """
         Define loss function 
         """
@@ -53,13 +53,18 @@ def kl_reconstruction_loss(true, pred, mu, sigma, original_dim, kl_loss_scaler):
 
 
 # Tuning VAE
-def build_vae_ht_model(config:Configuration):   
+def build_vae_ht_model(config:Configuration):
+    backend.clear_session()
+    gc.collect()
+    intermediate_activation = config["intermediate_activation"]
+    if intermediate_activation == "leakyrelu":
+        intermediate_activation = LeakyReLU()
+
     # Encoder
-    i       = Input(shape=(config["original_dim"],), name='encoder_input')
+    i       = Input(shape=(config["original_dim"], ), name='encoder_input')
     enc     = Dropout( config["input_dropout"] ) (i)      # Dropout for more redundant neurons
-    enc     = Dense( config["intermediate_neurons"], activation=config["intermediate_activation"] ) (i)
+    enc     = Dense( config["intermediate_neurons"], activation=intermediate_activation ) (i)
     enc     = Dropout( config["intermediate_dropout"] ) (enc)
-    enc     = BatchNormalization() (enc)
     mu      = Dense( config["latent_dimensions"], name='latent_mu') (enc)
     sigma   = Dense( config["latent_dimensions"], name='latent_sigma') (enc)
     z       = Lambda(sample_z, output_shape=( config["latent_dimensions"], ), name='z') ([mu, sigma])  ## Use reparameterization trick
@@ -68,9 +73,8 @@ def build_vae_ht_model(config:Configuration):
     
     # Decoder
     d_i     = Input(shape=( config["latent_dimensions"], ), name='decoder_input')
-    dec     = Dense( config["intermediate_neurons"], activation=config["intermediate_activation"] ) (d_i) 
+    dec     = Dense( config["intermediate_neurons"], activation=intermediate_activation ) (d_i) 
     dec     = Dropout( config["intermediate_dropout"] ) (dec)
-    dec     = BatchNormalization() (dec)
     o       = Dense( config["original_dim"] ) (dec)
 
     decoder = Model(d_i, o, name='decoder') ## Instantiate decoder
@@ -84,8 +88,9 @@ def build_vae_ht_model(config:Configuration):
         optimizer = Nadam( config["learning_rate"] )
 
     # Compile VAE
-    loss = partial(kl_reconstruction_loss, mu=mu, sigma=sigma, original_dim=config["original_dim"], kl_loss_scaler=config["kl_loss_scaler"])
-    vae.compile(optimizer=optimizer, loss=loss, metrics = ['mse'])
+    loss_function = partial(kl_reconstruction_loss, mu=mu, sigma=sigma, original_dim=config["original_dim"], kl_loss_scaler=config["kl_loss_scaler"])
+    print(loss_function)
+    vae.compile(optimizer=optimizer, loss=loss_function, metrics=['mse'])
     
     return vae
 
@@ -95,18 +100,21 @@ class FIA_VAE_hptune:
         self.configuration_space = configuration_space
         self.model_builder = model_builder
         self.model_args = model_args
-        self.training_data, self.test_data, self.training_labels, self.test_labels = train_test_split(X, ys, test_size=test_size)
+        split = train_test_split(X, ys, test_size=test_size)
+        self.training_data, self.test_data, self.training_labels, self.test_labels = split
 
     def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> float:
             keras.utils.set_random_seed(seed)
             model = self.model_builder(config=config)
 
+            model.summary()
             # Fit
             callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)	# Model will stop if no improvement
             model.fit(self.training_data, self.training_labels, epochs=int(budget), verbose=0, callbacks=[callback])
 
             # Evaluation
-            val_loss, val_mse = model.evaluate(self.test_data,  self.test_labels, verbose=1)   
+            val_loss, val_mse = model.evaluate(self.test_data,  self.test_labels, verbose=0)
+            keras.backend.clear_session()   
                  
             return val_loss
 

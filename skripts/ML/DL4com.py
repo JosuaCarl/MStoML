@@ -15,7 +15,7 @@ import tensorflow as tf
 import keras
 from keras import layers, activations, backend
 import keras_tuner
-from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer
+from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer, Constant
 from smac import MultiFidelityFacade, HyperparameterOptimizationFacade
 from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
@@ -114,7 +114,21 @@ class Classifier:
             keras.backend.clear_session()
 
         return np.mean(losses)
-    
+
+
+# Evaluation
+def extract_metrics(true_labels, prediction, run_label, cv_i,
+                    metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):
+    fpr, tpr, threshold = roc_curve(true_labels,  prediction)
+    auc = roc_auc_score(true_labels,  prediction)
+
+    prediction_labels = [0.0 if pred[0] < 0.5 else 1.0 for pred in prediction]
+    conf_mat = confusion_matrix(true_labels,  prediction_labels)
+    accuracy = accuracy_score(true_labels,  prediction_labels)
+
+    metrics_df.loc[len(metrics_df)] = [run_label, cv_i, accuracy, auc, tpr, fpr, threshold, conf_mat]
+
+    return metrics_df
 
 def cross_validate_model(X, ys, labels, config, classes=1, fold:Union[KFold, StratifiedKFold]=KFold(), patience:int=100, epochs:int=1000, verbosity=0):
     """

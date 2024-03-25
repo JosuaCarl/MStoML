@@ -1,6 +1,7 @@
 import sys
 import gc
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 
 from typing import Union
 from tqdm import tqdm
@@ -87,33 +88,32 @@ def build_vae_ht_model(config:Configuration):
     if config["solver"] == "nadam":
         optimizer = Nadam( config["learning_rate"] )
 
+    
     # Compile VAE
     loss_function = partial(kl_reconstruction_loss, mu=mu, sigma=sigma, original_dim=config["original_dim"], kl_loss_scaler=config["kl_loss_scaler"])
     print(loss_function)
-    vae.compile(optimizer=optimizer, loss=loss_function, metrics=['mse'])
+    vae.compile(optimizer=optimizer, loss=loss_function)
     
     return vae
 
 
 class FIA_VAE_hptune:
-    def __init__(self, X, ys, test_size:float, configuration_space:ConfigurationSpace, model_builder, model_args):
+    def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder, model_args):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
         self.model_args = model_args
-        split = train_test_split(X, ys, test_size=test_size)
-        self.training_data, self.test_data, self.training_labels, self.test_labels = split
+        self.training_data, self.test_data = train_test_split(X, test_size=test_size)
 
     def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> float:
             keras.utils.set_random_seed(seed)
             model = self.model_builder(config=config)
 
-            model.summary()
             # Fit
             callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)	# Model will stop if no improvement
-            model.fit(self.training_data, self.training_labels, epochs=int(budget), verbose=0, callbacks=[callback])
+            model.fit(self.training_data, self.training_data, epochs=int(budget), verbose=0, callbacks=[callback])
 
             # Evaluation
-            val_loss, val_mse = model.evaluate(self.test_data,  self.test_labels, verbose=0)
+            val_loss = model.evaluate(self.test_data,  self.test_data, verbose=0)
             keras.backend.clear_session()   
                  
             return val_loss

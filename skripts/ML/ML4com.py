@@ -4,6 +4,7 @@ import time
 import warnings
 import math
 import itertools
+from typing import Union
 from tqdm import tqdm
 from typing import List
 import numpy as np
@@ -11,13 +12,14 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.model_selection import cross_val_predict
 from sklearn.utils.random import sample_without_replacement
-from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
 from sklearn.preprocessing import StandardScaler, MaxAbsScaler, MinMaxScaler
 from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
 from sklearn import tree
 from sklearn import svm
 import seaborn as sns
 import matplotlib.pyplot as plt
+from ConfigSpace import Configuration, ConfigurationSpace
 
 
 # Combination of pos/neg 
@@ -114,18 +116,54 @@ def train_cv_model(classifier, param_grid, X, ys, target_labels, outdir:str, suf
     return results
 
 
-# KERAS
+## SMAC
+class SKL_Classifier:
+    def __init__(self, X, ys, cv:int, configuration_space:ConfigurationSpace, classifier):
+        self.X = X
+        self.ys = ys
+        self.cv = cv
+        self.configuration_space = configuration_space
+        self.classifier = classifier
+
+    def train(self, config: Configuration, seed: int = 0) -> np.float64:
+        scores = cross_val_score(self.classifier(**config, random_state=seed),
+                                 self.X, self.ys, cv=self.cv)
+        return 1 - np.mean(scores)
+
 def extract_metrics(true_labels, prediction, run_label, cv_i,
                     metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):
     fpr, tpr, threshold = roc_curve(true_labels,  prediction)
     auc = roc_auc_score(true_labels,  prediction)
-
-    prediction_labels = [0.0 if pred[0] < 0.5 else 1.0 for pred in prediction]
-    conf_mat = confusion_matrix(true_labels,  prediction_labels)
-    accuracy = accuracy_score(true_labels,  prediction_labels)
+    conf_mat = confusion_matrix(true_labels,  prediction)
+    accuracy = accuracy_score(true_labels,  prediction)
 
     metrics_df.loc[len(metrics_df)] = [run_label, cv_i, accuracy, auc, tpr, fpr, threshold, conf_mat]
 
+    return metrics_df
+
+
+def cross_validate_model_sklearn(model_in, X, ys, labels, config, fold:Union[KFold, StratifiedKFold]=KFold(), verbosity=0):
+    """
+    Cross-validate a model against the given hyperparameters for all organisms
+    """
+    metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+
+    for i, y in enumerate(tqdm(ys.columns)):
+        y = ys[y]
+        for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
+            model = model_in(**config)		# Ensures model resetting for each cross-validation
+            training_data = X.iloc[train_index]
+            training_labels = y.iloc[train_index]
+            validation_data = X.iloc[val_index]
+            validation_labels = y.iloc[val_index]
+
+            model.fit(training_data, training_labels)
+
+            prediction = model.predict(validation_data)
+            metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
+			
+            if verbosity != 0:
+                model.evaluate(validation_data,  validation_labels, verbose=verbosity) # type: ignore
     return metrics_df
 
 

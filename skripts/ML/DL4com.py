@@ -1,12 +1,12 @@
 # imports
-from ctypes import Union
+import sys
+import gc
 import os
 
 import sklearn
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['MALLOC_TRIM_THRESHOLD_'] = '0'
-import sys
-import gc
+
 from typing import Union
 from tqdm import tqdm
 from pathlib import Path
@@ -66,14 +66,14 @@ def build_classification_model(config:Configuration, classes:int=1):
     gc.collect()
     # Model definition
     model = keras.Sequential(name="MS_community_classifier")
-    model.add( keras.layers.Dropout( config.get("dropout_in") ) )
+    model.add( keras.layers.Dropout( config["dropout_in"] ) )
     model.add( keras.layers.BatchNormalization() )
     for i in range( config["n_layers"] ):
-        activation = config.get(f"activation_{i}")
+        activation = config[f"activation_{i}"]
         if activation == "leakyrelu":
             activation = layers.LeakyReLU()
-        model.add( layers.Dense( units=config.get(f"n_neurons_{i}"), activation=activation ) )
-        if config.get(f"dropout_{i}"):
+        model.add( layers.Dense( units=config[f"n_neurons_{i}"], activation=activation)  )
+        if config[f"dropout_{i}"]:
             model.add(keras.layers.Dropout(0.5, noise_shape=None, seed=None))
         model.add(keras.layers.BatchNormalization())
 
@@ -83,7 +83,7 @@ def build_classification_model(config:Configuration, classes:int=1):
     else:
         loss_function = keras.losses.CategoricalCrossentropy()
 
-    if config.get("solver") == "nadam":
+    if config["solver"] == "nadam":
         optimizer = keras.optimizers.Nadam( learning_rate=config["learning_rate"] )
     
     model.compile(optimizer=optimizer, loss=loss_function, metrics=['accuracy'])
@@ -96,10 +96,6 @@ class Classifier:
         self.model_builder = model_builder
         self.model_args = model_args
         self.training_data, self.test_data, self.training_labels, self.test_labels = train_test_split(X, ys, test_size=test_size)
-
-    @property
-    def configspace(self) -> ConfigurationSpace:
-        return self.configuration_space
 
     def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> np.float64:
         model = self.model_builder(config=config, **self.model_args)

@@ -1,15 +1,6 @@
 # imports
-import sys
 import time
 import argparse
-
-sys.path.append( '..' )
-sys.path.append( '../FIA' )
-sys.path.append( '../ML' )
-
-from helpers import *
-from FIA import *
-from ML4com import *        # type: ignore
 from VAE import *
 
 # Argument parser

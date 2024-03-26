@@ -3,10 +3,14 @@ import sys
 import time
 import argparse
 
+sys.path.append( '../FIA' )
+sys.path.append( '../ML' )
 sys.path.append( '..' )
 
-from VAE import *
+from FIA import *
+from ML4com import *
 from helpers import *
+from VAE import *
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',

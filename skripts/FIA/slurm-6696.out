@@ -1,0 +1,10 @@
+['../../runs/FIA/Com8_grown_together/oms', '../../runs/VAE/hyperband_optimization']
+/mnt/lustre/groups/link/linca945/MStoML/skripts/FIA
+Traceback (most recent call last):
+  File "/mnt/lustre/groups/link/linca945/MStoML/skripts/FIA/VAE_smac.py", line 109, in <module>
+    __main__()
+  File "/mnt/lustre/groups/link/linca945/MStoML/skripts/FIA/VAE_smac.py", line 30, in __main__
+    binned_dfs[:] =  total_ion_count_normalization(binned_dfs)      # type: ignore
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+NameError: name 'total_ion_count_normalization' is not defined
+Done

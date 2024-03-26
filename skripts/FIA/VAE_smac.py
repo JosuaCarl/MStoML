@@ -1,6 +1,10 @@
 # imports
+import sys
 import time
 import argparse
+
+sys.path.append( '..' )
+
 from VAE import *
 from helpers import *
 

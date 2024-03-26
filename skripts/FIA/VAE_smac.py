@@ -2,6 +2,7 @@
 import time
 import argparse
 from VAE import *
+from helpers import *
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_tuning
-#SBATCH --mem 450G
 #SBATCH --time 12:00:00
-#SBATCH --partition cpu2-hm
+#SBATCH --partition gpu-a30
+#SBATCH --nodes 1
+#SBATCH --ntasks-per-node 2
+#SBATCH --cpus-per-task 1
+#SBATCH --gres gpu:2
 
 # imports
 import sys
@@ -16,7 +19,7 @@ sys.path.append( '..' )
 from FIA import *
 from ML4com import *
 from helpers import *
-from VAE import *
+from VAE_torch import *
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',
@@ -25,7 +28,13 @@ parser.add_argument('-d', '--data_dir')
 parser.add_argument('-r', '--run_dir')
 args = parser.parse_args()
 
-print("Available GPUs: ", tf.config.list_physical_devices('GPU'))
+device = (
+    "cuda" if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available()
+    else "cpu"
+)
+print(f"Using {device} device")
+
 
 def __main__():
     # Runtime logging
@@ -54,26 +63,28 @@ def __main__():
     configuration_space = ConfigurationSpace(seed=42)
 
     original_dim                = Constant('original_dim', X.shape[1])
-    intermediate_neurons        = Integer('intermediate_neurons', (1000, 10000), log=True, default=5000)
-    intermediate_activation     = Categorical("intermediate_activation", ["relu", "tanh", "leakyrelu"], default="relu")
     input_dropout               = Float('input_dropout', (0.0, 0.5), default=0.25)
-    intermediate_dropout        = Float('intermediate_dropout', (0.0, 0.5), default=0.25)
+    intermediate_layers         = Integer('intermediate_layers', (1,4), default=1)
+    intermediate_dimension      = Integer('intermediate_dimension', (1000, 10000), log=True, default=5000)
+    intermediate_activation     = Categorical("intermediate_activation", ["relu", "tanh", "leakyrelu"], default="relu")
     latent_dimensions           = Integer('latent_dimensions', (100, 5000), log=False, default=1000)
     kl_loss_scaler              = Float('kl_loss_scaler', (1e-3, 1e1), log=True, default=1e-2)
     solver                      = Categorical("solver", ["nadam"], default="nadam")
     learning_rate               = Float('learning_rate', (1e-4, 1e-2), log=True, default=1e-3)
 
-    hyperparameters = [original_dim, intermediate_neurons, intermediate_activation, input_dropout, intermediate_dropout,
-                    latent_dimensions, kl_loss_scaler, solver, learning_rate]
+    hyperparameters = [original_dim, input_dropout,
+                       intermediate_layers, intermediate_dimension, intermediate_activation,
+                       latent_dimensions, 
+                       kl_loss_scaler, solver, learning_rate]
     configuration_space.add_hyperparameters(hyperparameters)
 
-    latent_limiter = ForbiddenGreaterThanRelation(configuration_space["latent_dimensions"], configuration_space["intermediate_neurons"])
+    latent_limiter = ForbiddenGreaterThanRelation(configuration_space["latent_dimensions"], configuration_space["intermediate_dimension"])
     configuration_space.add_forbidden_clauses([latent_limiter])
 
     print(f"Configuration space defined with estimated {configuration_space.estimate_size()} possible combinations.\n")
 
     outdir = Path(os.path.normpath(os.path.join(run_dir, "smac_vae")))
-    fia_vae_hptune = FIA_VAE_hptune(X, test_size=0.2, configuration_space=configuration_space, model_builder=build_vae_ht_model, model_args={"classes": 1})
+    fia_vae_hptune = FIA_VAE_hptune(X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE, device=device)
 
     # Define our environment variables
     scenario = Scenario( fia_vae_hptune.configuration_space, n_trials=2000,
@@ -83,7 +94,7 @@ def __main__():
                         walltime_limit=12*60*60, cputime_limit=np.inf, trial_memory_limit=None    # Max RAM in Bytes (not MB)
                         )
 
-    initial_design = MultiFidelityFacade.get_initial_design(scenario, n_configs=100)
+    initial_design = MultiFidelityFacade.get_initial_design(scenario, n_configs=10)
 
     intensifier = Hyperband(scenario, incumbent_selection="highest_budget")
 

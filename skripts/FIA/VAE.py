@@ -1,6 +1,7 @@
 import sys
 import gc
 import os
+import time
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 
 from typing import Union
@@ -13,19 +14,23 @@ import pandas as pd
 
 from sklearn.model_selection import train_test_split
 
-import keras
+import tensorflow as tf
 from keras import Model
 from keras.layers import Input, Dense, LeakyReLU, Lambda, Dropout, BatchNormalization
 from keras.losses import mse
 from keras.optimizers.legacy import Nadam
 import keras.backend as backend
-import tensorflow as tf
-tf.compat.v1.disable_eager_execution()
+import keras
 
 from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer, Constant, ForbiddenGreaterThanRelation
 from smac import MultiFidelityFacade, HyperparameterOptimizationFacade
 from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
+from smac.runhistory.dataclasses import TrialValue
+
+from tensorflow.python.framework.ops import disable_eager_execution
+disable_eager_execution()
+
 
 sys.path.append( '..' )
 from helpers import *
@@ -55,8 +60,11 @@ def kl_reconstruction_loss(true, pred, sample_weight, mu, sigma, original_dim, k
 
 # Tuning VAE
 def build_vae_ht_model(config:Configuration):
+    t = time.time()
     backend.clear_session()
     gc.collect()
+    print(f"Garbage collected ({time.time()-t}s)")
+    t = time.time()
     intermediate_activation = config["intermediate_activation"]
     if intermediate_activation == "leakyrelu":
         intermediate_activation = LeakyReLU()
@@ -65,7 +73,6 @@ def build_vae_ht_model(config:Configuration):
     i       = Input(shape=(config["original_dim"], ), name='encoder_input')
     enc     = Dropout( config["input_dropout"] ) (i)      # Dropout for more redundant neurons
     enc     = Dense( config["intermediate_neurons"], activation=intermediate_activation ) (i)
-    enc     = Dropout( config["intermediate_dropout"] ) (enc)
     mu      = Dense( config["latent_dimensions"], name='latent_mu') (enc)
     sigma   = Dense( config["latent_dimensions"], name='latent_sigma') (enc)
     z       = Lambda(sample_z, output_shape=( config["latent_dimensions"], ), name='z') ([mu, sigma])  ## Use reparameterization trick
@@ -75,7 +82,6 @@ def build_vae_ht_model(config:Configuration):
     # Decoder
     d_i     = Input(shape=( config["latent_dimensions"], ), name='decoder_input')
     dec     = Dense( config["intermediate_neurons"], activation=intermediate_activation ) (d_i) 
-    dec     = Dropout( config["intermediate_dropout"] ) (dec)
     o       = Dense( config["original_dim"] ) (dec)
 
     decoder = Model(d_i, o, name='decoder') ## Instantiate decoder
@@ -83,16 +89,22 @@ def build_vae_ht_model(config:Configuration):
     # Instantiate VAE
     vae_outputs = decoder (encoder(i)[2])               # type: ignore
     vae         = Model(i, vae_outputs, name='vae')
+    print(f"Instantiated VAE ({time.time()-t}s)")
+    t = time.time()
 
     # Define optimizer
     if config["solver"] == "nadam":
         optimizer = Nadam( config["learning_rate"] )
+    print(f"Optimizer defined ({time.time()-t}s)")
+    t = time.time()
 
     
     # Compile VAE
-    loss_function = partial(kl_reconstruction_loss, mu=mu, sigma=sigma, original_dim=config["original_dim"], kl_loss_scaler=config["kl_loss_scaler"])
-    print(loss_function)
+    loss_function = partial(kl_reconstruction_loss, mu=mu, sigma=sigma,
+                            original_dim=config["original_dim"], kl_loss_scaler=config["kl_loss_scaler"])
+    print(f"Loss function defined ({time.time()-t}s)")
     vae.compile(optimizer=optimizer, loss=loss_function)
+    print(f"Complied ({time.time()-t}s)")
     
     return vae
 
@@ -105,16 +117,24 @@ class FIA_VAE_hptune:
         self.training_data, self.test_data = train_test_split(X, test_size=test_size)
 
     def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> float:
+            t = time.time()
             keras.utils.set_random_seed(seed)
             model = self.model_builder(config=config)
+            print(f"Model built. ({time.time()-t}s)")
+            t = time.time()
 
             # Fit
             callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)	# Model will stop if no improvement
             model.fit(self.training_data, self.training_data, epochs=int(budget), verbose=0, callbacks=[callback])
+            print(f"Model fitted. ({time.time()-t}s)")
+            t = time.time()
 
             # Evaluation
             val_loss = model.evaluate(self.test_data,  self.test_data, verbose=0)
-            keras.backend.clear_session()   
+            print(f"Model evaluated ({time.time()-t}s)")
+            t = time.time()
+            keras.backend.clear_session()
+            print(f"Session cleared. ({time.time()-t}s)")
                  
             return val_loss
 
@@ -142,9 +162,7 @@ class FIA_VAE():
  
         self.input      = Input(shape=(self.input_shape,), name='encoder_input')
         self.input      = Dropout(self.intermediate_dropout) (self.input)
-        self.enc        = Dense(self.intermediate_neurons, activation=self.intermediate_activation) (self.input)
-        self.enc        = Dropout(self.intermediate_dropout) (self.enc)                                                 # Dropout for more redundant neurons
-        self.enc        = BatchNormalization() (self.enc)                                            
+        self.enc        = Dense(self.intermediate_neurons, activation=self.intermediate_activation) (self.input)                          
         self.mu         = Dense(self.latent_dim, name='latent_mu') (self.enc)
         self.sigma      = Dense(self.latent_dim, name='latent_sigma') (self.enc)
 
@@ -158,9 +176,7 @@ class FIA_VAE():
 
         # Definition
         self.decoder_input  = Input(shape=(self.latent_dim, ), name='decoder_input')
-        self.dec            = Dense(self.intermediate_neurons, activation=self.intermediate_activation) (self.decoder_input) 
-        self.dec            = Dropout(self.intermediate_dropout) (self.dec)
-        self.dec            = BatchNormalization() (self.dec)
+        self.dec            = Dense(self.intermediate_neurons, activation=self.intermediate_activation) (self.decoder_input)
         self.output  = Dense(self.input_shape) (self.dec )
 
         self.decoder = Model(self.decoder_input, self.output, name='decoder')                                           # Instantiate decoder

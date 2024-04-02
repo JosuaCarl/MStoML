@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+#SBATCH --mem 450G
+#SBATCH --time 12:00:00
+
 # imports
 import sys
 import time
@@ -42,15 +46,14 @@ def __main__():
     runtimes["data preparation"] = [time.time() - step_time]
     step_time = time.time()
 
-    # Configuration space
-    configuration_space = ConfigurationSpace()
+    configuration_space = ConfigurationSpace(seed=42)
 
     original_dim                = Constant('original_dim', X.shape[1])
-    intermediate_neurons        = Integer('intermediate_neurons', (100, 10000), log=True, default=1000)
+    intermediate_neurons        = Integer('intermediate_neurons', (1000, 50000), log=True, default=10000)
     intermediate_activation     = Categorical("intermediate_activation", ["relu", "tanh", "leakyrelu"], default="relu")
-    input_dropout               = Float('input_dropout', (0.2, 0.8), default=0.5)
-    intermediate_dropout        = Float('intermediate_dropout', (0.2, 0.8), default=0.5)
-    latent_dimensions           = Integer('latent_dimensions', (10, 1000), log=False, default=100)
+    input_dropout               = Float('input_dropout', (0.0, 0.5), default=0.25)
+    intermediate_dropout        = Float('intermediate_dropout', (0.0, 0.5), default=0.25)
+    latent_dimensions           = Integer('latent_dimensions', (100, 10000), log=False, default=1000)
     kl_loss_scaler              = Float('kl_loss_scaler', (1e-3, 1e1), log=True, default=1e-2)
     solver                      = Categorical("solver", ["nadam"], default="nadam")
     learning_rate               = Float('learning_rate', (1e-4, 1e-2), log=True, default=1e-3)
@@ -59,16 +62,20 @@ def __main__():
                     latent_dimensions, kl_loss_scaler, solver, learning_rate]
     configuration_space.add_hyperparameters(hyperparameters)
 
+    latent_limiter = ForbiddenGreaterThanRelation(configuration_space["latent_dimensions"], configuration_space["intermediate_neurons"])
+    configuration_space.add_forbidden_clauses([latent_limiter])
+
+    print(f"Configuration space defined with estimated {configuration_space.estimate_size()} possible combinations.\n")
 
     outdir = Path(os.path.normpath(os.path.join(run_dir, "smac_vae")))
     fia_vae_hptune = FIA_VAE_hptune(X, test_size=0.2, configuration_space=configuration_space, model_builder=build_vae_ht_model, model_args={"classes": 1})
 
     # Define our environment variables
-    scenario = Scenario( fia_vae_hptune.configuration_space, n_trials=10000,
+    scenario = Scenario( fia_vae_hptune.configuration_space, n_trials=2000,
                         deterministic=True,
                         min_budget=5, max_budget=100,
                         n_workers=1, output_directory=outdir,
-                        walltime_limit=12*60*60, cputime_limit=np.inf, trial_memory_limit=int(2e12)    # Max RAM in Bytes (not MB)
+                        walltime_limit=12*60*60, cputime_limit=np.inf, trial_memory_limit=None    # Max RAM in Bytes (not MB)
                         )
 
     initial_design = MultiFidelityFacade.get_initial_design(scenario, n_configs=100)
@@ -95,7 +102,7 @@ def __main__():
         best_hp = incumbent[0]
     else: 
         best_hp = incumbent
-    incumbent_cost = smac.validate(best_hp)
+    print(f"The final incumbent cost is as: {smac.validate(best_hp)}")
 
     results = pd.DataFrame(columns=["config_id", "config", "instance", "budget", "seed", "loss", "time", "status", "additional_info"])
     for trial_info, trial_value in smac.runhistory.items():

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_tuning
 #SBATCH --time 12:00:00
-#SBATCH --partition gpu-a30
+#SBATCH --mem 450G
+#SBATCH --partition cpu2-hm
 #SBATCH --nodes 1
-#SBATCH --ntasks-per-node 2
+#SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
-#SBATCH --gres gpu:2
 
+# processors: cpu1, cpu2-hm, gpu-a30
 # imports
 import sys
 import time
@@ -61,33 +62,31 @@ def __main__():
     print("Data loaded.")
 
     configuration_space = ConfigurationSpace(seed=42)
-
     original_dim                = Constant('original_dim', X.shape[1])
     input_dropout               = Float('input_dropout', (0.0, 0.5), default=0.25)
-    intermediate_layers         = Integer('intermediate_layers', (1,4), default=1)
-    intermediate_dimension      = Integer('intermediate_dimension', (1000, 10000), log=True, default=5000)
-    intermediate_activation     = Categorical("intermediate_activation", ["relu", "tanh", "leakyrelu"], default="relu")
-    latent_dimensions           = Integer('latent_dimensions', (100, 5000), log=False, default=1000)
-    kl_loss_scaler              = Float('kl_loss_scaler', (1e-3, 1e1), log=True, default=1e-2)
+    intermediate_layers         = Integer('intermediate_layers', (1, 3), default=2)
+    intermediate_dimension      = Integer('intermediate_dimension', (500, 2000), log=True, default=2000)
+    intermediate_activation     = Categorical("intermediate_activation", ["relu", "selu","tanh", "leakyrelu"], default="selu")
+    latent_dimension            = Integer('latent_dimension', (100, 1000), log=False, default=1000)
     solver                      = Categorical("solver", ["nadam"], default="nadam")
     learning_rate               = Float('learning_rate', (1e-4, 1e-2), log=True, default=1e-3)
 
     hyperparameters = [original_dim, input_dropout,
                        intermediate_layers, intermediate_dimension, intermediate_activation,
-                       latent_dimensions, 
-                       kl_loss_scaler, solver, learning_rate]
+                       latent_dimension, solver, learning_rate]
     configuration_space.add_hyperparameters(hyperparameters)
 
-    latent_limiter = ForbiddenGreaterThanRelation(configuration_space["latent_dimensions"], configuration_space["intermediate_dimension"])
+    latent_limiter = ForbiddenGreaterThanRelation(configuration_space["latent_dimension"], configuration_space["intermediate_dimension"])
     configuration_space.add_forbidden_clauses([latent_limiter])
 
     print(f"Configuration space defined with estimated {configuration_space.estimate_size()} possible combinations.\n")
 
     outdir = Path(os.path.normpath(os.path.join(run_dir, "smac_vae")))
-    fia_vae_hptune = FIA_VAE_hptune(X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE, device=device)
+    fia_vae_hptune = FIA_VAE_hptune(X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
+                                    device=device, workers=1, batch_size=64, verbose=False)
 
     # Define our environment variables
-    scenario = Scenario( fia_vae_hptune.configuration_space, n_trials=2000,
+    scenario = Scenario( fia_vae_hptune.configuration_space, n_trials=1000,
                         deterministic=True,
                         min_budget=5, max_budget=100,
                         n_workers=1, output_directory=outdir,
@@ -110,17 +109,15 @@ def __main__():
     
     # Optimization run
     print("Starting search:")
-    for i in range(5):                         # Test first 5 runs to see if process works
-        print(f"Trial {i+1} started")
+    for i in tqdm(range(100)):                         # Test first 5 runs to see if process works
         acc_time = time.time()
         info = smac.ask()
         assert info.seed is not None
 
-        cost = fia_vae_hptune.train(info.config, seed=info.seed)
+        cost = fia_vae_hptune.train(info.config, seed=info.seed, budget=info.budget)
         value = TrialValue(cost=cost, time=time.time()-acc_time, starttime=acc_time, endtime=time.time())
 
         smac.tell(info, value)
-        print(f"Trial {i+1} completed in {time.time()-acc_time} s")
 
 
     incumbent = smac.optimize()

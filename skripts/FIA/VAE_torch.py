@@ -1,37 +1,22 @@
 import sys
-import gc
-import os
 import time
 import random
 
-from typing import Union
-from tqdm import tqdm
-from pathlib import Path
-from functools import partial
-
 import numpy as np
-import pandas as pd
 
 from sklearn.model_selection import train_test_split
 
 from dataclasses import dataclass
+from ConfigSpace import Configuration, ConfigurationSpace
 
 import torch
 from torch import nn
 import torch.nn.functional as F
 from torch import optim
 from torch.utils.data import DataLoader
-from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 
 from torchinfo import summary
-
-from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer, Constant, ForbiddenGreaterThanRelation
-from smac import MultiFidelityFacade, HyperparameterOptimizationFacade
-from smac import Scenario
-from smac.intensifier.hyperband import Hyperband
-from smac.runhistory.dataclasses import TrialValue
-
 from GPUtil import showUtilization, getAvailable
 import psutil
 
@@ -42,6 +27,7 @@ print(f"Available GPUs: {getAvailable(limit=4)}")
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
+
 
 # Helpers
 def bits_to_bytes(bits, factor):
@@ -238,6 +224,24 @@ class FIA_VAE(nn.Module):
         
         return VAEOutput(z_dist=dist, z_sample=z, recon_x=recon_x, 
                          loss=loss, reconstruction_loss=reconstruction_loss, kl_loss=kl_loss)
+    
+    def save_state(self, path:str):
+        """
+        Save the model parameters
+
+        Args:
+            path: Path to the output file
+        """
+        torch.save(self.state_dict(), path)
+    
+    def load_state(self, path:str):
+        """
+        Load the model parameters / state
+
+        Args:
+            path: Path to the input file
+        """
+        self.load_state_dict(torch.load(path))
     
 
 

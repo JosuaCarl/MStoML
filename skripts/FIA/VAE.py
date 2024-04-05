@@ -22,11 +22,7 @@ from keras.optimizers.legacy import Nadam
 import keras.backend as backend
 import keras
 
-from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer, Constant, ForbiddenGreaterThanRelation
-from smac import MultiFidelityFacade, HyperparameterOptimizationFacade
-from smac import Scenario
-from smac.intensifier.hyperband import Hyperband
-from smac.runhistory.dataclasses import TrialValue
+from ConfigSpace import Configuration, ConfigurationSpace
 
 from tensorflow.python.framework.ops import disable_eager_execution
 disable_eager_execution()

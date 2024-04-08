@@ -29,7 +29,7 @@ disable_eager_execution()
 
 
 sys.path.append( '..' )
-from helpers import *
+from skripts.helpers.helpers import *
 
 print("Available GPUs: ", tf.config.list_physical_devices('GPU'))
 

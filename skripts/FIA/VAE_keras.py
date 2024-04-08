@@ -29,14 +29,12 @@ from ConfigSpace import Configuration, ConfigurationSpace
 from tensorflow.python.framework.ops import disable_eager_execution
 disable_eager_execution()
 
-
-sys.path.append( '..' )
-from helpers import *
+from skripts.helpers.pc_stats import *
 
 print("Available GPUs: ", tf.config.list_physical_devices('GPU'))
 
 # Helpers
-def get_activation_function(activation_function:str) -> nn.Module:
+def get_activation_function(activation_function:str):
     """
     Convert an activation function string into a pytorch function
 

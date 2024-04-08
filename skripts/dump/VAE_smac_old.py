@@ -15,7 +15,7 @@ sys.path.append( '..' )
 
 from FIA import *
 from ML4com import *
-from helpers import *
+from skripts.helpers.helpers import *
 from skripts.FIA.VAE_keras import *
 
 # Argument parser

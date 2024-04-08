@@ -21,7 +21,7 @@ from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
 
 sys.path.append( '..' )
-from helpers import *
+from skripts.helpers.helpers import *
 from ML4com import *
 
 # Models

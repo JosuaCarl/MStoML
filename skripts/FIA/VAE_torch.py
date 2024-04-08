@@ -20,8 +20,7 @@ from torchinfo import summary
 from GPUtil import showUtilization, getAvailable
 import psutil
 
-sys.path.append( '..' )
-from helpers import *
+from skripts.helpers.helpers import *
 
 print(f"Available GPUs: {getAvailable(limit=4)}")
 

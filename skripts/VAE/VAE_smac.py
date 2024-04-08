@@ -43,6 +43,7 @@ parser.add_argument('-r', '--run_dir')
 parser.add_argument('-t', '--test_configuration')
 parser.add_argument('-v', '--verbosity')
 parser.add_argument('-f', '--framework')
+parser.add_argument('-o', '--overwrite')
 args = parser.parse_args()
 
 if args.framework == "keras":
@@ -60,7 +61,7 @@ def __main__():
     Hyperparameter optimization with SMAC3
     """
     data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
-    test_configuration, verbosity = (bool(args.test_configuration), int(args.verbosity))
+    test_configuration, overwrite, verbosity = (bool(args.test_configuration), bool(args.overwrite), int(args.verbosity))
     framework = args.framework
     outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{framework}")))
     time_step(message="Setup loaded", verbosity=verbosity)
@@ -106,17 +107,17 @@ def __main__():
     intensifier = Hyperband(scenario, incumbent_selection="highest_budget")
     facade = MultiFidelityFacade( scenario, fia_vae_hptune.train, 
                                   initial_design=initial_design, intensifier=intensifier,
-                                  overwrite=False, logging_level=30-verbosity*10 )
+                                  overwrite=overwrite, logging_level=30-verbosity*10 )
     time_step(message="SMAC defined", verbosity=verbosity)
 
 
     if test_configuration:
         config = ConfigurationSpace(
-                    {'input_dropout': 0.25, 'intermediate_activation': 'silu', 'intermediate_dimension': 100,
-                    'intermediate_layers': 1, 'latent_dimension': 10, 'learning_rate': 0.001,
+                    {'input_dropout': 0.25, 'intermediate_activation': 'leakyrelu', 'intermediate_dimension': 200,
+                    'intermediate_layers': 4, 'latent_dimension': 10, 'learning_rate': 0.001,
                     'original_dim': 825000, 'solver': 'nadam'}
                 )
-        test_train(model=fia_vae_hptune, config=config, verbosity=verbosity)
+        test_train(smac_model=fia_vae_hptune, config=config, verbosity=verbosity)
 
     else:
         incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=10, verbosity=verbosity)

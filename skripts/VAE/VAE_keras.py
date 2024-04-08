@@ -38,13 +38,13 @@ def get_activation_function(activation_function:str):
         Activation function as a pytorch.nn class
     """
     if activation_function == "relu":
-        return activations.relu()
+        return activations.relu
     elif activation_function == "leakyrelu":
         return layers.LeakyReLU()
     elif activation_function == "selu":
-        return activations.selu()
+        return activations.selu
     elif activation_function == "tanh":
-        return activations.tanh()
+        return activations.tanh
     else:
         raise(ValueError(f"{activation_function} is not defined as a valid activation function."))
     
@@ -181,7 +181,8 @@ class FIA_VAE():
                      verbose = verbosity)
     
     def evaluate(self, test_data, verbosity:int=0):
-        self.vae.evaluate(test_data, test_data, verbose=verbosity)
+        loss, mse = self.vae.evaluate(test_data, test_data, verbose=verbosity)
+        return (loss, mse)
     
     
 
@@ -213,7 +214,7 @@ class FIA_VAE_hptune:
         model = self.model_builder(config)
         if self.verbosity > 1:
             if self.verbosity > 2:
-                model.summary()
+                model.vae.summary()
                 print_utilization()
             print(f"Model built in {time.time()-t}s")
             t = time.time()
@@ -229,7 +230,7 @@ class FIA_VAE_hptune:
             t = time.time()
 
         # Evaluation
-        loss = model.evaluate(self.test_data, verbosity=self.verbosity)
+        loss, mse = model.evaluate(self.test_data, verbosity=self.verbosity)
         if self.verbosity > 1:
             print(f"Model evaluated in {time.time()-t}s")
         

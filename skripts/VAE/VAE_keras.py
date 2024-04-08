@@ -1,16 +1,7 @@
 import sys
-import gc
 import os
 import time
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
-
-from typing import Union
-from tqdm import tqdm
-from pathlib import Path
-from functools import partial
-
-import numpy as np
-import pandas as pd
 
 from sklearn.model_selection import train_test_split
 
@@ -29,9 +20,11 @@ from ConfigSpace import Configuration, ConfigurationSpace
 from tensorflow.python.framework.ops import disable_eager_execution
 disable_eager_execution()
 
-from skripts.helpers.pc_stats import *
+sys.path.append("..")
+from helpers.pc_stats import *
 
 print("Available GPUs: ", tf.config.list_physical_devices('GPU'))
+
 
 # Helpers
 def get_activation_function(activation_function:str):
@@ -93,21 +86,22 @@ class FIA_VAE():
     def __init__(self, config:Configuration):
         im_layers       = config["intermediate_layers"]
         im_dim          = config["intermediate_dimension"]
-        activation_fun  = config["intermediate_activation"]
+        activation_fun  = get_activation_function( config["intermediate_activation"] )
         
         # Encoder
         self.input      = Input(shape=(config["original_dim"],), name='encoder_input')
-        self.input      = Dropout( config["input_dropout"] ) (self.input)
-        self.im_enc    = Dense(im_dim , activation=activation_fun) (self.input)
+        self.im_enc     = Dropout( config["input_dropout"] ) (self.input)
+        self.im_enc     = Dense( im_dim , activation=activation_fun ) (self.im_enc)
         for i in range(1, im_layers):                                                              # Successive halfing of layers
             if im_dim // 2**i <= config["latent_dimension"]:
                 im_layers = i 
                 break
             self.im_enc = Dense( im_dim // 2**i, activation=activation_fun ) (self.im_enc)
-        self.mu         = Dense(config["latent_dimension"], name='latent_mu') (self.im_enc)
-        self.sigma      = Dense(config["latent_dimension"], name='latent_sigma') (self.im_enc)
-        self.z          = Sampling() ([self.mu, self.sigma])                                       # Use reparameterization trick 
-        self.encoder = Model(self.input, [self.mu, self.sigma, self.z], name='encoder')            # Instantiate encoder
+        self.mu         = Dense( config["latent_dimension"], name='latent_mu' ) (self.im_enc)
+        self.sigma      = Dense( config["latent_dimension"], name='latent_sigma' ) (self.im_enc)
+        self.z          = Sampling() ( [self.mu, self.sigma] )                                     # Use reparameterization trick
+
+        self.encoder = Model( self.input, [self.mu, self.sigma, self.z], name='encoder' )            # Instantiate encoder
 
         # Decoder
         self.decoder_input  = Input(shape=(config["latent_dimension"], ), name='decoder_input')
@@ -116,6 +110,7 @@ class FIA_VAE():
             self.im_dec =  Dense( im_dim // 2**i, activation=activation_fun) (prev_layer)
         self.im_dec = Dense(im_dim, activation=activation_fun) (self.im_dec)
         self.output  = Dense(config["original_dim"]) (self.im_dec)
+
         self.decoder = Model(self.decoder_input, self.output, name='decoder')                        # Instantiate decoder
 
         # VAE
@@ -131,24 +126,8 @@ class FIA_VAE():
         self.optimizer = get_solver( config["solver"] )( config["learning_rate"] )
 
         # Compile VAE
-        self.vae.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss,
-                         metrics = [self.loss, self.reconstruction_loss, self.kl_loss])
+        self.vae.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss, metrics = [ "mse" ])
 
-    @property
-    def metrics(self):
-        return [
-            self.loss,
-            self.reconstruction_loss,
-            self.kl_loss,
-        ]
-
-    def train(self, train_data, val_data, n_epochs, batch_size, verbosity=1):
-        self.vae.fit(train_data, train_data,
-                     epochs = n_epochs, 
-                     batch_size = batch_size, 
-                     validation_data = (val_data, val_data),
-                     verbose = verbosity)
-    
     def encode(self, data):
         return self.encoder.predict(data)[2]
     
@@ -194,13 +173,25 @@ class FIA_VAE():
 
         return self.loss
     
+    def train(self, train_data, val_data, epochs, batch_size, verbosity:int=0):
+        self.vae.fit(train_data, train_data,
+                     epochs = epochs, 
+                     batch_size = batch_size, 
+                     validation_data = (val_data, val_data),
+                     verbose = verbosity)
+    
+    def evaluate(self, test_data, verbosity:int=0):
+        self.vae.evaluate(test_data, test_data, verbose=verbosity)
+    
+    
 
 class FIA_VAE_hptune:
     def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
-                 verbosity:int=0):
+                 batch_size, verbosity:int=0):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
         self.training_data, self.test_data = train_test_split(X, test_size=test_size)
+        self.batch_size = batch_size
         self.verbosity = verbosity
 
     def train(self, config: Configuration, seed: int = 0, budget:int=25) -> float:
@@ -228,8 +219,8 @@ class FIA_VAE_hptune:
             t = time.time()
 
         # Fitting
-        callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)	# Model will stop if no improvement
-        model.fit(self.training_data, self.training_data, epochs=int(budget), verbose=0, callbacks=[callback])
+        model.train(self.training_data, self.training_data, epochs=int(budget),
+                    batch_size=self.batch_size, verbosity=self.verbosity)
         if self.verbosity > 1:
             if self.verbosity > 2:
                 print("After training utilization:")
@@ -238,7 +229,7 @@ class FIA_VAE_hptune:
             t = time.time()
 
         # Evaluation
-        loss, reconstruction_loss, kl_loss = model.evaluate(self.test_data,  self.test_data, verbose=0)
+        loss = model.evaluate(self.test_data, verbosity=self.verbosity)
         if self.verbosity > 1:
             print(f"Model evaluated in {time.time()-t}s")
         

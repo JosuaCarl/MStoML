@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import random
@@ -20,7 +21,8 @@ from torchinfo import summary
 from GPUtil import showUtilization, getAvailable
 import psutil
 
-from skripts.helpers.helpers import *
+sys.path.append("..")
+from helpers.pc_stats import *
 
 print(f"Available GPUs: {getAvailable(limit=4)}")
 

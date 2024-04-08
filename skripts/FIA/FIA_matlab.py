@@ -4,11 +4,8 @@ import time
 import sys
 import argparse
 
-# Append paths to scripting files
-sys.path.append( '../FIA' )
-
 # import methods from FIA python script
-from FIA import *
+from skripts.FIA.fia import *
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='FIA_oms',

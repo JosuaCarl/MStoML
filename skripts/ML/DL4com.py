@@ -20,8 +20,9 @@ from smac import MultiFidelityFacade, HyperparameterOptimizationFacade
 from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
 
-sys.path.append( '..' )
-from skripts.helpers.helpers import *
+dir_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append( os.path.join( dir_path, '../..' ))
+from skripts.helpers.mailing import *
 from ML4com import *
 
 # Models

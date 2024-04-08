@@ -148,41 +148,11 @@ class FIA_VAE_hptune:
 # Final VAE
 class FIA_VAE():
 
-    def __init__(self, config:Configuration, 
+    def __init__(self,
                 input_shape, intermediate_neurons:int, latent_dim:int,       # Shape
                 kl_beta:float=1e-2, learning_rate:float=1e-3, intermediate_dropout:float=0.5, input_dropout:float=0.5,
                 intermediate_activation=LeakyReLU()):                     # Rates
         
-        im_layers       = config["intermediate_layers"]
-        im_dim          = config["intermediate_dimension"]
-        activation_fun  = config["intermediate_activation"]
-        
-        # Encoder construction
-        encoder_layers = [ nn.Dropout(config["input_dropout"]),
-                           nn.Linear(config["original_dim"],  im_dim),
-                           activation_fun ]
-        for i in range(1, im_layers):                                                              # Successive halfing of layers
-            if im_dim // 2**i <= config["latent_dimension"]:
-                im_layers = i 
-                break
-            encoder_layers.append( nn.Linear( im_dim // 2**(i-1), im_dim // 2**i ) )
-            encoder_layers.append( activation_fun )
-        encoder_layers.append( nn.Linear(im_dim // 2**(im_layers-1), 2 * config["latent_dimension"]) )
-        self.encoder = nn.Sequential( *encoder_layers)
-
-        # Kernel trick construction
-        self.softplus = nn.Softplus()
-
-        # Decoder construction
-        decoder_layers = [ nn.Linear(config["latent_dimension"], im_dim // 2**(im_layers-1)),
-                           activation_fun ]
-        for i in reversed(range(1, im_layers)):
-            decoder_layers.append( nn.Linear( im_dim // 2**i, im_dim // 2**(i-1) ) )
-            decoder_layers.append( activation_fun )
-        decoder_layers.append( nn.Linear(im_dim, config["original_dim"]) )
-        decoder_layers.append( nn.Sigmoid() )
-        self.decoder = nn.Sequential( *decoder_layers)
-
         self.input_shape = input_shape
         self.intermediate_neurons = intermediate_neurons
         self.latent_dim = latent_dim

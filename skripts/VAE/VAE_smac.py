@@ -24,11 +24,16 @@ from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
 from smac.runhistory.dataclasses import TrialValue
 
-sys.path.append( '../FIA' )
-sys.path.append( '..' )
+# Doesn't work with Slurm, because __file__ variable is not copied
+"""
+dir_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append( os.path.normcase(os.path.join( dir_path, '..' )))
+print(os.path.normpath(os.path.join( dir_path, '..' )))
+"""
+sys.path.append("..")
+from helpers.pc_stats import *
+from FIA.FIA import *
 
-from FIA import *
-from helpers import *
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',
@@ -41,9 +46,9 @@ parser.add_argument('-f', '--framework')
 args = parser.parse_args()
 
 if args.framework == "keras":
-    from VAE_keras import *
+    from VAE.VAE_keras import *
 elif args.framework == "pytorch":
-    from VAE_torch import *        
+    from VAE.VAE_torch import *        
 
 # Logging (time and steps)
 last_timestamp = time.time()
@@ -89,7 +94,7 @@ def __main__():
         
     elif framework == "keras":
         fia_vae_hptune = FIA_VAE_hptune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
-                                         model_args={"classes": 1} )
+                                         batch_size=64, verbosity=verbosity )
 
 
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,

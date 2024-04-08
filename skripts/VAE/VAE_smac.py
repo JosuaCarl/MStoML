@@ -2,7 +2,7 @@
 #SBATCH --job-name VAE_tuning
 #SBATCH --time 24:00:00
 #SBATCH --mem 200G
-#SBATCH --partition cpu1
+#SBATCH --partition cpu2-hm
 #SBATCH --nodes 2
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1

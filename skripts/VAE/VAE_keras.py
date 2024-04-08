@@ -105,10 +105,11 @@ class FIA_VAE():
 
         # Decoder
         self.decoder_input  = Input(shape=(config["latent_dimension"], ), name='decoder_input')
+        prev_layer = self.decoder_input
         for i in reversed(range(1, im_layers)):
-            prev_layer = self.decoder_input if i == im_layers-1 else self.im_dec
             self.im_dec =  Dense( im_dim // 2**i, activation=activation_fun) (prev_layer)
-        self.im_dec = Dense(im_dim, activation=activation_fun) (self.im_dec)
+            prev_layer = self.im_dec
+        self.im_dec = Dense(im_dim, activation=activation_fun) (prev_layer)
         self.output  = Dense(config["original_dim"]) (self.im_dec)
 
         self.decoder = Model(self.decoder_input, self.output, name='decoder')                        # Instantiate decoder

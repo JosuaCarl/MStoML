@@ -173,3 +173,4 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 ./runs/FIA/Com8_grown_together/oms/data_matrix.tsv
+../../runs/FIA/Com8_grown_together/oms/data_matrix.tsv

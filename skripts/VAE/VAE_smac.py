@@ -2,11 +2,11 @@
 #SBATCH --job-name VAE_tuning
 #SBATCH --time 24:00:00
 #SBATCH --mem 200G
-#SBATCH --partition gpu-a30
+#SBATCH --partition cpu1
 #SBATCH --nodes 2
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
-#SBATCH --gres gpu:1
+# --gres gpu:1
 # available processors: cpu1, cpu2-hm, gpu-a30
 
 # imports

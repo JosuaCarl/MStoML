@@ -188,7 +188,7 @@ class FIA_VAE():
 
 class FIA_VAE_hptune:
     def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
-                 batch_size, verbosity:int=0):
+                 batch_size:int=16, verbosity:int=0):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
         self.training_data, self.test_data = train_test_split(X, test_size=test_size)

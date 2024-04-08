@@ -88,7 +88,7 @@ def __main__():
                                          device=device, workers=0, batch_size=64, verbosity=verbosity )
         
     elif framework == "keras":
-        fia_vae_hptune = FIA_VAE_hptune( X, test_size=0.2, configuration_space=configuration_space, model_builder=build_vae_ht_model,
+        fia_vae_hptune = FIA_VAE_hptune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
                                          model_args={"classes": 1} )
 
 

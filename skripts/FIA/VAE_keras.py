@@ -31,6 +31,7 @@ disable_eager_execution()
 sys.path.append( '..' )
 from helpers import *
 
+print("Available GPUs: ", tf.config.list_physical_devices('GPU'))
 
 # Methods
 def sample_z(args):
@@ -44,14 +45,24 @@ def sample_z(args):
     return mu + backend.exp(sigma / 2) * eps
 
 
-def kl_reconstruction_loss(true, pred, sample_weight, mu, sigma, original_dim, kl_loss_scaler):
+def kl_reconstruction_loss(true, pred, sample_weight, mu, sigma, original_dim):
         """
-        Define loss function 
+        Define loss function for Kullback-Leibler and Reconstruction loss
+
+        Args:
+            true: True values
+            pred: Predicted valeus
+            sample_weight: Weights of each sample
+            mu: Mean of the underlying distribution
+            sigma: Standard deviation of the underlying distribution
+            original_dim: Original number of m/z bins
+        Returns:
+            Mean of the reconstruction and Kullback-Leibler loss across all dimensions
         """
         reconstruction_loss = mse(true, pred) * original_dim
         kl_loss = -0.5 * backend.sum( 1.0 + sigma - backend.square(mu) - backend.exp(sigma), axis=-1)
 
-        return backend.mean(reconstruction_loss + kl_loss_scaler * kl_loss)
+        return backend.mean(reconstruction_loss + kl_loss)
 
 
 # Tuning VAE
@@ -96,8 +107,7 @@ def build_vae_ht_model(config:Configuration):
 
     
     # Compile VAE
-    loss_function = partial(kl_reconstruction_loss, mu=mu, sigma=sigma,
-                            original_dim=config["original_dim"], kl_loss_scaler=config["kl_loss_scaler"])
+    loss_function = partial(kl_reconstruction_loss, mu=mu, sigma=sigma, original_dim=config["original_dim"])
     print(f"Loss function defined ({time.time()-t}s)")
     vae.compile(optimizer=optimizer, loss=loss_function)
     print(f"Complied ({time.time()-t}s)")

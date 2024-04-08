@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_tuning
-#SBATCH --time 20:00:00
+#SBATCH --time 24:00:00
 #SBATCH --mem 200G
 #SBATCH --partition gpu-a30
 #SBATCH --nodes 2
@@ -95,13 +95,13 @@ def __main__():
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,
                          n_trials=100000, min_budget=2, max_budget=100,
                          n_workers=1, output_directory=outdir,
-                         walltime_limit=12*60*60, cputime_limit=np.inf, trial_memory_limit=None )   # Max RAM in Bytes (not MB)
+                         walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None )   # Max RAM in Bytes (not MB)
                         
     initial_design = MultiFidelityFacade.get_initial_design(scenario, n_configs=10)
     intensifier = Hyperband(scenario, incumbent_selection="highest_budget")
     facade = MultiFidelityFacade( scenario, fia_vae_hptune.train, 
                                   initial_design=initial_design, intensifier=intensifier,
-                                  overwrite=True, logging_level=30-verbosity*10 )
+                                  overwrite=False, logging_level=30-verbosity*10 )
     time_step(message="SMAC defined", verbosity=verbosity)
 
 
@@ -135,9 +135,16 @@ def time_step(message:str, verbosity:int=0):
 
 
 def read_data(data_dir:str, verbosity:int=0):
-    # Data Read-in
+    """
+    Read in the data from a data_matrix and normalize it according to total ion counts
+
+    Args:
+        data_dir (str): Directory with "data_matrix.tsv" file. The rows must represent m/z bins, the columns different samples
+    Returns:
+        X: matrix with total ion count (TIC) normalized data (transposed)
+    """
     binned_dfs = pd.read_csv(os.path.join(data_dir, "data_matrix.tsv"), sep="\t", index_col="mz", engine="pyarrow")
-    binned_dfs[:] =  total_ion_count_normalization(binned_dfs)      # type: ignore
+    binned_dfs[:] =  total_ion_count_normalization(binned_dfs)
 
     X = binned_dfs.transpose()
     time_step(message="Data loaded", verbosity=verbosity)
@@ -145,6 +152,13 @@ def read_data(data_dir:str, verbosity:int=0):
 
 
 def search_device(verbosity:int=0):
+    """
+    Searches the fastest device for computation in pytorch
+    Args:
+        verbosity (int): level of verbosity
+    Returns:
+        device (str)
+    """
     device = ( "cuda" if torch.cuda.is_available()
                     else "mps" if torch.backends.mps.is_available()
                     else "cpu" )
@@ -191,6 +205,17 @@ def ask_tell_optimization(facade, smac_model, n:int=10, verbosity:int=0):
 
 
 def run_optimization(facade, smac_model, verbose_steps:int=10, verbosity:int=0):
+    """
+    Perform optimization run with smac facade.
+
+    Args:
+        facade: SMAC facade
+        smac_model: Model to supply for training
+        verbose_steps (int): number of steps to be returned in a more verbose fashion
+        verbosity (int): level of verbosity
+    Returns:
+        incumbent: best hyperparameter cominations
+    """
     if verbosity > 0:
         print("Starting search:")
         ask_tell_optimization(facade=facade, smac_model=smac_model, n=verbose_steps, verbosity=verbosity)
@@ -200,6 +225,15 @@ def run_optimization(facade, smac_model, verbose_steps:int=10, verbosity:int=0):
 
 
 def save_runhistory(incumbent, fascade, run_dir:str, verbosity:int=0):
+    """
+    Saves the history of one run
+
+    Args:
+        incumbent: The calculated incumbent (best hyperparameters)
+        fascade: The fascade used for computation
+        run_dir (str): The directory where the results are saved to
+        verbosity (int): level of verbosity
+    """
     best_hp = incumbent[0] if isinstance(incumbent, list) else incumbent
     if verbosity > 0: 
         print(f"The final incumbent cost is as: {fascade.validate(best_hp)}")

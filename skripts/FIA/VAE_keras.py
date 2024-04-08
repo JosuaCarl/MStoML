@@ -16,9 +16,11 @@ from sklearn.model_selection import train_test_split
 
 import tensorflow as tf
 from keras import Model
-from keras.layers import Input, Dense, LeakyReLU, Lambda, Dropout, BatchNormalization
+from keras import layers
+from keras.layers import Input, Dense, Dropout
 from keras.losses import mse
-from keras.optimizers.legacy import Nadam
+from keras import optimizers
+from keras import activations
 import keras.backend as backend
 import keras
 
@@ -33,209 +35,142 @@ from helpers import *
 
 print("Available GPUs: ", tf.config.list_physical_devices('GPU'))
 
-# Methods
-def sample_z(args):
+# Helpers
+def get_activation_function(activation_function:str) -> nn.Module:
     """
-    Define sampling with reparameterization trick
+    Convert an activation function string into a pytorch function
+
+    Args:
+        activation_function (str): Activation function in string representation 
+
+    Returns:
+        Activation function as a pytorch.nn class
     """
-    mu, sigma = args
-    batch     = backend.shape(mu)[0]
-    dim       = backend.shape(mu)[1]
-    eps       = backend.random_normal(shape=(batch, dim))
-    return mu + backend.exp(sigma / 2) * eps
-
-
-def kl_reconstruction_loss(true, pred, sample_weight, mu, sigma, original_dim):
-        """
-        Define loss function for Kullback-Leibler and Reconstruction loss
-
-        Args:
-            true: True values
-            pred: Predicted valeus
-            sample_weight: Weights of each sample
-            mu: Mean of the underlying distribution
-            sigma: Standard deviation of the underlying distribution
-            original_dim: Original number of m/z bins
-        Returns:
-            Mean of the reconstruction and Kullback-Leibler loss across all dimensions
-        """
-        reconstruction_loss = mse(true, pred) * original_dim
-        kl_loss = -0.5 * backend.sum( 1.0 + sigma - backend.square(mu) - backend.exp(sigma), axis=-1)
-
-        return backend.mean(reconstruction_loss + kl_loss)
-
-
-# Tuning VAE
-def build_vae_ht_model(config:Configuration):
-    t = time.time()
-    backend.clear_session()
-    gc.collect()
-    print(f"Garbage collected ({time.time()-t}s)")
-    t = time.time()
-    intermediate_activation = config["intermediate_activation"]
-    if intermediate_activation == "leakyrelu":
-        intermediate_activation = LeakyReLU()
-
-    # Encoder
-    i       = Input(shape=(config["original_dim"], ), name='encoder_input')
-    enc     = Dropout( config["input_dropout"] ) (i)      # Dropout for more redundant neurons
-    enc     = Dense( config["intermediate_neurons"], activation=intermediate_activation ) (i)
-    mu      = Dense( config["latent_dimensions"], name='latent_mu') (enc)
-    sigma   = Dense( config["latent_dimensions"], name='latent_sigma') (enc)
-    z       = Lambda(sample_z, output_shape=( config["latent_dimensions"], ), name='z') ([mu, sigma])  ## Use reparameterization trick
-
-    encoder = Model(i, [mu, sigma, z], name='encoder')  ## Instantiate encoder
+    if activation_function == "relu":
+        return activations.relu()
+    elif activation_function == "leakyrelu":
+        return layers.LeakyReLU()
+    elif activation_function == "selu":
+        return activations.selu()
+    elif activation_function == "tanh":
+        return activations.tanh()
+    else:
+        raise(ValueError(f"{activation_function} is not defined as a valid activation function."))
     
-    # Decoder
-    d_i     = Input(shape=( config["latent_dimensions"], ), name='decoder_input')
-    dec     = Dense( config["intermediate_neurons"], activation=intermediate_activation ) (d_i) 
-    o       = Dense( config["original_dim"] ) (dec)
 
-    decoder = Model(d_i, o, name='decoder') ## Instantiate decoder
-     
-    # Instantiate VAE
-    vae_outputs = decoder (encoder(i)[2])               # type: ignore
-    vae         = Model(i, vae_outputs, name='vae')
-    print(f"Instantiated VAE ({time.time()-t}s)")
-    t = time.time()
+def get_solver(solver:str):
+    """
+    Convert an solver string into a pytorch function
 
-    # Define optimizer
-    if config["solver"] == "nadam":
-        optimizer = Nadam( config["learning_rate"] )
-    print(f"Optimizer defined ({time.time()-t}s)")
-    t = time.time()
-
+    Args:
+        solver (str): Solver in string representation 
     
-    # Compile VAE
-    loss_function = partial(kl_reconstruction_loss, mu=mu, sigma=sigma, original_dim=config["original_dim"])
-    print(f"Loss function defined ({time.time()-t}s)")
-    vae.compile(optimizer=optimizer, loss=loss_function)
-    print(f"Complied ({time.time()-t}s)")
-    
-    return vae
+    Returns:
+        solver as a pytorch.optim class
+    """
+    if solver == "adam":
+        return optimizers.legacy.Adam
+    elif solver == "nadam":
+        return optimizers.legacy.Nadam
+    elif solver == "adamw":
+        return optimizers.AdamW
+    else:
+        raise(ValueError(f"{solver} is not defined as a valid solver."))
 
 
-class FIA_VAE_hptune:
-    def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder, model_args):
-        self.configuration_space = configuration_space
-        self.model_builder = model_builder
-        self.model_args = model_args
-        self.training_data, self.test_data = train_test_split(X, test_size=test_size)
-
-    def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> float:
-            t = time.time()
-            keras.utils.set_random_seed(seed)
-            model = self.model_builder(config=config)
-            print(f"Model built. ({time.time()-t}s)")
-            t = time.time()
-
-            # Fit
-            callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)	# Model will stop if no improvement
-            model.fit(self.training_data, self.training_data, epochs=int(budget), verbose=0, callbacks=[callback])
-            print(f"Model fitted. ({time.time()-t}s)")
-            t = time.time()
-
-            # Evaluation
-            val_loss = model.evaluate(self.test_data,  self.test_data, verbose=0)
-            print(f"Model evaluated ({time.time()-t}s)")
-            t = time.time()
-            keras.backend.clear_session()
-            print(f"Session cleared. ({time.time()-t}s)")
-                 
-            return val_loss
+class Sampling(layers.Layer):
+    """
+    Uses (z_mean, z_log_var) to sample z, the vector encoding a digit.
+    """
+    def call(self, inputs):
+        z_mean, z_log_var = inputs
+        z_mean_shape = backend.shape(z_mean)
+        batch   = z_mean_shape[0]
+        dim     = z_mean_shape[1]
+        epsilon = backend.random_normal(shape=(batch, dim))
+        return z_mean + backend.exp(0.5 * z_log_var) * epsilon
 
 
-
-# Final VAE
 class FIA_VAE():
-
-    def __init__(self, input_shape, intermediate_neurons:int, latent_dim:int,       # Shape
-                kl_beta:float=1e-2, learning_rate:float=1e-3, intermediate_dropout:float=0.5, input_dropout:float=0.5,
-                intermediate_activation=LeakyReLU()):                     # Rates
+    def __init__(self, config:Configuration):
+        im_layers       = config["intermediate_layers"]
+        im_dim          = config["intermediate_dimension"]
+        activation_fun  = config["intermediate_activation"]
         
-        self.input_shape = input_shape
-        self.intermediate_neurons = intermediate_neurons
-        self.latent_dim = latent_dim
-        self.kl_beta = kl_beta
-        self.learning_rate = learning_rate
-        self.input_dropout = input_dropout
-        self.intermediate_dropout = intermediate_dropout
-        self.intermediate_activation = intermediate_activation
-        
-        # # =================
-        # # Encoder
-        # # =================
- 
-        self.input      = Input(shape=(self.input_shape,), name='encoder_input')
-        self.input      = Dropout(self.intermediate_dropout) (self.input)
-        self.enc        = Dense(self.intermediate_neurons, activation=self.intermediate_activation) (self.input)                          
-        self.mu         = Dense(self.latent_dim, name='latent_mu') (self.enc)
-        self.sigma      = Dense(self.latent_dim, name='latent_sigma') (self.enc)
+        # Encoder
+        self.input      = Input(shape=(config["original_dim"],), name='encoder_input')
+        self.input      = Dropout( config["input_dropout"] ) (self.input)
+        self.im_enc    = Dense(im_dim , activation=activation_fun) (self.input)
+        for i in range(1, im_layers):                                                              # Successive halfing of layers
+            if im_dim // 2**i <= config["latent_dimension"]:
+                im_layers = i 
+                break
+            self.im_enc = Dense( im_dim // 2**i, activation=activation_fun ) (self.im_enc)
+        self.mu         = Dense(config["latent_dimension"], name='latent_mu') (self.im_enc)
+        self.sigma      = Dense(config["latent_dimension"], name='latent_sigma') (self.im_enc)
+        self.z          = Sampling() ([self.mu, self.sigma])                                       # Use reparameterization trick 
+        self.encoder = Model(self.input, [self.mu, self.sigma, self.z], name='encoder')            # Instantiate encoder
 
-        self.z          = Lambda(self.sample_z, output_shape=(self.latent_dim, ), name='z')([self.mu, self.sigma])      # Use reparameterization trick 
-
-        self.encoder = Model(self.input, [self.mu, self.sigma, self.z], name='encoder')                                 # Instantiate encoder
-
-        # =================
         # Decoder
-        # =================
+        self.decoder_input  = Input(shape=(config["latent_dimension"], ), name='decoder_input')
+        for i in reversed(range(1, im_layers)):
+            prev_layer = self.decoder_input if i == im_layers-1 else self.im_dec
+            self.im_dec =  Dense( im_dim // 2**i, activation=activation_fun) (prev_layer)
+        self.im_dec = Dense(im_dim, activation=activation_fun) (self.im_dec)
+        self.output  = Dense(config["original_dim"]) (self.im_dec)
+        self.decoder = Model(self.decoder_input, self.output, name='decoder')                        # Instantiate decoder
 
-        # Definition
-        self.decoder_input  = Input(shape=(self.latent_dim, ), name='decoder_input')
-        self.dec            = Dense(self.intermediate_neurons, activation=self.intermediate_activation) (self.decoder_input)
-        self.output  = Dense(self.input_shape) (self.dec )
-
-        self.decoder = Model(self.decoder_input, self.output, name='decoder')                                           # Instantiate decoder
-
-        # =================
         # VAE
-        # =================
-
-        # Instantiate VAE
-        self.vae_outputs = self.decoder(self.encoder(self.input)[2])            # type: ignore
+        self.vae_outputs = self.decoder(self.encoder(self.input)[2])
         self.vae         = Model(self.input, self.vae_outputs, name='vae')
 
+        # Loss trackers
+        self.reconstruction_loss = keras.metrics.Mean(name="reconstruction_loss")
+        self.kl_loss = keras.metrics.Mean(name="kl_loss")
+        self.loss = keras.metrics.Mean(name="total_loss")
+
         # Define optimizer
-        self.optimizer = Nadam(learning_rate=self.learning_rate)
+        self.optimizer = get_solver( config["solver"] )( config["learning_rate"] )
 
         # Compile VAE
-        self.vae.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss, metrics = ['mse'])
-    
-    
+        self.vae.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss,
+                         metrics = [self.loss, self.reconstruction_loss, self.kl_loss])
+
+    @property
+    def metrics(self):
+        return [
+            self.loss,
+            self.reconstruction_loss,
+            self.kl_loss,
+        ]
+
     def train(self, train_data, val_data, n_epochs, batch_size, verbosity=1):
-        self.vae.fit(train_data, train_data,        	             # type: ignore
+        self.vae.fit(train_data, train_data,
                      epochs = n_epochs, 
                      batch_size = batch_size, 
                      validation_data = (val_data, val_data),
-                     verbose = verbosity)                            # type: ignore
+                     verbose = verbosity)
     
     def encode(self, data):
-        return self.encoder.predict(data)[2]                         # type: ignore
+        return self.encoder.predict(data)[2]
     
     def encode_mu(self, data):
-        return self.encoder.predict(data)[0]                         # type: ignore
+        return self.encoder.predict(data)[0]
     
     def decode(self, data):
-        return self.decoder.predict(data)                            # type: ignore
+        return self.decoder.predict(data)
     
     def reconstruct(self, data):
         return self.decode(self.encode(data))
     
     def save_model(self, save_folder, suffix:str=""):
-        self.vae.save(os.path.join(save_folder, f'VAE{suffix}.h5'))                  # type: ignore
-        self.encoder.save(os.path.join(save_folder, f'VAE_encoder{suffix}.h5'))      # type: ignore
-        self.decoder.save(os.path.join(save_folder, f'VAE_decoder{suffix}.h5'))      # type: ignore
+        self.vae.save(os.path.join(save_folder, f'VAE{suffix}.h5'))
+        self.encoder.save(os.path.join(save_folder, f'VAE_encoder{suffix}.h5'))
+        self.decoder.save(os.path.join(save_folder, f'VAE_decoder{suffix}.h5'))
         
-    
-    def load_vae(self, save_path):
-        # The two functions below have to be redefined for the loading
-        # of the model. They cannot be methods of the mtVAE class for
-        # some reason.
-        # https://github.com/keras-team/keras/issues/13992
-                       
+    def load_vae(self, save_path):                       
         self.vae = keras.models.load_model(save_path)
-        self.vae.compile(optimizer=self.optimizer,                       # type: ignore
-                         custom_objects={'sample_z': self.sample_z}, 
+        self.vae.compile(optimizer=self.optimizer, 
                          loss=self.kl_reconstruction_loss, 
                          metrics = ['mse'])
         
@@ -244,28 +179,74 @@ class FIA_VAE():
         
     def load_decoder(self, save_path):
         self.decoder = keras.models.load_model(save_path)
-
-    def sample_z(self, args):
-        """
-        Define sampling with reparameterization trick
-        """
-        mu, sigma = args
-        batch     = backend.shape(mu)[0]
-        dim       = backend.shape(mu)[1]
-        eps       = backend.random_normal(shape=(batch, dim))
-        return mu + backend.exp(sigma / 2) * eps
     
     def kl_reconstruction_loss(self, true, pred):
         """
-        Kullback-Leibler + Reconstruction loss
+        Loss function for Kullback-Leibler + Reconstruction loss
+
+        Args:
+            true: True values
+            pred: Predicted values
+        Returns:
+            Loss = Kullback-Leibler + Reconstruction loss
         """
-        # Reconstruction loss
-        reconstruction_loss = mse(true, pred) * self.input_shape
+        self.reconstruction_loss = mse(true, pred)
+        self.kl_loss = backend.mean(-0.5 * backend.sum( 1.0 + self.sigma - backend.square(self.mu) - backend.exp(self.sigma), axis=-1))
+        self.loss = self.reconstruction_loss + self.kl_loss
 
-        # KL divergence loss
-        kl_loss = 1 + self.sigma - backend.square(self.mu) - backend.exp(self.sigma)         # type: ignore
-        kl_loss = backend.sum(kl_loss, axis=-1)
-        kl_loss *= -0.5
+        return self.loss
+    
 
-        # Total loss = mean(rec + scaler * KL divergence loss )
-        return backend.mean(reconstruction_loss + self.kl_beta * kl_loss)
+class FIA_VAE_hptune:
+    def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
+                 verbosity:int=0):
+        self.configuration_space = configuration_space
+        self.model_builder = model_builder
+        self.training_data, self.test_data = train_test_split(X, test_size=test_size)
+        self.verbosity = verbosity
+
+    def train(self, config: Configuration, seed: int = 0, budget:int=25) -> float:
+        """
+        Method to train the model
+
+        Args:
+            config: Configuration to be trained upon
+            seed: initializing seed
+            budget: number of epochs to be used in training
+        
+        Returns:
+            Average loss of the model
+        """
+        t = time.time()
+        keras.utils.set_random_seed(seed)
+
+        # Definition
+        model = self.model_builder(config)
+        if self.verbosity > 1:
+            if self.verbosity > 2:
+                model.summary()
+                print_utilization()
+            print(f"Model built in {time.time()-t}s")
+            t = time.time()
+
+        # Fitting
+        callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)	# Model will stop if no improvement
+        model.fit(self.training_data, self.training_data, epochs=int(budget), verbose=0, callbacks=[callback])
+        if self.verbosity > 1:
+            if self.verbosity > 2:
+                print("After training utilization:")
+                print_utilization()
+            print(f"Model trained in {time.time()-t}s")
+            t = time.time()
+
+        # Evaluation
+        loss, reconstruction_loss, kl_loss = model.evaluate(self.test_data,  self.test_data, verbose=0)
+        if self.verbosity > 1:
+            print(f"Model evaluated in {time.time()-t}s")
+        
+        # Clearing model parameters
+        keras.backend.clear_session()
+        if self.verbosity > 1:
+            print(f"Session cleared in ({time.time()-t}s)")
+                
+        return loss

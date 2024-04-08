@@ -41,7 +41,7 @@ parser.add_argument('-f', '--framework')
 args = parser.parse_args()
 
 if args.framework == "keras":
-    from skripts.FIA.VAE_keras import *
+    from VAE_keras import *
 elif args.framework == "pytorch":
     from VAE_torch import *        
 

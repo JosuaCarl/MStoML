@@ -37,13 +37,6 @@ def join_df_metNames(df):
     comb = comb.set_index('metNames')
     return comb
 
-# Normalization
-def total_ion_count_normalization(df):
-    return df / df.sum()
-
-def standard_normalization(df, axis=1):
-    return df.apply(lambda line: [(x - np.mean(line)) / np.var(line) for x in line], result_type="expand", axis=axis)
-
 # Helpers
 def dict_permutations(dictionary:dict) -> List[dict]:
   keys, values = zip(*dictionary.items())

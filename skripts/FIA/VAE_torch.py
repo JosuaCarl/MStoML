@@ -121,9 +121,9 @@ class FIA_VAE(nn.Module):
     """
     def __init__(self, config:Configuration):
         super(FIA_VAE, self).__init__()
-        im_layers = config["intermediate_layers"]
-        im_dim = config["intermediate_dimension"]
-        activation_fun = get_activation_function( config["intermediate_activation"] )
+        im_layers       = config["intermediate_layers"]
+        im_dim          = config["intermediate_dimension"]
+        activation_fun  = get_activation_function( config["intermediate_activation"] )
         
         # Encoder construction
         encoder_layers = [ nn.Dropout(config["input_dropout"]),
@@ -327,12 +327,17 @@ class FIA_VAE_hptune:
         generator = torch.Generator()
         generator.manual_seed(seed)
 
+        # Dataset Loading
         train_loader = DataLoader(self.training_data, batch_size=self.batch_size,
                                   num_workers=self.workers, worker_init_fn=self.seed_worker,
+                                  generator=generator, pin_memory=False )
+        test_loader = DataLoader(self.test_data, batch_size=self.batch_size,
+                                  num_workers=self.workers, worker_init_fn=self.seed_worker,
                                   generator=generator, pin_memory=False
-                                  )
+                                )
+        
+        # Definition
         model = self.model_builder(config).to( self.device )
-
         if self.verbosity > 1:
             if self.verbosity > 2:
                 print(model)
@@ -341,6 +346,7 @@ class FIA_VAE_hptune:
             print(f"Model built in {time.time()-t}s")
             t = time.time()
         
+        # Fitting
         optimizer = get_solver( config["solver"] )(model.parameters(), lr=config["learning_rate"]) 
         for epoch in range(int(budget)):
             self.train_epoch(model=model, data_loader=train_loader, optimizer=optimizer)
@@ -350,12 +356,8 @@ class FIA_VAE_hptune:
                 print_utilization()
             print(f"Model trained in {time.time()-t}s")
             t = time.time()
-
-        test_loader = DataLoader(self.test_data, batch_size=self.batch_size,
-                                  num_workers=self.workers, worker_init_fn=self.seed_worker,
-                                  generator=generator, pin_memory=False
-                                )
-
+        
+        # Evaluation
         avg_loss = self.evaluate(model, test_loader)
         if self.verbosity > 1:
             print(f"Model evaluated in {time.time()-t}s")

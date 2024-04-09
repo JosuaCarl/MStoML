@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_tuning
 #SBATCH --time 24:00:00
-#SBATCH --mem 200G
-#SBATCH --partition cpu2-hm
+#SBATCH --mem 400G
 #SBATCH --nodes 2
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
-# --gres gpu:1
+
 # available processors: cpu1, cpu2-hm, gpu-a30
 
 # imports
@@ -46,17 +45,15 @@ parser.add_argument('-f', '--framework')
 parser.add_argument('-o', '--overwrite')
 args = parser.parse_args()
 
-if args.framework == "keras":
-    from VAE.VAE_keras import *
-elif args.framework == "pytorch":
-    from VAE.VAE_torch import *        
+from VAE.VAE_keras import *
+from VAE.VAE_torch import *        
 
 # Logging (time and steps)
 last_timestamp = time.time()
 step = 0
 runtimes = {}
 
-def __main__():
+def main():
     """
     Hyperparameter optimization with SMAC3
     """
@@ -88,14 +85,17 @@ def __main__():
         print(f"Configuration space defined with estimated {configuration_space.estimate_size()} possible combinations.\n")
 
 
-    if framework == "pytorch":
+    if "torch" in framework:
         device = search_device(verbosity=verbosity)
         fia_vae_hptune = FIA_VAE_hptune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
                                          device=device, workers=0, batch_size=64, verbosity=verbosity )
         
-    elif framework == "keras":
+    elif "keras" in framework:
         fia_vae_hptune = FIA_VAE_hptune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
                                          batch_size=64, verbosity=verbosity )
+    
+    else:
+        raise(ValueError(f"The framework '{framework}' is not implemented. The framework must contain one of ['torch', 'keras']."))
 
 
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,
@@ -108,7 +108,7 @@ def __main__():
     facade = MultiFidelityFacade( scenario, fia_vae_hptune.train, 
                                   initial_design=initial_design, intensifier=intensifier,
                                   overwrite=overwrite, logging_level=30-verbosity*10 )
-    time_step(message="SMAC defined", verbosity=verbosity)
+    time_step(message=f"SMAC defined. Overwriting: {overwrite}", verbosity=verbosity)
 
 
     if test_configuration:
@@ -259,6 +259,9 @@ def save_runhistory(incumbent, fascade, run_dir:str, verbosity:int=0):
     runtime_df.to_csv(os.path.join(run_dir, "runtimes.tsv"), sep="\t")
     if verbosity > 0: 
         print("Finished!")
+    
+    return (results, runtime_df)
 
 
-__main__()
+if __name__ == "__main__":
+    main()

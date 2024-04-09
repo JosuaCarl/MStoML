@@ -1,0 +1,33 @@
+{
+  "hyperparameters": [
+    {
+      "name": "intermediate_dimension",
+      "type": "uniform_int",
+      "log": true,
+      "lower": 100,
+      "upper": 200,
+      "default": 200,
+      "q": null
+    },
+    {
+      "name": "latent_dimension",
+      "type": "uniform_int",
+      "log": false,
+      "lower": 10,
+      "upper": 200,
+      "default": 50,
+      "q": null
+    }
+  ],
+  "conditions": [],
+  "forbiddens": [
+    {
+      "left": "latent_dimension",
+      "right": "intermediate_dimension",
+      "type": "RELATION",
+      "lambda": "GREATER"
+    }
+  ],
+  "python_module_version": "0.6.1",
+  "json_format_version": 0.4
+}

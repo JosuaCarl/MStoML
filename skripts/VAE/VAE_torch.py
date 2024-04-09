@@ -3,6 +3,7 @@ import sys
 import time
 import random
 
+from tqdm import tqdm
 import numpy as np
 
 from sklearn.model_selection import train_test_split
@@ -50,7 +51,7 @@ def get_activation_function(activation_function:str) -> nn.Module:
     elif activation_function == "tanh":
         return nn.Tanh()
     else:
-        raise(ValueError(f"{activation_function} is not defined as a valid activation function."))
+        raise(ValueError(f"'{activation_function}' is not defined as a valid activation function."))
     
 
 def get_solver(solver:str):
@@ -70,7 +71,7 @@ def get_solver(solver:str):
     elif solver == "adamw":
         return optim.AdamW
     else:
-        raise(ValueError(f"{solver} is not defined as a valid solver."))
+        raise(ValueError(f"'{solver}' is not defined as a valid solver."))
     
 # Dataclass
 @dataclass
@@ -119,9 +120,6 @@ class FIA_VAE(nn.Module):
         encoder_layers.append( nn.Linear(im_dim // 2**(im_layers-1), 2 * config["latent_dimension"]) )
         self.encoder = nn.Sequential( *encoder_layers)
 
-        # Kernel trick construction
-        self.softplus = nn.Softplus()
-
         # Decoder construction
         decoder_layers = [ nn.Linear(config["latent_dimension"], im_dim // 2**(im_layers-1)),
                            activation_fun ]
@@ -132,6 +130,8 @@ class FIA_VAE(nn.Module):
         decoder_layers.append( nn.Sigmoid() )
         self.decoder = nn.Sequential( *decoder_layers)
 
+        # Kernel trick construction
+        self.softplus = nn.Softplus()
 
     def encode(self, x, eps: float = 1e-8):
         """
@@ -173,7 +173,14 @@ class FIA_VAE(nn.Module):
             torch.Tensor: Reconstructed data in the original input space.
         """
         return self.decoder(z)
-    
+
+    def init_weights(self):
+        def init_kaiming_uniform(module):
+            if isinstance(module, nn.Linear):
+                torch.nn.init.kaiming_uniform_(module.weight)
+        self.encoder.apply(init_kaiming_uniform)
+        self.decoder.apply(init_kaiming_uniform)
+
     def forward(self, x, compute_loss: bool = True):
         """
         Performs a forward pass of the VAE.
@@ -314,23 +321,27 @@ class FIA_VAE_hptune:
                                   generator=generator, pin_memory=False )
         test_loader = DataLoader(self.test_data, batch_size=self.batch_size,
                                   num_workers=self.workers, worker_init_fn=self.seed_worker,
-                                  generator=generator, pin_memory=False
-                                )
+                                  generator=generator, pin_memory=False )
         
         # Definition
-        model = self.model_builder(config).to( self.device )
+        self.model = self.model_builder(config).to( self.device )
         if self.verbosity > 1:
             if self.verbosity > 2:
-                print(model)
-                summary(model, inpute_size=self.training_data.shape, mode="train", device=self.device)
+                print(self.model)
+                summary(self.model, inpute_size=self.training_data.shape, mode="train", device=self.device)
                 print_utilization()
             print(f"Model built in {time.time()-t}s")
             t = time.time()
         
         # Fitting
-        optimizer = get_solver( config["solver"] )(model.parameters(), lr=config["learning_rate"]) 
-        for epoch in range(int(budget)):
-            self.train_epoch(model=model, data_loader=train_loader, optimizer=optimizer)
+        optimizer = get_solver( config["solver"] )(self.model.parameters(), lr=config["learning_rate"])
+        self.model.init_weights()
+        if self.verbosity > 2:
+            for epoch in tqdm(range(int(budget))):
+                self.train_epoch(model=self.model, data_loader=train_loader, optimizer=optimizer)
+        else:
+            for epoch in range(int(budget)):
+                self.train_epoch(model=self.model, data_loader=train_loader, optimizer=optimizer)
         if self.verbosity > 1:
             if self.verbosity > 2:
                 print("After training utilization:")
@@ -339,7 +350,7 @@ class FIA_VAE_hptune:
             t = time.time()
         
         # Evaluation
-        avg_loss = self.evaluate(model, test_loader)
+        avg_loss = self.evaluate(self.model, test_loader)
         if self.verbosity > 1:
             print(f"Model evaluated in {time.time()-t}s")
 

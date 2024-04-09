@@ -46,7 +46,7 @@ def get_activation_function(activation_function:str):
     elif activation_function == "tanh":
         return activations.tanh
     else:
-        raise(ValueError(f"{activation_function} is not defined as a valid activation function."))
+        raise(ValueError(f"'{activation_function}' is not defined as a valid activation function."))
     
 
 def get_solver(solver:str):
@@ -66,7 +66,7 @@ def get_solver(solver:str):
     elif solver == "adamw":
         return optimizers.AdamW
     else:
-        raise(ValueError(f"{solver} is not defined as a valid solver."))
+        raise(ValueError(f"'{solver}' is not defined as a valid solver."))
 
 
 class Sampling(layers.Layer):

@@ -1,11 +1,13 @@
 import sys
 import os
 import time
+import datetime
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 
 from sklearn.model_selection import train_test_split
 
 import tensorflow as tf
+from keras.callbacks import TensorBoard
 from keras import Model
 from keras import layers
 from keras.layers import Input, Dense, Dropout
@@ -174,12 +176,18 @@ class FIA_VAE():
 
         return self.loss
     
-    def train(self, train_data, val_data, epochs, batch_size, verbosity:int=0):
-        self.vae.fit(train_data, train_data,
-                     epochs = epochs, 
-                     batch_size = batch_size, 
-                     validation_data = (val_data, val_data),
-                     verbose = verbosity)
+    def train(self, train_data, val_data, epochs:int, batch_size:int, log_dir:str, verbosity:int=0):
+        if verbosity > 0:
+            log_dir = os.path.join(log_dir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+            tensorboard_callback = TensorBoard(log_dir=log_dir, histogram_freq=1, write_graph=True, write_images=True,
+                                               update_freq='epoch', profile_batch=2, embeddings_freq=1)
+
+            self.vae.fit(train_data, train_data,
+                        epochs = epochs, 
+                        batch_size = batch_size, 
+                        validation_data = (val_data, val_data),
+                        verbose = verbosity,
+                        callbacks=[ tensorboard_callback ])
     
     def evaluate(self, test_data, verbosity:int=0):
         loss, mse = self.vae.evaluate(test_data, test_data, verbose=verbosity)
@@ -189,11 +197,12 @@ class FIA_VAE():
 
 class FIA_VAE_hptune:
     def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
-                 batch_size:int=16, verbosity:int=0):
+                 log_dir:str, batch_size:int=16, verbosity:int=0):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
         self.training_data, self.test_data = train_test_split(X, test_size=test_size)
         self.batch_size = batch_size
+        self.log_dir = log_dir
         self.verbosity = verbosity
 
     def train(self, config: Configuration, seed: int = 0, budget:int=25) -> float:
@@ -222,7 +231,7 @@ class FIA_VAE_hptune:
 
         # Fitting
         model.train(self.training_data, self.training_data, epochs=int(budget),
-                    batch_size=self.batch_size, verbosity=self.verbosity)
+                    batch_size=self.batch_size, log_dir=self.log_dir, verbosity=self.verbosity)
         if self.verbosity > 1:
             if self.verbosity > 2:
                 print("After training utilization:")

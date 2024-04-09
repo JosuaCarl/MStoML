@@ -1,6 +1,9 @@
 import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
 import sys
 import time
+import datetime
 import random
 
 from tqdm import tqdm
@@ -19,8 +22,6 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from torchinfo import summary
-from GPUtil import showUtilization, getAvailable
-import psutil
 
 sys.path.append("..")
 from helpers.pc_stats import *
@@ -235,7 +236,7 @@ class FIA_VAE(nn.Module):
 
 class FIA_VAE_hptune:
     def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
-                 device:str, workers:int=1, batch_size:int=16, verbosity:int=0):
+                 device:str, log_dir:str, workers:int=1, batch_size:int=16, verbosity:int=0):
         """
         X: Tensor
         test_size: The fraction as a float to be tested upon
@@ -252,7 +253,9 @@ class FIA_VAE_hptune:
         self.test_data              = torch.tensor(test_data.values).to(torch.float32).to ( device )
         self.workers                = workers
         self.batch_size             = batch_size
+        self.writer                 = SummaryWriter(os.path.join(log_dir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
         self.verbosity              = verbosity
+
     
     def seed_worker(self, worker_id):
         """
@@ -274,12 +277,16 @@ class FIA_VAE_hptune:
             data_loader
             optimizer
         """
+        sum_loss = 0
         for data in data_loader:
             optimizer.zero_grad()  # Zero the gradients
             output = model(data)  # Forward pass
             loss = output.loss
+            sum_loss += loss
             loss.backward()
             optimizer.step()  # Update the model parameters
+
+        return sum_loss
     
     def evaluate(self, model, data_loader):
         """
@@ -324,24 +331,27 @@ class FIA_VAE_hptune:
                                   generator=generator, pin_memory=False )
         
         # Definition
-        self.model = self.model_builder(config).to( self.device )
+        model = self.model_builder(config).to( self.device )
         if self.verbosity > 1:
             if self.verbosity > 2:
-                print(self.model)
-                summary(self.model, inpute_size=self.training_data.shape, mode="train", device=self.device)
+                print(model)
+                summary(model, inpute_size=self.training_data.shape, mode="train", device=self.device)
                 print_utilization()
             print(f"Model built in {time.time()-t}s")
             t = time.time()
         
         # Fitting
-        optimizer = get_solver( config["solver"] )(self.model.parameters(), lr=config["learning_rate"])
-        self.model.init_weights()
+        optimizer = get_solver( config["solver"] )(model.parameters(), lr=config["learning_rate"])
+        model.init_weights()
         if self.verbosity > 2:
             for epoch in tqdm(range(int(budget))):
-                self.train_epoch(model=self.model, data_loader=train_loader, optimizer=optimizer)
+                loss = self.train_epoch(model=model, data_loader=train_loader, optimizer=optimizer)
+                self.writer.add_scalar("Training loss", loss, epoch)
         else:
             for epoch in range(int(budget)):
-                self.train_epoch(model=self.model, data_loader=train_loader, optimizer=optimizer)
+                loss = self.train_epoch(model=model, data_loader=train_loader, optimizer=optimizer)
+                self.writer.add_scalar("Training loss", loss, epoch)
+
         if self.verbosity > 1:
             if self.verbosity > 2:
                 print("After training utilization:")
@@ -350,7 +360,9 @@ class FIA_VAE_hptune:
             t = time.time()
         
         # Evaluation
-        avg_loss = self.evaluate(self.model, test_loader)
+        avg_loss = self.evaluate(model, test_loader)
+        self.writer.add_scalar("Validation loss", avg_loss)
+        self.writer.flush()
         if self.verbosity > 1:
             print(f"Model evaluated in {time.time()-t}s")
 

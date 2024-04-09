@@ -70,7 +70,7 @@ def main():
         Constant(       "original_dim",             X.shape[1]),
         Float(          "input_dropout",            (0.0, 0.5), default=0.25),
         Integer(        "intermediate_layers",      (1, 5), default=2),
-        Integer(        "intermediate_dimension",   (100, 700), log=True, default=700),
+        Integer(        "intermediate_dimension",   (100, 500), log=True, default=500),
         Categorical(    "intermediate_activation",  ["relu", "selu", "tanh", "leakyrelu"], default="selu"),
         Integer(        "latent_dimension",         (10, 100), log=False, default=100),
         Categorical(    "solver",                   ["nadam"], default="nadam"),

@@ -17,11 +17,15 @@ from tqdm import tqdm
 from pathlib import Path
 import pandas as pd
 
+from sklearn.model_selection import train_test_split
+
 from ConfigSpace import Categorical, Configuration, ConfigurationSpace, Float, Integer, Constant, ForbiddenGreaterThanRelation
 from smac import MultiFidelityFacade
 from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
 from smac.runhistory.dataclasses import TrialValue
+
+from torchinfo import summary
 
 # Doesn't work with Slurm, because __file__ variable is not copied
 """
@@ -32,21 +36,18 @@ print(os.path.normpath(os.path.join( dir_path, '..' )))
 sys.path.append("..")
 from helpers.pc_stats import *
 from FIA.FIA import *
-
+from VAE.VAE import *
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                 description='Hyperparameter tuning for Variational Autoencoder with SMAC')
 parser.add_argument('-d', '--data_dir')
 parser.add_argument('-r', '--run_dir')
-parser.add_argument('-t', '--test_configuration')
 parser.add_argument('-v', '--verbosity')
 parser.add_argument('-f', '--framework')
 parser.add_argument('-o', '--overwrite')
 args = parser.parse_args()
 
-from VAE.VAE_keras import *
-from VAE.VAE_torch import *        
 
 # Logging (time and steps)
 last_timestamp = time.time()
@@ -58,7 +59,7 @@ def main():
     Hyperparameter optimization with SMAC3
     """
     data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
-    test_configuration, overwrite, verbosity = (bool(args.test_configuration), bool(args.overwrite), int(args.verbosity))
+    overwrite, verbosity = ( bool(args.overwrite), int(args.verbosity) )
     framework = args.framework
     outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{framework}")))
     time_step(message="Setup loaded", verbosity=verbosity)
@@ -87,12 +88,12 @@ def main():
 
     if "torch" in framework:
         device = search_device(verbosity=verbosity)
-        fia_vae_hptune = FIA_VAE_hptune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
-                                         device=device, workers=0, batch_size=64, verbosity=verbosity )
+        fia_vae_hptune = FIA_VAE_tune_torch( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE_torch,
+                                             device=device, workers=0, batch_size=64, log_dir=os.path.join(outdir, "log"), verbosity=verbosity )
         
     elif "keras" in framework:
-        fia_vae_hptune = FIA_VAE_hptune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
-                                         batch_size=64, verbosity=verbosity )
+        fia_vae_hptune = FIA_VAE_tune_keras( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE_keras,
+                                                   batch_size=64, log_dir=os.path.join(outdir, "log"), verbosity=verbosity )
     
     else:
         raise(ValueError(f"The framework '{framework}' is not implemented. The framework must contain one of ['torch', 'keras']."))
@@ -110,22 +111,14 @@ def main():
                                   overwrite=overwrite, logging_level=30-verbosity*10 )
     time_step(message=f"SMAC defined. Overwriting: {overwrite}", verbosity=verbosity)
 
+    incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=10, verbosity=verbosity)
 
-    if test_configuration:
-        config = ConfigurationSpace(
-                    {'input_dropout': 0.25, 'intermediate_activation': 'leakyrelu', 'intermediate_dimension': 200,
-                    'intermediate_layers': 4, 'latent_dimension': 10, 'learning_rate': 0.001,
-                    'original_dim': 825000, 'solver': 'nadam'}
-                )
-        test_train(smac_model=fia_vae_hptune, config=config, verbosity=verbosity)
+    best_hp = validate_incumbent(incumbent=incumbent, fascade=facade, verbosity=verbosity)
 
-    else:
-        incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=10, verbosity=verbosity)
-
-        save_runhistory(incumbent=incumbent, fascade=facade, run_dir=run_dir, verbosity=verbosity)
+    save_runtime(run_dir=run_dir, verbosity=verbosity)
 
 
-
+# METHODS
 def time_step(message:str, verbosity:int=0):
     """
     Saves the time difference between last and current step
@@ -138,54 +131,6 @@ def time_step(message:str, verbosity:int=0):
     step += 1
     if verbosity > 0: 
         print(message)
-
-
-def read_data(data_dir:str, verbosity:int=0):
-    """
-    Read in the data from a data_matrix and normalize it according to total ion counts
-
-    Args:
-        data_dir (str): Directory with "data_matrix.tsv" file. The rows must represent m/z bins, the columns different samples
-    Returns:
-        X: matrix with total ion count (TIC) normalized data (transposed)
-    """
-    binned_dfs = pd.read_csv(os.path.join(data_dir, "data_matrix.tsv"), sep="\t", index_col="mz", engine="pyarrow")
-    binned_dfs[:] =  total_ion_count_normalization(binned_dfs)
-
-    X = binned_dfs.transpose()
-    time_step(message="Data loaded", verbosity=verbosity)
-    return X
-
-
-def search_device(verbosity:int=0):
-    """
-    Searches the fastest device for computation in pytorch
-    Args:
-        verbosity (int): level of verbosity
-    Returns:
-        device (str)
-    """
-    device = ( "cuda" if torch.cuda.is_available()
-                    else "mps" if torch.backends.mps.is_available()
-                    else "cpu" )
-    if verbosity > 0:
-        print(f"Using {device} device")
-    return device
-
-
-def test_train(smac_model, config:Configuration, verbosity:int=0):
-    """
-    Run a test training run of a model
-    
-    Args:
-        smac_model: smac model to be used
-        config (ConfigSpace.Configuration): configuration of test_run
-        verbosity (int): verbosity of output
-    """
-    if verbosity > 0: 
-        print("Test run:")
-        print(config.get_default_configuration())
-    smac_model.train(config.get_default_configuration(), seed=42, budget=2)
 
 
 def ask_tell_optimization(facade, smac_model, n:int=10, verbosity:int=0):
@@ -230,29 +175,20 @@ def run_optimization(facade, smac_model, verbose_steps:int=10, verbosity:int=0):
     return incumbent
 
 
-def save_runhistory(incumbent, fascade, run_dir:str, verbosity:int=0):
+def validate_incumbent(incumbent, fascade, run_dir:str, verbosity:int=0):
     """
     Saves the history of one run
 
     Args:
         incumbent: The calculated incumbent (best hyperparameters)
         fascade: The fascade used for computation
-        run_dir (str): The directory where the results are saved to
         verbosity (int): level of verbosity
     """
     best_hp = incumbent[0] if isinstance(incumbent, list) else incumbent
-    if verbosity > 0: 
-        print(f"The final incumbent cost is as: {fascade.validate(best_hp)}")
+    return best_hp 
 
-    results = pd.DataFrame(columns=["config_id", "config", "instance", "budget", "seed", "loss", "time", "status", "additional_info"])
-    for trial_info, trial_value in fascade.runhistory.items():
-        results.loc[len(results.index)] = [trial_info.config_id, dict(fascade.runhistory.get_config(trial_info.config_id)), trial_info.instance,
-                                        trial_info.budget, trial_info.seed,
-                                        trial_value.cost, trial_value.time, trial_value.status, trial_value.additional_info]
-    results.to_csv(os.path.join(run_dir, "results_hp_search.tsv"), sep="\t")
-    time_step(message="Saved history", verbosity=verbosity)
 
-    # Runtime notation
+def save_runtime(run_dir, verbosity:int=0):
     global runtimes
     runtimes["total"] = [np.sum(runtimes.values())]
     runtime_df = pd.DataFrame(runtimes)
@@ -260,7 +196,199 @@ def save_runhistory(incumbent, fascade, run_dir:str, verbosity:int=0):
     if verbosity > 0: 
         print("Finished!")
     
-    return (results, runtime_df)
+    return runtime_df
+
+# CLASSES
+class FIA_VAE_tune_torch:
+    def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
+                 device:str, log_dir:str, workers:int=1, batch_size:int=16, verbosity:int=0):
+        """
+        X: Tensor
+        test_size: The fraction as a float to be tested upon
+        configuration_space: ConfigurationSpace from configspace (hyperparameters)
+        device: device to be used for computation
+        batch_size: Number of samples to be used at once as an integer
+        verbosity: verbosity level as an integer [0: No output, 1: Summary output, >1: Model and usage output]
+        """
+        self.device                 = torch.device( device )
+        self.configuration_space    = configuration_space
+        self.model_builder          = model_builder
+        training_data, test_data    = train_test_split(X, test_size=test_size)
+        self.training_data          = torch.tensor(training_data.values).to(torch.float32).to( device )
+        self.test_data              = torch.tensor(test_data.values).to(torch.float32).to ( device )
+        self.workers                = workers
+        self.batch_size             = batch_size
+        self.writer                 = SummaryWriter(os.path.join(log_dir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S")))
+        self.verbosity              = verbosity
+
+    
+    def seed_worker(self, worker_id):
+        """
+        Initalizes all modules with relevant random number generators to a seed to control randomness
+
+        Args:
+            worker_id: Used to be able to receive input from different workers
+        """
+        worker_seed = torch.initial_seed()
+        random.seed(worker_seed)
+        rng = np.random.default_rng(worker_seed)
+
+    def train_epoch(self, model, data_loader, optimizer):
+        """
+        Train the model for one epoch
+
+        Args:
+            model
+            data_loader
+            optimizer
+        """
+        sum_loss = 0
+        for data in data_loader:
+            optimizer.zero_grad()  # Zero the gradients
+            output = model(data)  # Forward pass
+            loss = output.loss
+            sum_loss += loss
+            loss.backward()
+            optimizer.step()  # Update the model parameters
+
+        return sum_loss
+    
+    def evaluate(self, model, data_loader):
+        """
+        Evaluate the model
+
+        Args:
+            model
+            data_loader
+        
+        Returns:
+            Average loss of the model
+        """
+        sum_loss = 0
+        for data in data_loader:
+            with torch.no_grad():
+                output = model(data) 
+                sum_loss += output.loss
+        return sum_loss / len(data_loader)
+    
+    def train(self, config: Configuration, seed:int=0, budget:int=10):
+        """
+        Method to train the model
+
+        Args:
+            config: Configuration to be trained upon
+            seed: initializing seed
+            budget: number of epochs to be used in training
+        
+        Returns:
+            Average loss of the model
+        """
+        t = time.time()        
+        generator = torch.Generator()
+        generator.manual_seed(seed)
+
+        # Dataset Loading
+        train_loader = DataLoader(self.training_data, batch_size=self.batch_size,
+                                  num_workers=self.workers, worker_init_fn=self.seed_worker,
+                                  generator=generator, pin_memory=False )
+        test_loader = DataLoader(self.test_data, batch_size=self.batch_size,
+                                  num_workers=self.workers, worker_init_fn=self.seed_worker,
+                                  generator=generator, pin_memory=False )
+        
+        # Definition
+        model = self.model_builder(config).to( self.device )
+        if self.verbosity > 1:
+            if self.verbosity > 2:
+                print(model)
+                summary(model, inpute_size=self.training_data.shape, mode="train", device=self.device)
+                print_utilization()
+            print(f"Model built in {time.time()-t}s")
+            t = time.time()
+        
+        # Fitting
+        optimizer = get_solver( config["solver"] )(model.parameters(), lr=config["learning_rate"])
+        model.init_weights()
+        if self.verbosity > 2:
+            for epoch in tqdm(range(int(budget))):
+                loss = self.train_epoch(model=model, data_loader=train_loader, optimizer=optimizer)
+                self.writer.add_scalar("Training loss", loss, epoch)
+        else:
+            for epoch in range(int(budget)):
+                loss = self.train_epoch(model=model, data_loader=train_loader, optimizer=optimizer)
+                self.writer.add_scalar("Training loss", loss, epoch)
+
+        if self.verbosity > 1:
+            if self.verbosity > 2:
+                print("After training utilization:")
+                print_utilization()
+            print(f"Model trained in {time.time()-t}s")
+            t = time.time()
+        
+        # Evaluation
+        avg_loss = self.evaluate(model, test_loader)
+        self.writer.add_scalar("Validation loss", avg_loss)
+        self.writer.flush()
+        if self.verbosity > 1:
+            print(f"Model evaluated in {time.time()-t}s")
+
+        return avg_loss.cpu()
+
+
+class FIA_VAE_tune_keras:
+    def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
+                 log_dir:str, batch_size:int=16, verbosity:int=0):
+        self.configuration_space = configuration_space
+        self.model_builder = model_builder
+        self.training_data, self.test_data = train_test_split(X, test_size=test_size)
+        self.batch_size = batch_size
+        self.log_dir = log_dir
+        self.verbosity = verbosity
+
+    def train(self, config: Configuration, seed: int = 0, budget:int=25) -> float:
+        """
+        Method to train the model
+
+        Args:
+            config: Configuration to be trained upon
+            seed: initializing seed
+            budget: number of epochs to be used in training
+        
+        Returns:
+            Average loss of the model
+        """
+        t = time.time()
+        keras.utils.set_random_seed(seed)
+
+        # Definition
+        model = self.model_builder(config)
+        if self.verbosity > 1:
+            if self.verbosity > 2:
+                model.vae.summary()
+                print_utilization()
+            print(f"Model built in {time.time()-t}s")
+            t = time.time()
+
+        # Fitting
+        model.train(self.training_data, self.training_data, epochs=int(budget),
+                    batch_size=self.batch_size, log_dir=self.log_dir, verbosity=self.verbosity)
+        if self.verbosity > 1:
+            if self.verbosity > 2:
+                print("After training utilization:")
+                print_utilization()
+            print(f"Model trained in {time.time()-t}s")
+            t = time.time()
+
+        # Evaluation
+        loss, mse = model.evaluate(self.test_data, verbosity=self.verbosity)
+        if self.verbosity > 1:
+            print(f"Model evaluated in {time.time()-t}s")
+        
+        # Clearing model parameters
+        keras.backend.clear_session()
+        if self.verbosity > 1:
+            print(f"Session cleared in ({time.time()-t}s)")
+                
+        return loss
 
 
 if __name__ == "__main__":

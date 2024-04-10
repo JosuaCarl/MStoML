@@ -1,4 +1,4 @@
-from GPUtil import showUtilization
+from GPUtil import showUtilization, getAvailable
 import psutil
 
 def bits_to_bytes(bits, factor):
@@ -10,6 +10,11 @@ def bits_to_bytes(bits, factor):
         factor: / 10**factor (e.g. use 9 for GB)
     """
     return round((bits * 0.125) / 10**factor, 5)
+
+
+def print_available_gpus():
+    print(f"Available GPUs: {getAvailable(limit=4)}")
+
 
 def print_utilization():
     """

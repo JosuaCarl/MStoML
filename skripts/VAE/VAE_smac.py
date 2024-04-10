@@ -35,7 +35,7 @@ print(os.path.normpath(os.path.join( dir_path, '..' )))
 # os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
 sys.path.append("..")
 from helpers.pc_stats import *
-from VAE import *
+from VAE.VAE import *
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',

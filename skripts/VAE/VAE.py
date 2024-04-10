@@ -25,7 +25,7 @@ args = parser.parse_args()
 
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-os.environ["KERAS_BACKEND"] = args.framework
+os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
 import keras
 from keras import Model
 from keras import layers

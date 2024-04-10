@@ -110,6 +110,31 @@ def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
     step += 1
 
 
+def get_activation_function(activation_function:str):
+        """
+        Convert an activation function string into a keras function
+
+        Args:
+            activation_function (str): Activation function in string representation
+        Returns:
+            Activation function as keras.activations or keras.layers
+        """
+        activation_functions = {"relu": activations.relu, "leakyrelu" :layers.LeakyReLU(), "selu": activations.selu, "tanh": activations.tanh}
+        return activation_functions[activation_function]
+    
+def get_solver(solver:str):
+    """
+    Convert an solver string into a keras function
+
+    Args:
+        solver (str): Solver in string representation 
+    Returns:
+        solver as a keras.optimizers class
+    """
+    solvers = {"adam": optimizers.legacy.Adam, "nadam": optimizers.legacy.Nadam, "adamw": optimizers.AdamW}
+    return solvers[solver]
+
+
 class Sampling(layers.Layer):
         """
         Uses (z_mean, z_log_var) to sample z, the vector encoding a digit.
@@ -122,12 +147,11 @@ class Sampling(layers.Layer):
             epsilon = backend.random_normal(shape=(batch, dim))
             return z_mean + backend.exp(0.5 * z_log_var) * epsilon
 
-# VAE
 class FIA_VAE():
     def __init__(self, config:Configuration):
         im_layers       = config["intermediate_layers"]
         im_dim          = config["intermediate_dimension"]
-        activation_fun  = self.get_activation_function( config["intermediate_activation"] )
+        activation_fun  = get_activation_function( config["intermediate_activation"] )
         
         # Encoder
         self.input      = Input(shape=(config["original_dim"],), name='encoder_input')
@@ -165,34 +189,10 @@ class FIA_VAE():
         self.loss = keras.metrics.Mean(name="total_loss")
 
         # Define optimizer
-        self.optimizer = self.get_solver( config["solver"] )( config["learning_rate"] )
+        self.optimizer = get_solver( config["solver"] )( config["learning_rate"] )
 
         # Compile VAE
         self.vae.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss, metrics = [ "mse" ])
-
-    def get_activation_function(self, activation_function:str):
-        """
-        Convert an activation function string into a keras function
-
-        Args:
-            activation_function (str): Activation function in string representation
-        Returns:
-            Activation function as keras.activations or keras.layers
-        """
-        activation_functions = {"relu": activations.relu, "leakyrelu" :layers.LeakyReLU(), "selu": activations.selu, "tanh": activations.tanh}
-        return activation_functions[activation_function]
-    
-    def get_solver(self, solver:str):
-        """
-        Convert an solver string into a keras function
-
-        Args:
-            solver (str): Solver in string representation 
-        Returns:
-            solver as a keras.optimizers class
-        """
-        solvers = {"adam": optimizers.legacy.Adam, "nadam": optimizers.legacy.Nadam, "adamw": optimizers.AdamW}
-        return solvers[solver]
 
     def encode(self, data):
         return self.encoder.predict(data)[2]
@@ -239,6 +239,17 @@ class FIA_VAE():
         self.loss = self.reconstruction_loss + self.kl_loss
 
         return self.loss
+    
+    def train(self, training_data_in, training_data_out, validation_data_in, validation_data_out,
+              epochs:int, batch_size:int, callbacks:list, verbosity:int=0):
+        self.vae.fit(training_data_in, training_data_out,
+                     validation_data = (validation_data_in, validation_data_out),
+                     epochs = epochs, batch_size = batch_size, 
+                     callbacks = callbacks, verbose = verbosity)
+    
+    def evaluate(self, test_data_in, test_data_out, verbosity:int=0):
+        loss, mse = self.vae.evaluate(test_data_in, test_data_out, verbose=verbosity)
+        return (loss, mse)
     
 
 if __name__ == "__main__":

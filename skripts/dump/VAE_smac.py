@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_tuning
 #SBATCH --time 24:00:00
-#SBATCH --mem 400G
+#SBATCH --mem 200G
 #SBATCH --nodes 2
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
-
 # available processors: cpu1, cpu2-hm, gpu-a30
 
 # imports
@@ -16,8 +15,6 @@ import argparse
 from tqdm import tqdm
 from pathlib import Path
 import pandas as pd
-
-from sklearn.model_selection import train_test_split
 
 from ConfigSpace import Categorical, Configuration, ConfigurationSpace, Float, Integer, Constant, ForbiddenGreaterThanRelation
 from smac import MultiFidelityFacade
@@ -31,39 +28,41 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append( os.path.normcase(os.path.join( dir_path, '..' )))
 print(os.path.normpath(os.path.join( dir_path, '..' )))
 """
-
-# os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
 sys.path.append("..")
 from helpers.pc_stats import *
-from VAE import *
+from helpers.normalization import *
+
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                 description='Hyperparameter tuning for Variational Autoencoder with SMAC')
 parser.add_argument('-d', '--data_dir')
 parser.add_argument('-r', '--run_dir')
-parser.add_argument('-o', '--overwrite')
+parser.add_argument('-t', '--test_configuration')
 parser.add_argument('-v', '--verbosity')
 parser.add_argument('-f', '--framework')
+parser.add_argument('-o', '--overwrite')
 args = parser.parse_args()
 
-
+if "keras" in args.framework:
+    from VAE.VAE_keras import *
+elif "torch" in args.framework:
+    from VAE.VAE_torch import *        
 
 # Logging (time and steps)
 last_timestamp = time.time()
 step = 0
 runtimes = {}
 
-def main():
+def __main__():
     """
     Hyperparameter optimization with SMAC3
     """
     data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
-    overwrite, verbosity = ( bool(args.overwrite), int(args.verbosity) )
+    test_configuration, overwrite, verbosity = (bool(args.test_configuration), bool(args.overwrite), int(args.verbosity))
     framework = args.framework
-    gpu = "gpu" in framework
     outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{framework}")))
-    time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
+    time_step(message="Setup loaded", verbosity=verbosity)
 
     X = read_data(data_dir, verbosity=verbosity)
 
@@ -72,7 +71,7 @@ def main():
         Constant(       "original_dim",             X.shape[1]),
         Float(          "input_dropout",            (0.0, 0.5), default=0.25),
         Integer(        "intermediate_layers",      (1, 5), default=2),
-        Integer(        "intermediate_dimension",   (100, 500), log=True, default=500),
+        Integer(        "intermediate_dimension",   (100, 700), log=True, default=700),
         Categorical(    "intermediate_activation",  ["relu", "selu", "tanh", "leakyrelu"], default="selu"),
         Integer(        "latent_dimension",         (10, 100), log=False, default=100),
         Categorical(    "solver",                   ["nadam"], default="nadam"),
@@ -87,8 +86,14 @@ def main():
         print(f"Configuration space defined with estimated {configuration_space.estimate_size()} possible combinations.\n")
 
 
-    fia_vae_hptune = FIA_VAE_tune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
-                                   batch_size=64, log_dir=os.path.join(outdir, "log"), verbosity=verbosity, gpu=gpu)
+    if "torch" in framework:
+        device = search_device(verbosity=verbosity)
+        fia_vae_hptune = FIA_VAE_hptune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
+                                         device=device, workers=0, batch_size=64, verbosity=verbosity )
+        
+    elif "keras" in framework:
+        fia_vae_hptune = FIA_VAE_hptune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
+                                         batch_size=64, verbosity=verbosity )
 
 
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,
@@ -101,28 +106,84 @@ def main():
     facade = MultiFidelityFacade( scenario, fia_vae_hptune.train, 
                                   initial_design=initial_design, intensifier=intensifier,
                                   overwrite=overwrite, logging_level=30-verbosity*10 )
-    time_step(message=f"SMAC defined. Overwriting: {overwrite}", verbosity=verbosity, min_verbosity=1)
-
-    incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=10, verbosity=verbosity)
-
-    best_hp = validate_incumbent(incumbent=incumbent, fascade=facade, verbosity=verbosity)
-
-    save_runtime(run_dir=run_dir, verbosity=verbosity)
+    time_step(message="SMAC defined", verbosity=verbosity)
 
 
-# METHODS
-def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
+    if test_configuration:
+        config = ConfigurationSpace(
+                    {'input_dropout': 0.25, 'intermediate_activation': 'leakyrelu', 'intermediate_dimension': 200,
+                    'intermediate_layers': 4, 'latent_dimension': 10, 'learning_rate': 0.001,
+                    'original_dim': 825000, 'solver': 'nadam'}
+                )
+        test_train(smac_model=fia_vae_hptune, config=config, verbosity=verbosity)
+
+    else:
+        incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=10, verbosity=verbosity)
+
+        save_runhistory(incumbent=incumbent, fascade=facade, run_dir=run_dir, verbosity=verbosity)
+
+
+
+def time_step(message:str, verbosity:int=0):
     """
     Saves the time difference between last and current step
     """
     global last_timestamp
     global step
     global runtimes
-    runtimes[f"{step}: {message}"] = time.time() - last_timestamp
-    if verbosity >= min_verbosity: 
-        print(f"{message} ({runtimes[f'{step}: {message}']}s)")
+    runtimes[f"{step}: {message}"] = [time.time() - last_timestamp]
     last_timestamp = time.time()
     step += 1
+    if verbosity > 0: 
+        print(message)
+
+
+def read_data(data_dir:str, verbosity:int=0):
+    """
+    Read in the data from a data_matrix and normalize it according to total ion counts
+
+    Args:
+        data_dir (str): Directory with "data_matrix.tsv" file. The rows must represent m/z bins, the columns different samples
+    Returns:
+        X: matrix with total ion count (TIC) normalized data (transposed)
+    """
+    binned_dfs = pd.read_csv(os.path.join(data_dir, "data_matrix.tsv"), sep="\t", index_col="mz", engine="pyarrow")
+    binned_dfs[:] =  total_ion_count_normalization(binned_dfs)
+
+    X = binned_dfs.transpose()
+    time_step(message="Data loaded", verbosity=verbosity)
+    return X
+
+
+def search_device(verbosity:int=0):
+    """
+    Searches the fastest device for computation in pytorch
+    Args:
+        verbosity (int): level of verbosity
+    Returns:
+        device (str)
+    """
+    device = ( "cuda" if torch.cuda.is_available()
+                    else "mps" if torch.backends.mps.is_available()
+                    else "cpu" )
+    if verbosity > 0:
+        print(f"Using {device} device")
+    return device
+
+
+def test_train(smac_model, config:Configuration, verbosity:int=0):
+    """
+    Run a test training run of a model
+    
+    Args:
+        smac_model: smac model to be used
+        config (ConfigSpace.Configuration): configuration of test_run
+        verbosity (int): verbosity of output
+    """
+    if verbosity > 0: 
+        print("Test run:")
+        print(config.get_default_configuration())
+    smac_model.train(config.get_default_configuration(), seed=42, budget=2)
 
 
 def ask_tell_optimization(facade, smac_model, n:int=10, verbosity:int=0):
@@ -139,7 +200,7 @@ def ask_tell_optimization(facade, smac_model, n:int=10, verbosity:int=0):
         acc_time = time.time()
         info = facade.ask()
         assert info.seed is not None
-        if verbosity >= 2:
+        if verbosity > 1:
             print(f"Configuration: {dict(info.config)}")
         loss = smac_model.train(info.config, seed=info.seed, budget=info.budget)
         value = TrialValue(cost=loss, time=time.time()-acc_time, starttime=acc_time, endtime=time.time())
@@ -159,7 +220,7 @@ def run_optimization(facade, smac_model, verbose_steps:int=10, verbosity:int=0):
     Returns:
         incumbent: best hyperparameter cominations
     """
-    if verbosity >= 1:
+    if verbosity > 0:
         print("Starting search:")
         ask_tell_optimization(facade=facade, smac_model=smac_model, n=verbose_steps, verbosity=verbosity)
     incumbent = facade.optimize()
@@ -167,89 +228,35 @@ def run_optimization(facade, smac_model, verbose_steps:int=10, verbosity:int=0):
     return incumbent
 
 
-def validate_incumbent(incumbent, fascade, run_dir:str, verbosity:int=0):
+def save_runhistory(incumbent, fascade, run_dir:str, verbosity:int=0):
     """
     Saves the history of one run
 
     Args:
         incumbent: The calculated incumbent (best hyperparameters)
         fascade: The fascade used for computation
+        run_dir (str): The directory where the results are saved to
         verbosity (int): level of verbosity
     """
     best_hp = incumbent[0] if isinstance(incumbent, list) else incumbent
-    return best_hp 
+    if verbosity > 0: 
+        print(f"The final incumbent cost is as: {fascade.validate(best_hp)}")
 
+    results = pd.DataFrame(columns=["config_id", "config", "instance", "budget", "seed", "loss", "time", "status", "additional_info"])
+    for trial_info, trial_value in fascade.runhistory.items():
+        results.loc[len(results.index)] = [trial_info.config_id, dict(fascade.runhistory.get_config(trial_info.config_id)), trial_info.instance,
+                                        trial_info.budget, trial_info.seed,
+                                        trial_value.cost, trial_value.time, trial_value.status, trial_value.additional_info]
+    results.to_csv(os.path.join(run_dir, "results_hp_search.tsv"), sep="\t")
+    time_step(message="Saved history", verbosity=verbosity)
 
-def save_runtime(run_dir, verbosity:int=0):
+    # Runtime notation
     global runtimes
     runtimes["total"] = [np.sum(runtimes.values())]
     runtime_df = pd.DataFrame(runtimes)
     runtime_df.to_csv(os.path.join(run_dir, "runtimes.tsv"), sep="\t")
-    if verbosity >= 1: 
+    if verbosity > 0: 
         print("Finished!")
-    
-    return runtime_df
 
 
-class FIA_VAE_tune:
-    def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
-                 log_dir:str, batch_size:int=16, verbosity:int=0, gpu:bool=False):
-        self.configuration_space = configuration_space
-        self.model_builder = model_builder
-        self.training_data, self.test_data = train_test_split(X, test_size=test_size)
-        self.batch_size = batch_size
-        self.log_dir = log_dir
-        self.verbosity = verbosity
-        self.gpu = gpu
-
-    def train(self, config: Configuration, seed: int = 0, budget:int=25) -> float:
-        """
-        Method to train the model
-
-        Args:
-            config: Configuration to be trained upon
-            seed: initializing seed
-            budget: number of epochs to be used in training
-        
-        Returns:
-            Average loss of the model
-        """
-        time_step("Start", verbosity=self.verbosity, min_verbosity=2)
-        keras.utils.set_random_seed(seed)
-
-        # Definition
-        model = self.model_builder(config)
-        if self.verbosity >= 3:
-            model.vae.summary()
-            print_utilization(gpu=self.gpu)
-        time_step("Model built", verbosity=self.verbosity, min_verbosity=2)
-
-        # Fitting
-        callbacks = []
-        if self.verbosity >= 1:
-            log_dir = os.path.join(self.log_dir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-            callbacks.append( TensorBoard(log_dir=log_dir, write_graph=True, write_images=True, update_freq='epoch') )
-
-        model.train(training_data_in=self.training_data, training_data_out=self.training_data,
-                    validation_data_in=self.training_data, validation_data_out=self.training_data,
-                    epochs=int(budget), batch_size=self.batch_size,
-                    callbacks=callbacks, verbosity=self.verbosity)
-
-        if self.verbosity >= 3:
-            print("After training utilization:")
-            print_utilization(gpu=self.gpu)
-        time_step("Model trained", verbosity=self.verbosity, min_verbosity=2)
-
-        # Evaluation
-        loss, mse = model.evaluate(self.test_data, self.test_data, verbosity=self.verbosity)
-        time_step("Model evaluated", verbosity=self.verbosity, min_verbosity=2)
-        
-        # Clearing model parameters
-        keras.backend.clear_session()
-        time_step("Session cleared", verbosity=self.verbosity, min_verbosity=2)
-                
-        return loss
-
-
-if __name__ == "__main__":
-    main()
+__main__()

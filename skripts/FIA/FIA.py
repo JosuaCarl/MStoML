@@ -786,13 +786,6 @@ def normalize_spectra(experiment: Union[oms.MSExperiment, str], normalization_me
     normalizer.filterPeakMap(norm_exp)
     return norm_exp
 
-def total_ion_count_normalization(df):
-    return df / df.sum()
-
-def standard_normalization(df, axis=1):
-    return df.apply(lambda line: [(x - np.mean(line)) / np.var(line) for x in line], result_type="expand", axis=axis)
-
-
 # Deisotoping
 def deisotope_spectrum(spectrum: oms.MSSpectrum, fragment_tolerance: float = 0.1, fragment_unit_ppm: bool = False,
                        min_charge: int = 1, max_charge: int = 3,

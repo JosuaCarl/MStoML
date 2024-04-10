@@ -16,11 +16,12 @@ def print_available_gpus():
     print(f"Available GPUs: {getAvailable(limit=4)}")
 
 
-def print_utilization():
+def print_utilization(gpu:bool=False):
     """
     Print the GPU, CPU and RAM utilization at the moment.
     """
-    showUtilization(all=True)
+    if gpu:
+        showUtilization(all=True)
     print(f"CPU: {psutil.cpu_percent()}%")
     vm = psutil.virtual_memory()
     print(f"RAM: {bits_to_bytes(vm.used, 9)}GB / {bits_to_bytes(vm.total, 9)}GB ({vm.percent}%)")

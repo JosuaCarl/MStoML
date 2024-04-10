@@ -14,7 +14,6 @@ from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 import tensorflow as tf
 import keras
 from keras import layers, activations, backend
-import keras_tuner
 from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer, Constant
 from smac import MultiFidelityFacade, HyperparameterOptimizationFacade
 from smac import Scenario

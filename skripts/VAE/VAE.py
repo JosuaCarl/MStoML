@@ -14,18 +14,9 @@ sys.path.append( '..' )
 from helpers.normalization import *
 from helpers.pc_stats import *
 
-# Argument parser
-parser = argparse.ArgumentParser(prog='VAE_smac_run',
-                                description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-parser.add_argument('-d', '--data_dir')
-parser.add_argument('-r', '--run_dir')
-parser.add_argument('-v', '--verbosity')
-parser.add_argument('-f', '--framework')
-args = parser.parse_args()
 
-
+# os.environ["KERAS_BACKEND"] = "torch"             # Set to change backend of keras
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
 import keras
 from keras import Model, Sequential
 from keras.layers import Input, Dense, Dropout
@@ -242,4 +233,13 @@ class FIA_VAE(Model):
 
 
 if __name__ == "__main__":
+    # Argument parser
+    parser = argparse.ArgumentParser(prog='VAE_smac_run',
+                                     description='Hyperparameter tuning for Variational Autoencoder with SMAC')
+    parser.add_argument('-d', '--data_dir')
+    parser.add_argument('-r', '--run_dir')
+    parser.add_argument('-v', '--verbosity')
+    parser.add_argument('-f', '--framework')
+    args = parser.parse_args()
+ 
     main()

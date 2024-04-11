@@ -32,12 +32,6 @@ sys.path.append( os.path.normcase(os.path.join( dir_path, '..' )))
 print(os.path.normpath(os.path.join( dir_path, '..' )))
 """
 
-os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
-sys.path.append("..")
-from helpers.pc_stats import *
-from VAE import *
-
-# Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                 description='Hyperparameter tuning for Variational Autoencoder with SMAC')
 parser.add_argument('-d', '--data_dir')
@@ -47,6 +41,11 @@ parser.add_argument('-v', '--verbosity')
 parser.add_argument('-f', '--framework')
 args = parser.parse_args()
 
+os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
+
+sys.path.append("..")
+from helpers.pc_stats import *
+from VAE.VAE import *
 
 
 # Logging (time and steps)
@@ -64,7 +63,7 @@ def main():
     gpu = "gpu" in framework
     outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{framework}")))
     if verbosity > 0:
-        print(f"Using {backend.backend()} as backend")
+        print(f"Using {keras.backend.backend()} as backend")
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
     X = read_data(data_dir, verbosity=verbosity)

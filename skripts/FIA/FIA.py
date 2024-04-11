@@ -5,7 +5,6 @@ import math
 from typing import overload, Any, List, Dict, Tuple, Set, Sequence, Union, Optional
 import shutil
 from matplotlib.figure import Figure
-from pyparsing import Opt
 import requests
 from copy import deepcopy
 from tqdm import tqdm
@@ -87,8 +86,8 @@ def load_experiment(experiment:Union[oms.MSExperiment, str], separator:str="\t")
     else:
         return read_experiment(experiment, separator=separator)
     
-def load_experiments(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:Optional[str]=None,
-                     separator:str="\t", data_load:bool=True) -> Sequence[oms.MSExperiment|str]:
+def load_experiments(experiments:Union[Sequence[Union[oms.MSExperiment,str]], str], file_ending:Optional[str]=None,
+                     separator:str="\t", data_load:bool=True) -> Sequence[Union[oms.MSExperiment,str]]:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
@@ -113,7 +112,7 @@ def load_name(experiment:Union[oms.MSExperiment, str], alt_name:Optional[str]=No
         else:
             raise ValueError(f"No file path found in experiment. Please provide alt_name.")
 
-def load_names_batch(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:str=".mzML") -> List[str]:
+def load_names_batch(experiments:Union[Sequence[Union[oms.MSExperiment,str]], str], file_ending:str=".mzML") -> List[str]:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
@@ -364,7 +363,7 @@ def bin_df_stepwise_batch(experiments:pd.DataFrame,
 
 
 # Limiting
-def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upper_limit: int | float,
+def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: Union[int, float], mz_upper_limit: Union[int, float],
                    sample_size: int, statistic:str="sum") -> oms.MSSpectrum:
     """
     Limits the range of the Spectrum to <mz_lower_limit> and <mz_upper_limit>. 
@@ -396,7 +395,7 @@ def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: int | float, mz_upp
     return new_spectrum
 
 
-def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: int | float=0, mz_upper_limit: int | float=10000,
+def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: Union[int, float]=0, mz_upper_limit: Union[int, float]=10000,
                      sample_size:int=100000, statistic:str="sum", deepcopy: bool = False) -> oms.MSExperiment:
     """
     Limits the range of all spectra in an experiment to <mz_lower_limit> and <mz_upper_limit>. 
@@ -431,7 +430,7 @@ def trim_threshold(experiment:oms.MSExperiment, threshold:float=0.05):
     tm.filterPeakMap(experiment)
     return experiment
 
-def trim_threshold_batch(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir:str, file_ending:str=".mzML", threshold:float=0.05, deepcopy:bool=False):
+def trim_threshold_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], run_dir:str, file_ending:str=".mzML", threshold:float=0.05, deepcopy:bool=False):
     """
     Removes point below an absolute intensity theshold
     """
@@ -464,7 +463,7 @@ def sum_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
     return comb_spectrum
 
 
-def combine_spectra_experiments(spectra_container:Sequence[oms.MSExperiment|oms.MSSpectrum]) -> oms.MSExperiment:
+def combine_spectra_experiments(spectra_container:Sequence[Union[oms.MSExperiment,oms.MSSpectrum]]) -> oms.MSExperiment:
     """
     Combines all spectra/experiements, into different spectra in one experiment
     """
@@ -582,7 +581,7 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
     return centroid_exp
 
 
-def centroid_batch(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir:str, file_ending:str=".mzML",
+def centroid_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], run_dir:str, file_ending:str=".mzML",
                    instrument:str="TOF",
                    signal_to_noise:float=1.0, spacing_difference_gap:float=4.0,
                    spacing_difference:float=1.5, missing:int=1, ms_levels:List[int]=[],
@@ -675,7 +674,7 @@ def merge_experiment(experiment: Union[oms.MSExperiment, str], method:str="block
     return merge_exp
 
 
-def merge_batch(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir:str, file_ending:str=".mzML", method:str="block_method",
+def merge_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], run_dir:str, file_ending:str=".mzML", method:str="block_method",
                 mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", ms_levels:List[int]=[1], sort_blocks:str="RT_ascending",
                 rt_block_size: Optional[int] = None, rt_max_length:float=0.0,
                 spectrum_type:str="automatic", rt_range:Optional[float]=5.0, rt_unit:str="scans", 
@@ -705,7 +704,7 @@ def make_merge_dict(dir:str, file_ending:str=".mzML") -> dict:
     samples = {"_".join(name.split("_")[:-1]) for name in names}
     return {sample: [os.path.join(dir, file) for file in os.listdir(dir) if file.startswith(sample) and file.endswith(file_ending)] for sample in samples}
 
-def merge_experiments(experiments: Union[Sequence[oms.MSExperiment|str], str], run_dir:str, file_ending:str=".mzML", method:str="block_method",
+def merge_experiments(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], run_dir:str, file_ending:str=".mzML", method:str="block_method",
                     mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", ms_levels:List[int]=[1], sort_blocks:str="RT_ascending",
                     rt_block_size: Optional[int] = None, rt_max_length:float=0.0,
                     spectrum_type:str="automatic", rt_range:Optional[float]=5.0, rt_unit:str="scans", 
@@ -787,7 +786,6 @@ def normalize_spectra(experiment: Union[oms.MSExperiment, str], normalization_me
     normalizer.filterPeakMap(norm_exp)
     return norm_exp
 
-
 # Deisotoping
 def deisotope_spectrum(spectrum: oms.MSSpectrum, fragment_tolerance: float = 0.1, fragment_unit_ppm: bool = False,
                        min_charge: int = 1, max_charge: int = 3,
@@ -867,7 +865,7 @@ def mass_trace_detection(experiment: Union[oms.MSExperiment, str],
 
     return mass_traces
 
-def mass_trace_detection_batch(experiments: Union[Sequence[oms.MSExperiment|str], str], file_ending:str=".mzML", 
+def mass_trace_detection_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], file_ending:str=".mzML", 
                                mass_error_ppm: float = 10.0, noise_threshold_int: float = 1000.0, reestimate_mt_sd:str="true",
                                quant_method:str="median", trace_termination_criterion:str="outlier", trace_termination_outliers:int=3,
                                min_trace_length:float=5.0, max_trace_length:float=-1.0) -> list:
@@ -974,7 +972,7 @@ def feature_detection_untargeted(experiment: Union[oms.MSExperiment, str],
 
     return feature_map
 
-def feature_detection_untargeted_batch(experiments:Union[Sequence[oms.MSExperiment|str], str], file_ending:str=".mzML",
+def feature_detection_untargeted_batch(experiments:Union[Sequence[Union[oms.MSExperiment,str]], str], file_ending:str=".mzML",
                                        mass_traces_deconvol_all: list[list] = [], isotope_filtering_model="metabolites (2% RMS)",
                                        local_rt_range:float=3.0, local_mz_range:float=5.0, 
                                        charge_lower_bound:int=1, charge_upper_bound:int=3,

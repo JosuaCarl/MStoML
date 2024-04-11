@@ -14,14 +14,14 @@ from sklearn.model_selection import train_test_split, KFold, StratifiedKFold
 import tensorflow as tf
 import keras
 from keras import layers, activations, backend
-import keras_tuner
 from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer, Constant
 from smac import MultiFidelityFacade, HyperparameterOptimizationFacade
 from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
 
-sys.path.append( '..' )
-from helpers import *
+dir_path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append( os.path.join( dir_path, '../..' ))
+from skripts.helpers.mailing import *
 from ML4com import *
 
 # Models

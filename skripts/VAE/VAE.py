@@ -27,13 +27,9 @@ args = parser.parse_args()
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
 import keras
-from keras import Model
-from keras import layers
+from keras import Model, Sequential
 from keras.layers import Input, Dense, Dropout
-from keras.losses import MeanSquaredError
-from keras import optimizers
-from keras import activations
-from keras import backend
+from keras import backend, ops, layers, activations, metrics, losses, optimizers
 from keras.callbacks import TensorBoard
 
 
@@ -43,8 +39,6 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
 
 import tensorflow as tf
-from tensorflow.python.framework.ops import disable_eager_execution
-disable_eager_execution()
 
 
 # Logging (time and steps)
@@ -62,7 +56,7 @@ def main():
     outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{framework}")))
     if verbosity > 0 and "gpu" in framework:
         print_available_gpus()
-        if "torch" in framework:
+        if "tensorflow" in framework:
             print("Available GPUs: ", tf.config.list_physical_devices('GPU'))
             
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
@@ -131,7 +125,7 @@ def get_solver(solver:str):
     Returns:
         solver as a keras.optimizers class
     """
-    solvers = {"adam": optimizers.legacy.Adam, "nadam": optimizers.legacy.Nadam, "adamw": optimizers.AdamW}
+    solvers = {"adam": optimizers.Adam, "nadam": optimizers.Nadam, "adamw": optimizers.AdamW}
     return solvers[solver]
 
 
@@ -141,89 +135,74 @@ class Sampling(layers.Layer):
         """
         def call(self, inputs):
             z_mean, z_log_var = inputs
-            z_mean_shape = backend.shape(z_mean)
+            z_mean_shape = ops.shape(z_mean)
             batch   = z_mean_shape[0]
             dim     = z_mean_shape[1]
-            epsilon = backend.random_normal(shape=(batch, dim))
-            return z_mean + backend.exp(0.5 * z_log_var) * epsilon
+            epsilon = keras.random.normal(shape=(batch,dim))
+            return ops.multiply(ops.add(z_mean, ops.exp(0.5 * z_log_var)), epsilon)
 
-class FIA_VAE():
+class FIA_VAE(Model):
     def __init__(self, config:Configuration):
-        im_layers       = config["intermediate_layers"]
-        im_dim          = config["intermediate_dimension"]
-        activation_fun  = get_activation_function( config["intermediate_activation"] )
-        
-        # Encoder
-        self.input      = Input(shape=(config["original_dim"],), name='encoder_input')
-        self.im_enc     = Dropout( config["input_dropout"] ) (self.input)
-        self.im_enc     = Dense( im_dim , activation=activation_fun ) (self.im_enc)
-        for i in range(1, im_layers):                                                              # Successive halfing of layers
-            if im_dim // 2**i <= config["latent_dimension"]:
-                im_layers = i 
-                break
-            self.im_enc = Dense( im_dim // 2**i, activation=activation_fun ) (self.im_enc)
-        self.mu         = Dense( config["latent_dimension"], name='latent_mu' ) (self.im_enc)
-        self.sigma      = Dense( config["latent_dimension"], name='latent_sigma' ) (self.im_enc)
-        self.z          = Sampling() ( [self.mu, self.sigma] )                                     # Use reparameterization trick
+        super().__init__()
+        intermediate_dims       = [i for i in range(config["intermediate_layers"]) 
+                                    if config["intermediate_dimension"] // 2**i > config["latent_dimension"]]
+        activation_function     = get_activation_function( config["intermediate_activation"] )
 
-        self.encoder = Model( self.input, [self.mu, self.sigma, self.z], name='encoder' )            # Instantiate encoder
+        # Encoder (with sucessive halfing of intermediate dimension)
+        self.dropout            = Dropout( config["input_dropout"] , name="dropout")        
+        self.intermediate_enc   = Sequential ( [ Input(shape=(config["original_dim"],), name='encoder_input') ] +
+                                               [ Dense( config["intermediate_dimension"] // 2**i,
+                                                        activation=activation_function ) 
+                                                for i in intermediate_dims] , name="encoder_intermediate")
+
+        self.mu_encoder         = Dense( config["latent_dimension"], name='latent_mu' )
+        self.sigma_encoder      = Dense( config["latent_dimension"], name='latent_sigma' )
+        self.z_encoder          = Sampling(name="latent_reparametrization") 
 
         # Decoder
-        self.decoder_input  = Input(shape=(config["latent_dimension"], ), name='decoder_input')
-        prev_layer = self.decoder_input
-        for i in reversed(range(1, im_layers)):
-            self.im_dec =  Dense( im_dim // 2**i, activation=activation_fun) (prev_layer)
-            prev_layer = self.im_dec
-        self.im_dec = Dense(im_dim, activation=activation_fun) (prev_layer)
-        self.output  = Dense(config["original_dim"]) (self.im_dec)
-
-        self.decoder = Model(self.decoder_input, self.output, name='decoder')                        # Instantiate decoder
-
-        # VAE
-        self.vae_outputs = self.decoder(self.encoder(self.input)[2])
-        self.vae         = Model(self.input, self.vae_outputs, name='vae')
+        self.decoder            = Sequential( [ Input(shape=(config["latent_dimension"], ), name='decoder_input') ] +
+                                              [ Dense( config["intermediate_dimension"] // 2**i,
+                                                       activation=activation_function )
+                                               for i in reversed(intermediate_dims) ] +
+                                              [ Dense(config["original_dim"]) ] , name="Decoder")
 
         # Loss trackers
-        self.reconstruction_loss = keras.metrics.Mean(name="reconstruction_loss")
-        self.kl_loss = keras.metrics.Mean(name="kl_loss")
-        self.loss = keras.metrics.Mean(name="total_loss")
+        self.reconstruction_loss    = metrics.Mean(name="reconstruction_loss")
+        self.kl_loss                = metrics.Mean(name="kl_loss")
+        self.loss_tracker           = metrics.Mean(name="loss")
 
         # Define optimizer
         self.optimizer = get_solver( config["solver"] )( config["learning_rate"] )
 
         # Compile VAE
-        self.vae.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss, metrics = [ "mse" ])
+        self.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss, metrics = [ "mse" ])
+
+    @property
+    def metrics(self):
+        return [self.loss_tracker, self.reconstruction_loss, self.kl_loss]
+
+    def call(self, data, training=False):
+        x = self.dropout(data, training=training)
+        return self.decode(self.encode(x))
 
     def encode(self, data):
-        return self.encoder.predict(data)[2]
+        x = self.intermediate_enc(data)
+        self.mu = self.mu_encoder(x)
+        self.sigma = self.sigma_encoder(x)
+        self.z = self.z_encoder( [self.mu, self.sigma] )
+        return self.z
     
     def encode_mu(self, data):
-        return self.encoder.predict(data)[0]
+        x = self.intermediate_enc(data)
+        return self.mu(x)
     
-    def decode(self, data):
-        return self.decoder.predict(data)
-    
-    def reconstruct(self, data):
-        return self.decode(self.encode(data))
+    def decode(self, x):
+        return self.decoder(x)
     
     def save_model(self, save_folder, suffix:str=""):
-        self.vae.save(os.path.join(save_folder, f'VAE{suffix}.h5'))
-        self.encoder.save(os.path.join(save_folder, f'VAE_encoder{suffix}.h5'))
-        self.decoder.save(os.path.join(save_folder, f'VAE_decoder{suffix}.h5'))
-        
-    def load_vae(self, save_path):                       
-        self.vae = keras.models.load_model(save_path)
-        self.vae.compile(optimizer=self.optimizer, 
-                         loss=self.kl_reconstruction_loss, 
-                         metrics = ['mse'])
-        
-    def load_encoder(self, save_path):
-        self.encoder = keras.models.load_model(save_path)
-        
-    def load_decoder(self, save_path):
-        self.decoder = keras.models.load_model(save_path)
-    
-    def kl_reconstruction_loss(self, true, pred):
+        self.save(os.path.join(save_folder, f'VAE{suffix}.h5'))
+         
+    def kl_reconstruction_loss(self, y_true, y_pred):
         """
         Loss function for Kullback-Leibler + Reconstruction loss
 
@@ -233,24 +212,34 @@ class FIA_VAE():
         Returns:
             Loss = Kullback-Leibler + Reconstruction loss
         """
-        mse = MeanSquaredError()
-        self.reconstruction_loss = mse(true, pred)
-        self.kl_loss = backend.mean(-0.5 * backend.sum( 1.0 + self.sigma - backend.square(self.mu) - backend.exp(self.sigma), axis=-1))
-        self.loss = self.reconstruction_loss + self.kl_loss
+        reconstruction_loss = losses.mean_absolute_error(y_true, y_pred)
+        self.reconstruction_loss.update_state(reconstruction_loss)
+        kl_loss = -0.5 * ops.sum( 1.0 + self.sigma - ops.square(self.mu) - ops.exp(self.sigma) )
+        self.kl_loss.update_state(kl_loss)
+        loss = reconstruction_loss + kl_loss
+        self.loss_tracker.update_state( loss )
+        return loss
+    
+    """
+    def train_step(self, data):
+        x, y = data
 
-        return self.loss
-    
-    def train(self, training_data_in, training_data_out, validation_data_in, validation_data_out,
-              epochs:int, batch_size:int, callbacks:list, verbosity:int=0):
-        self.vae.fit(training_data_in, training_data_out,
-                     validation_data = (validation_data_in, validation_data_out),
-                     epochs = epochs, batch_size = batch_size, 
-                     callbacks = callbacks, verbose = verbosity)
-    
-    def evaluate(self, test_data_in, test_data_out, verbosity:int=0):
-        loss, mse = self.vae.evaluate(test_data_in, test_data_out, verbose=verbosity)
-        return (loss, mse)
-    
+        with tf.GradientTape() as tape:
+            y_pred = self(x, training=True)  # Forward pass
+            # Compute our own loss
+            loss = self.kl_reconstruction_loss(y, y_pred)
+
+        # Compute gradients
+        trainable_vars = self.trainable_variables
+        gradients = tape.gradient(loss, trainable_vars)
+
+        # Update weights
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+        return {"loss": self.loss_tracker.result(),
+                "reconstruction_loss": self.reconstruction_loss.result(), 
+                "kl_loss": self.kl_loss.result()}
+    """
+
 
 if __name__ == "__main__":
     main()

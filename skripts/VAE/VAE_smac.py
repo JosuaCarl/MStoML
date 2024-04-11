@@ -32,10 +32,10 @@ sys.path.append( os.path.normcase(os.path.join( dir_path, '..' )))
 print(os.path.normpath(os.path.join( dir_path, '..' )))
 """
 
-# os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
+os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
 sys.path.append("..")
 from helpers.pc_stats import *
-from VAE.VAE import *
+from VAE import *
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',
@@ -63,6 +63,8 @@ def main():
     framework = args.framework
     gpu = "gpu" in framework
     outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{framework}")))
+    if verbosity > 0:
+        print(f"Using {backend.backend()} as backend")
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
     X = read_data(data_dir, verbosity=verbosity)
@@ -230,10 +232,9 @@ class FIA_VAE_tune:
             log_dir = os.path.join(self.log_dir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
             callbacks.append( TensorBoard(log_dir=log_dir, write_graph=True, write_images=True, update_freq='epoch') )
 
-        model.train(training_data_in=self.training_data, training_data_out=self.training_data,
-                    validation_data_in=self.training_data, validation_data_out=self.training_data,
-                    epochs=int(budget), batch_size=self.batch_size,
-                    callbacks=callbacks, verbosity=self.verbosity)
+        model.fit(x=self.training_data, y=self.training_data, validation_split=0.2,
+                  batch_size=self.batch_size, epochs=int(budget),
+                  callbacks=callbacks, verbose=self.verbosity)
 
         if self.verbosity >= 3:
             print("After training utilization:")
@@ -241,7 +242,8 @@ class FIA_VAE_tune:
         time_step("Model trained", verbosity=self.verbosity, min_verbosity=2)
 
         # Evaluation
-        loss, mse = model.evaluate(self.test_data, self.test_data, verbosity=self.verbosity)
+        loss, recon_loss, kl_loss = model.evaluate(self.test_data, self.test_data,
+                                                   batch_size=self.batch_size, verbose=self.verbosity)
         time_step("Model evaluated", verbosity=self.verbosity, min_verbosity=2)
         
         # Clearing model parameters

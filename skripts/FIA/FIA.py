@@ -1,4 +1,5 @@
 import os
+import gc
 import time
 from typing import List, Tuple, Sequence, Union, Optional
 import shutil
@@ -20,6 +21,8 @@ from scipy.cluster.hierarchy import fcluster, linkage
 from sklearn.impute import KNNImputer
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.pipeline import Pipeline
+
+import psutil
 
 ### DATA OBTAIN ###
 def batch_download(base_url:str, file_urls:list, save_directory:str) -> None:
@@ -79,6 +82,7 @@ def load_experiment(experiment:Union[oms.MSExperiment, str], separator:str="\t")
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
     """
+    gc.collect()
     if isinstance(experiment, oms.MSExperiment):
         return experiment
     else:
@@ -437,10 +441,12 @@ def trim_threshold_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]
     if deepcopy:
         experiments = [copy_experiment(experiment) for experiment in experiments]
     names = load_names_batch(experiments, file_ending)
-    experiments = load_experiments(experiments, file_ending)
+    experiments = load_experiments(experiments, file_ending, data_load=False)
     for i, experiment in enumerate(tqdm(experiments)):
+        experiment = load_experiment(experiment)
         trimmed_exp = trim_threshold(experiment, threshold)
         oms.MzMLFile().store(os.path.join(cleaned_dir, names[i] + ".mzML"), trimmed_exp)
+        del trimmed_exp
     return cleaned_dir
 
 
@@ -502,7 +508,6 @@ def smooth_spectra(experiment: Union[oms.MSExperiment, str], gaussian_width: flo
     return smooth_exp
 
 
-# Centroiding
 # Centroiding
 def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str="TOF",
                         signal_to_noise:float=1.0, spacing_difference_gap:float=4.0,
@@ -579,6 +584,17 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
     return centroid_exp
 
 
+def bits_to_bytes(bits, factor):
+    """
+    Coverts a number of bits to a number of bytes
+
+    Args:
+        bits: bits to be converted
+        factor: / 10**factor (e.g. use 9 for GB)
+    """
+    return round((bits * 0.125) / 10**factor, 5)
+
+
 def centroid_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], run_dir:str, file_ending:str=".mzML",
                    instrument:str="TOF",
                    signal_to_noise:float=1.0, spacing_difference_gap:float=4.0,
@@ -596,8 +612,9 @@ def centroid_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "centroids") )
     names = load_names_batch(experiments, file_ending)
-    experiments = load_experiments(experiments, file_ending)
+    experiments = load_experiments(experiments, file_ending, data_load=False)
     for i, experiment in enumerate(tqdm(experiments)):
+        experiment = load_experiment(experiment)
         centroided_exp = centroid_experiment(experiment,
                                             instrument=instrument,
                                             signal_to_noise=signal_to_noise, spacing_difference_gap=spacing_difference_gap,
@@ -612,7 +629,6 @@ def centroid_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str
                                             ms1_only=ms1_only, clear_meta_data=clear_meta_data,
                                             deepcopy=deepcopy)
         oms.MzMLFile().store(os.path.join(cleaned_dir, names[i] + ".mzML"), centroided_exp)
-
     return cleaned_dir
 
 
@@ -683,8 +699,9 @@ def merge_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], 
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "merged") )
     names = load_names_batch(experiments, file_ending)
-    experiments = load_experiments(experiments, file_ending)
+    experiments = load_experiments(experiments, file_ending, data_load=False)
     for i, experiment in enumerate(tqdm(experiments)):
+        experiment = load_experiment(experiment)
         merged_exp = merge_experiment(experiment, method=method,
                                         mz_binning_width=mz_binning_width, mz_binning_width_unit=mz_binning_width_unit,
                                         ms_levels=ms_levels, sort_blocks=sort_blocks,
@@ -871,8 +888,9 @@ def mass_trace_detection_batch(experiments: Union[Sequence[Union[oms.MSExperimen
     Mass trace detection
     """
     mass_traces_all = []
-    experiments = load_experiments(experiments, file_ending)
+    experiments = load_experiments(experiments, file_ending, data_load=False)
     for experiment in tqdm(experiments):
+        experiment = load_experiment(experiment)
         mass_traces_all.append(
             mass_trace_detection(experiment=experiment, mass_error_ppm=mass_error_ppm, noise_threshold_int=noise_threshold_int,
                                 reestimate_mt_sd=reestimate_mt_sd, quant_method=quant_method, trace_termination_criterion=trace_termination_criterion,
@@ -980,8 +998,9 @@ def feature_detection_untargeted_batch(experiments:Union[Sequence[Union[oms.MSEx
                                        report_chromatograms:str="false", remove_single_traces: str = "true",
                                        mz_scoring_by_elements: str = "false", elements:str="CHNOPS") -> list[oms.FeatureMap]:
     feature_maps = []
-    experiments = load_experiments(experiments, file_ending)
+    experiments = load_experiments(experiments, file_ending, data_load=False)
     for i, experiment in enumerate(tqdm(experiments)):
+        experiment = load_experiment(experiment)
         feature_maps.append(
             feature_detection_untargeted(experiment=experiment,
                                          mass_traces_deconvol=mass_traces_deconvol_all[i], 

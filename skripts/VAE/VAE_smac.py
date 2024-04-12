@@ -34,14 +34,14 @@ print(os.path.normpath(os.path.join( dir_path, '..' )))
 
 parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                 description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-parser.add_argument('-d', '--data_dir')
-parser.add_argument('-r', '--run_dir')
-parser.add_argument('-o', '--overwrite')
-parser.add_argument('-v', '--verbosity')
-parser.add_argument('-f', '--framework')
+parser.add_argument('-d', '--data_dir', nargs=1, required=True)
+parser.add_argument('-r', '--run_dir', nargs=1, required=True)
+parser.add_argument('-o', '--overwrite', action="store_true", required=False)
+parser.add_argument('-v', '--verbosity', nargs=1, type=int, required=True)
+parser.add_argument('-b', '--backend', nargs=1, required=True)
 args = parser.parse_args()
 
-os.environ["KERAS_BACKEND"] = "torch" if "torch" in args.framework else "tensorflow"
+os.environ["KERAS_BACKEND"] = args.backend
 
 sys.path.append("..")
 from helpers.pc_stats import *
@@ -58,7 +58,7 @@ def main():
     Hyperparameter optimization with SMAC3
     """
     data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
-    overwrite, verbosity = ( bool(args.overwrite), int(args.verbosity) )
+    overwrite, verbosity = ( bool(args.overwrite), args.verbosity )
     framework = args.framework
     gpu = "gpu" in framework
     outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{framework}")))
@@ -115,6 +115,11 @@ def main():
 def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
     """
     Saves the time difference between last and current step
+
+    Args:
+        message (str): Message, that will be printed and saved, along with runtime.
+        verbosity (int): Current verbosity. 
+        min_verbosity (int): If verbosity >= min_verbosity, print message.
     """
     global last_timestamp
     global step
@@ -227,7 +232,7 @@ class FIA_VAE_tune:
 
         # Fitting
         callbacks = []
-        if self.verbosity >= 1:
+        if self.verbosity >= 2:
             log_dir = os.path.join(self.log_dir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
             callbacks.append( TensorBoard(log_dir=log_dir, write_graph=True, write_images=True, update_freq='epoch') )
 

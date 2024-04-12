@@ -1,7 +1,6 @@
 import sys
 import os
 import argparse
-from tqdm import tqdm
 from pathlib import Path
 import time
 import datetime
@@ -15,7 +14,6 @@ from helpers.normalization import *
 from helpers.pc_stats import *
 
 
-# os.environ["KERAS_BACKEND"] = "torch"             # Set to change backend of keras
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import keras
 from keras import Model, Sequential
@@ -32,36 +30,106 @@ torch.backends.cudnn.enabled = True
 import tensorflow as tf
 
 
-# Logging (time and steps)
 last_timestamp = time.time()
 step = 0
 runtimes = {}
 
 def main():
     """
-    Hyperparameter optimization with SMAC3
+    One-time traing of Variational Autoencoder
+
+    Example:
+        The  following extracts data from ../data and uses ../runs as a directory to save to.
+        It will run the model on the backend tensorflow and use gpu.
+        It has the name 1 to differentiate it from other runs.
+        It uses a batch_size of 16 and trains for 10000 epochs.
+        It will construct a new model from the condiguration space, train, test and plot it.
+        Its verbosity is set to 1, meaning surface level output.
+        ```
+        VAE.py -d "../data" -r "../runs" -b "tensorflow" -c "gpu" -n "1" -bat 16 -e 10000 -s "new" "train" "test" "plot" -v 1
+        ```
     """
     data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
-    verbosity =  int(args.verbosity)
-    framework = args.framework
-    outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{framework}")))
-    if verbosity > 0 and "gpu" in framework:
+    backend_name = args.backend
+    computation = args.computation
+    gpu = computation == "gpu"
+    name = args.name
+    steps = args.steps
+    verbosity =  args.verbosity if args.verbosity else 0
+    outdir = Path(os.path.normpath(os.path.join(run_dir, f"vae_{backend_name}_{computation}")))
+
+    if verbosity > 0 and gpu:
         print_available_gpus()
-        if "tensorflow" in framework:
+        if "tensorflow" in backend_name:
             print("Available GPUs: ", tf.config.list_physical_devices('GPU'))
+        if "torch" in backend_name:
+            print("GPU available: ", torch.cuda.is_available())
             
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
-    X = read_data(data_dir, verbosity=verbosity)
+    data = read_data(data_dir, verbosity=verbosity)
 
-    config_space = ConfigurationSpace(
+    batch_size = args.batch_size if args.batch_size else None
+    epochs = args.epochs
+
+    time_step("Start", verbosity=verbosity, min_verbosity=2)
+    keras.utils.set_random_seed( 42 )
+
+    if "new" in steps:
+        config_space = ConfigurationSpace(
                 {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 500,
                 'intermediate_layers': 4, 'latent_dimension': 10, 'learning_rate': 0.001,
                 'original_dim': 825000, 'solver': 'nadam'}
             )
-    config = config_space.get_default_configuration()
-    seed = 42
-    epochs = 10000
+        config = config_space.get_default_configuration()
+    
+        model = FIA_VAE(config)
+        if verbosity >= 3:
+            model.vae.summary()
+            print_utilization(gpu=gpu)
+    else:
+        model = keras.saving.load_model(os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.keras"),
+                                            custom_objects=None, compile=True, safe_mode=True)
+        model.load_weights(os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.weights.h5"))
+    
+    time_step("Model built", verbosity=verbosity, min_verbosity=2)
+
+    callbacks = []
+    if verbosity >= 2:
+        log_dir = os.path.join(log_dir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+        callbacks.append( TensorBoard(log_dir=log_dir, write_graph=True, write_images=True, update_freq='epoch') )
+
+    if "train" in steps:
+        model.fit(x=data, y=data, validation_split=0.2,
+                  batch_size=batch_size, epochs=epochs,
+                  callbacks=callbacks, verbose=verbosity)
+
+        if verbosity >= 3:
+            print("After training utilization:")
+            print_utilization(gpu=gpu)
+        time_step("Model trained", verbosity=verbosity, min_verbosity=2)
+        
+        model.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.weights.h5"), overwrite=True )
+        model.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.keras"), overwrite=True )
+        time_step("Model trained", verbosity=verbosity, min_verbosity=2)        
+
+    if "test" in steps:
+        loss, recon_loss, kl_loss = model.evaluate(data, data,
+                                                    batch_size=batch_size, verbose=verbosity, callbacks=callbacks)
+        print({"Loss: ": loss, "Reconstruction loss: ": recon_loss, "Kullback-Leibler loss: ": kl_loss})
+        time_step("Model evaluated", verbosity=verbosity, min_verbosity=2)
+        
+    if "predict" in steps:
+        prediction = model.predict(data, batch_size=batch_size, verbose=verbosity, callbacks=callbacks)
+        print(prediction)
+
+    if "plot" in steps:
+        keras.utils.plot_model( model,
+                                to_file=os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.png"),
+                                show_shapes=True, show_dtype=False, show_layer_names=True,
+                                rankdir="TB", expand_nested=True, dpi=600,
+                                show_layer_activations=True, show_trainable=True )
+
 
 
 def read_data(data_dir:str, verbosity:int=0):
@@ -189,9 +257,6 @@ class FIA_VAE(Model):
     
     def decode(self, x):
         return self.decoder(x)
-    
-    def save_model(self, save_folder, suffix:str=""):
-        self.save(os.path.join(save_folder, f'VAE{suffix}.h5'))
          
     def kl_reconstruction_loss(self, y_true, y_pred):
         """
@@ -233,13 +298,19 @@ class FIA_VAE(Model):
 
 
 if __name__ == "__main__":
-    # Argument parser
     parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-    parser.add_argument('-d', '--data_dir')
-    parser.add_argument('-r', '--run_dir')
-    parser.add_argument('-v', '--verbosity')
-    parser.add_argument('-f', '--framework')
+    parser.add_argument('-d', '--data_dir', nargs=1, required=True)
+    parser.add_argument('-r', '--run_dir', nargs=1, required=True)
+    parser.add_argument('-b', '--backend',  nargs=1, required=True)
+    parser.add_argument('-c', '--computation',  nargs=1, required=True)
+    parser.add_argument('-n', '--name', nargs=1, required=False)
+    parser.add_argument('-bat', '--batch_size', type=int, nargs=1, required=False)
+    parser.add_argument('-e', '--epochs', type=int, nargs=1, required=True)
+    parser.add_argument('-s', '--steps', nargs="+", required=True)
+    parser.add_argument('-v', '--verbosity', type=int, nargs=1, required=False)
     args = parser.parse_args()
- 
+    
+    os.environ["KERAS_BACKEND"] = args.backend
+
     main()

@@ -2989,6 +2989,29 @@ typing_extensions = "*"
 test = ["black", "flake8", "isort", "mypy", "pre-commit", "pydocstyle[toml]", "pytest", "pytest-cov", "pytest-forked", "scikit-learn"]
 
 [[package]]
+name = "pyopenms"
+version = "3.1.0"
+description = "Python wrapper for C++ LC-MS library OpenMS"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pyopenms-3.1.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:2961201cc733eb59b700627e886eff4e465f9f2aa1b41fa09d460471eeb9b858"},
+    {file = "pyopenms-3.1.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c5dc3796a74342c0cffc11d28d3b984ad3589d7e8eda884a7e8300e7d5b99fe4"},
+    {file = "pyopenms-3.1.0-cp310-cp310-win_amd64.whl", hash = "sha256:f189bb74c252256ef2f46068f85595001f4d3fadf584fa3851e04cdaa63a5e0f"},
+    {file = "pyopenms-3.1.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:2abb64c9c23401e5423b21d428ce8762568c73431d5534f755173af7e66d6ea2"},
+    {file = "pyopenms-3.1.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:bb59ee07a3dea7854b6086924b50e73fff3d5364e0ca642bb2c72477c28226be"},
+    {file = "pyopenms-3.1.0-cp311-cp311-win_amd64.whl", hash = "sha256:5c9598dc942be7ac9822d3951947e447c4d760ff3759c8096febea15b759e101"},
+    {file = "pyopenms-3.1.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:e58145e437271f05754708fc4b75a52c58ae0ab709cf4f3deca78439d07af369"},
+    {file = "pyopenms-3.1.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c9209f278618461f543dc25be7e84364976a5b368cc8fad4588425de77736ca4"},
+    {file = "pyopenms-3.1.0-cp39-cp39-win_amd64.whl", hash = "sha256:ed6a25d58ca5b0d5f0f1d48a1675f1feaedc985674cd1cb2f475db681cc37628"},
+]
+
+[package.dependencies]
+matplotlib = ">=3.5"
+numpy = "*"
+pandas = "*"
+
+[[package]]
 name = "pyparsing"
 version = "3.1.2"
 description = "pyparsing module - Classes and methods to define and execute parsing grammars"
@@ -4590,4 +4613,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "7d079700c8826b4c02424ac0e5a4f05da398a0810c65176a0dab38bc622fb059"
+content-hash = "2b683044cd123c39388ad934f017d77c5f7cc9e7042092b06fb133ff4588c304"

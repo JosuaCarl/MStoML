@@ -34,7 +34,7 @@ print(os.path.normpath(os.path.join( dir_path, '..' )))
 sys.path.append("..")
 from helpers.pc_stats import *
 from FIA.FIA import *
-from VAE.VAE import *
+from VAE.vae import *
 
 # Argument parser
 parser = argparse.ArgumentParser(prog='VAE_smac_run',

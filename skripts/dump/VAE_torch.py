@@ -19,7 +19,7 @@ from ConfigSpace import Configuration, ConfigurationSpace
 from tqdm import tqdm
 
 sys.path.append( '..' )
-from FIA.FIA import total_ion_count_normalization
+from helpers.normalization import total_ion_count_normalization
 from helpers.pc_stats import *
 
 class FIA_VAE(nn.Module):

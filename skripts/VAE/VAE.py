@@ -141,8 +141,15 @@ def read_data(data_dir:str, verbosity:int=0):
     Returns:
         X: matrix with total ion count (TIC) normalized data (transposed)
     """
-    binned_dfs = pd.read_csv(os.path.join(data_dir, "data_matrix.tsv"), sep="\t", index_col="mz", engine="pyarrow")
-    binned_dfs[:] =  total_ion_count_normalization(binned_dfs)
+    data_matrix_filepath = os.path.join(data_dir, "data_matrix.tsv")
+    if os.path.isfile(data_matrix_filepath):
+        binned_dfs = pd.read_csv(data_matrix_filepath, sep="\t", index_col="mz", engine="pyarrow")
+        binned_dfs[:] =  total_ion_count_normalization(binned_dfs)
+    else:
+        from FIA.FIA import load_fia_df, bin_df_stepwise_batch
+        fia_df = load_fia_df(data_dir, file_ending=".mzML", separator="\t")
+        bin_df_stepwise_batch(fia_df, binning_var="mz", binned_var="inty", statistic="sum", start=50.0, stop=1700.0, step=0.002)
+        binned_dfs.to_csv(data_matrix_filepath, sep="\t")
 
     X = binned_dfs.transpose()
     time_step(message="Data loaded", verbosity=verbosity, min_verbosity=1)

@@ -173,7 +173,7 @@ def run_optimization(facade, smac_model, verbose_steps:int=10, verbosity:int=0):
     return incumbent
 
 
-def validate_incumbent(incumbent, fascade, run_dir:str, verbosity:int=0):
+def validate_incumbent(incumbent, fascade, verbosity:int=0):
     """
     Saves the history of one run
 
@@ -188,7 +188,7 @@ def validate_incumbent(incumbent, fascade, run_dir:str, verbosity:int=0):
 
 def save_runtime(run_dir, verbosity:int=0):
     global runtimes
-    runtimes["total"] = [np.sum(runtimes.values())]
+    runtimes["total"] = [np.sum( runtimes.values())]
     runtime_df = pd.DataFrame(runtimes)
     runtime_df.to_csv(os.path.join(run_dir, "runtimes.tsv"), sep="\t")
     if verbosity >= 1: 

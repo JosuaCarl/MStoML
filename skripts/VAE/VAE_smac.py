@@ -25,29 +25,6 @@ from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
 from smac.runhistory.dataclasses import TrialValue
 
-# Doesn't work with Slurm, because __file__ variable is not copied
-"""
-dir_path = os.path.dirname(os.path.realpath(__file__))
-sys.path.append( os.path.normcase(os.path.join( dir_path, '..' )))
-print(os.path.normpath(os.path.join( dir_path, '..' )))
-"""
-
-parser = argparse.ArgumentParser(prog='VAE_smac_run',
-                                description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-parser.add_argument('-d', '--data_dir', nargs=1, required=True)
-parser.add_argument('-r', '--run_dir', nargs=1, required=True)
-parser.add_argument('-o', '--overwrite', action="store_true", required=False)
-parser.add_argument('-v', '--verbosity', nargs=1, type=int, required=True)
-parser.add_argument('-b', '--backend', nargs=1, required=True)
-args = parser.parse_args()
-
-os.environ["KERAS_BACKEND"] = args.backend
-
-sys.path.append("..")
-from helpers.pc_stats import *
-from VAE.VAE import *
-
-
 # Logging (time and steps)
 last_timestamp = time.time()
 step = 0
@@ -58,10 +35,14 @@ def main():
     Hyperparameter optimization with SMAC3
     """
     data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
-    overwrite, verbosity = ( bool(args.overwrite), args.verbosity )
-    framework = args.framework
-    gpu = "gpu" in framework
-    outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{framework}")))
+    overwrite =  bool(args.overwrite)
+    backend_name = args.backend
+    computation = args.computation
+    gpu = computation == "gpu"
+    name = args.name if args.name else "0"
+    verbosity =  args.verbosity if args.verbosity else 0
+    outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{backend_name}_{computation}_{name}")))
+
     if verbosity > 0:
         print(f"Using {keras.backend.backend()} as backend")
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
@@ -198,6 +179,9 @@ def save_runtime(run_dir, verbosity:int=0):
 
 
 class FIA_VAE_tune:
+    """
+    Class for running the SMAC3 tuning
+    """
     def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
                  log_dir:str, batch_size:int=16, verbosity:int=0, gpu:bool=False):
         self.configuration_space = configuration_space
@@ -258,4 +242,26 @@ class FIA_VAE_tune:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(prog='VAE_smac_run',
+                                description='Hyperparameter tuning for Variational Autoencoder with SMAC')
+    parser.add_argument('-d', '--data_dir', nargs=1, required=True)
+    parser.add_argument('-r', '--run_dir', nargs=1, required=True)
+    parser.add_argument('-o', '--overwrite', action="store_true", required=False)
+    parser.add_argument('-b', '--backend',  nargs=1, required=True)
+    parser.add_argument('-c', '--computation',  nargs=1, required=True)
+    parser.add_argument('-n', '--name', nargs=1, required=False)
+    parser.add_argument('-v', '--verbosity', nargs=1, type=int, required=True)
+    args = parser.parse_args()
+
+    os.environ["KERAS_BACKEND"] = args.backend
+
+    # Doesn't work with Slurm, because __file__ variable is not preserved when copying to cluster
+    """
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    sys.path.append( os.path.normpath(os.path.join( dir_path, '..' )))
+    """
+    sys.path.append("..")
+    from helpers.pc_stats import *
+    from VAE.vae import *
+
     main()

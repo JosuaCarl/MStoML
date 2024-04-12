@@ -53,7 +53,7 @@ def main():
     backend_name = args.backend
     computation = args.computation
     gpu = computation == "gpu"
-    name = args.name
+    name = args.name if args.name else "0"
     steps = args.steps
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, f"vae_{backend_name}_{computation}")))
@@ -201,6 +201,9 @@ class Sampling(layers.Layer):
             return ops.multiply(ops.add(z_mean, ops.exp(0.5 * z_log_var)), epsilon)
 
 class FIA_VAE(Model):
+    """
+    A variational autoencoder for flow injection analysis
+    """
     def __init__(self, config:Configuration):
         super().__init__()
         intermediate_dims       = [i for i in range(config["intermediate_layers"]) 

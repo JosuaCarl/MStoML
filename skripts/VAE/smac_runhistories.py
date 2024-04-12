@@ -1,30 +1,28 @@
 import sys
 import os
-sys.path.append( '..' )
-
-from VAE.VAE_smac import *
-from helpers.pc_stats import *
 
 from smac import RunHistory
 from ConfigSpace.read_and_write import json as cs_json
 
 import matplotlib.pyplot as plt
 
-
-# Argument parser
-parser = argparse.ArgumentParser(prog='Interpret_smac',
-                                description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-parser.add_argument('-i', '--in_dirs')
-parser.add_argument('-o', '--out_dir')
-parser.add_argument('-v', '--verbosity')
-parser.add_argument('-f', '--framework')
-args = parser.parse_args()
+sys.path.append( '..' )
+from VAE.VAE_smac import *
+from helpers.pc_stats import *
 
 
 def main():
     """
     Interpretation of SMAC run
     """
+    parser = argparse.ArgumentParser(prog='Interpret_smac',
+                                     description='Hyperparameter tuning for Variational Autoencoder with SMAC')
+    parser.add_argument('-i', '--in_dirs')
+    parser.add_argument('-o', '--out_dir')
+    parser.add_argument('-v', '--verbosity')
+    parser.add_argument('-f', '--framework')
+    args = parser.parse_args()
+
     in_dirs, out_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.in_dirs.split(","), args.out_dir]]
     verbosity =  int(args.verbosity) if args.verbosity else 0
     framework = args.framework
@@ -39,7 +37,7 @@ def main():
         print("Saved Runhistories.")
 
 
-def read_runhistories(folder_paths:list, verbosity:int=0) -> RunHistory:
+def read_runhistories(folder_paths:list, skip_dirs:list, verbosity:int=0) -> RunHistory:
     """
     Read in different runhistories
 
@@ -51,6 +49,8 @@ def read_runhistories(folder_paths:list, verbosity:int=0) -> RunHistory:
     runhistories = RunHistory()
     for folder_path in folder_paths:
         for dir in os.listdir(folder_path):
+            if dir in skip_dirs:
+                continue
             for sub in os.listdir(os.path.join(folder_path, dir)):
                 with open(os.path.join(folder_path, dir, sub, 'configspace.json'), 'r') as f:
                     json_string = f.read()

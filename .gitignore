@@ -191,3 +191,4 @@ cython_debug/
 ./runs/FIA/Com8_grown_together/oms/data_matrix.tsv ./runs/VAE/results/model_torch_lm_1
 ./runs/FIA/Com8_grown_together/oms/data_matrix.tsv ./runs/VAE/results/model_torch_lm_1
 ./runs/FIA/Com8_grown_together/oms/data_matrix.tsv ./runs/VAE/results/model_torch_lm_1
+./runs/FIA/Com8_grown_together/oms/data_matrix.tsv ./runs/VAE/results/model_torch_lm_1

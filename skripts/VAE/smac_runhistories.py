@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+#SBATCH --job-name Runhistory-collection
+#SBATCH --time 00:30:00
+#SBATCH --nodes 2
+#SBATCH --partition cpu1
+#SBATCH --ntasks-per-node 1
+#SBATCH --cpus-per-task 1
+
 import sys
 import os
 
@@ -17,23 +25,28 @@ def main():
     """
     parser = argparse.ArgumentParser(prog='Interpret_smac',
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-    parser.add_argument('-i', '--in_dirs')
-    parser.add_argument('-o', '--out_dir')
-    parser.add_argument('-v', '--verbosity')
-    parser.add_argument('-f', '--framework')
+    parser.add_argument('-i', '--in_dirs', nargs="+", required=True)
+    parser.add_argument('-o', '--out_dir', required=True)
+    parser.add_argument('-b', '--backend',  required=True)
+    parser.add_argument('-c', '--computation', required=True)
+    parser.add_argument('-n', '--name', required=False)
+    parser.add_argument('-v', '--verbosity', required=True)
     args = parser.parse_args()
 
-    in_dirs, out_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.in_dirs.split(","), args.out_dir]]
+    out_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.out_dir]]
     verbosity =  int(args.verbosity) if args.verbosity else 0
-    framework = args.framework
-    smac_dirs = [Path(os.path.normpath(os.path.join(in_dir, f"smac_vae_{framework}"))) for in_dir in in_dirs]
-    time_step(message="Setup loaded", verbosity=verbosity)
+    backend_name = args.backend
+    computation = args.computation
+    name = args.name if args.name else None
+    project = f"smac_vae_{backend_name}_{computation}_{name}" if name else f"smac_vae_{backend_name}_{computation}"
+    smac_dirs = [Path(os.path.normpath(os.path.join(in_dir, project))) for in_dir in args.in_dirs]
+    time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
-    runhistories = read_runhistories(folder_paths=smac_dirs, verbosity=verbosity)
+    runhistories = read_runhistories(folder_paths=smac_dirs, skip_dirs="log", verbosity=verbosity)
 
     save_runhistory(runhistory=runhistories, out_dir=out_dir)
 
-    if verbosity > 0:
+    if verbosity >= 1:
         print("Saved Runhistories.")
 
 

@@ -30,7 +30,8 @@ last_timestamp = time.time()
 step = 0
 runtimes = {}
 
-def main():
+
+def main(args):
     """
     Hyperparameter optimization with SMAC3
     """
@@ -39,9 +40,10 @@ def main():
     backend_name = args.backend
     computation = args.computation
     gpu = computation == "gpu"
-    name = args.name if args.name else "0"
+    name = args.name if args.name else None
+    project = f"smac_vae_{backend_name}_{computation}_{name}" if name else f"smac_vae_{backend_name}_{computation}"
     verbosity =  args.verbosity if args.verbosity else 0
-    outdir = Path(os.path.normpath(os.path.join(run_dir, f"smac_vae_{backend_name}_{computation}_{name}")))
+    outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
 
     if verbosity > 0:
         print(f"Using {keras.backend.backend()} as backend")
@@ -244,13 +246,13 @@ class FIA_VAE_tune:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                 description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-    parser.add_argument('-d', '--data_dir', nargs=1, required=True)
-    parser.add_argument('-r', '--run_dir', nargs=1, required=True)
+    parser.add_argument('-d', '--data_dir', required=True)
+    parser.add_argument('-r', '--run_dir', required=True)
     parser.add_argument('-o', '--overwrite', action="store_true", required=False)
-    parser.add_argument('-b', '--backend',  nargs=1, required=True)
-    parser.add_argument('-c', '--computation',  nargs=1, required=True)
-    parser.add_argument('-n', '--name', nargs=1, required=False)
-    parser.add_argument('-v', '--verbosity', nargs=1, type=int, required=True)
+    parser.add_argument('-b', '--backend',  required=True)
+    parser.add_argument('-c', '--computation', required=True)
+    parser.add_argument('-n', '--name', required=False)
+    parser.add_argument('-v', '--verbosity', type=int, required=True)
     args = parser.parse_args()
 
     os.environ["KERAS_BACKEND"] = args.backend
@@ -262,6 +264,6 @@ if __name__ == "__main__":
     """
     sys.path.append("..")
     from helpers.pc_stats import *
-    from VAE.vae import *
+    from VAE.vae import keras, np, datetime, read_data, TensorBoard, FIA_VAE
 
-    main()
+    main(args=args)

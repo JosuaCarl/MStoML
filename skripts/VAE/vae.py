@@ -1,3 +1,13 @@
+#!/usr/bin/env python3
+#SBATCH --job-name VAE_training
+#SBATCH --time 12:00:00
+#SBATCH --mem 400G
+#SBATCH --nodes 2
+#SBATCH --ntasks-per-node 1
+#SBATCH --cpus-per-task 1
+
+# available processors: cpu1, cpu2-hm, gpu-a30
+
 import sys
 import os
 import argparse
@@ -53,10 +63,11 @@ def main():
     backend_name = args.backend
     computation = args.computation
     gpu = computation == "gpu"
-    name = args.name if args.name else "0"
+    name = args.name if args.name else None
+    project = f"vae_{backend_name}_{computation}_{name}" if name else f"vae_{backend_name}_{computation}"
     steps = args.steps
     verbosity =  args.verbosity if args.verbosity else 0
-    outdir = Path(os.path.normpath(os.path.join(run_dir, f"vae_{backend_name}_{computation}")))
+    outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
 
     if verbosity > 0 and gpu:
         print_available_gpus()
@@ -303,15 +314,15 @@ class FIA_VAE(Model):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-    parser.add_argument('-d', '--data_dir', nargs=1, required=True)
-    parser.add_argument('-r', '--run_dir', nargs=1, required=True)
-    parser.add_argument('-b', '--backend',  nargs=1, required=True)
-    parser.add_argument('-c', '--computation',  nargs=1, required=True)
-    parser.add_argument('-n', '--name', nargs=1, required=False)
-    parser.add_argument('-bat', '--batch_size', type=int, nargs=1, required=False)
-    parser.add_argument('-e', '--epochs', type=int, nargs=1, required=True)
+    parser.add_argument('-d', '--data_dir', required=True)
+    parser.add_argument('-r', '--run_dir', required=True)
+    parser.add_argument('-b', '--backend', required=True)
+    parser.add_argument('-c', '--computation', required=True)
+    parser.add_argument('-n', '--name', required=False)
+    parser.add_argument('-bat', '--batch_size', type=int, required=False)
+    parser.add_argument('-e', '--epochs', type=int, required=True)
     parser.add_argument('-s', '--steps', nargs="+", required=True)
-    parser.add_argument('-v', '--verbosity', type=int, nargs=1, required=False)
+    parser.add_argument('-v', '--verbosity', type=int, required=False)
     args = parser.parse_args()
     
     os.environ["KERAS_BACKEND"] = args.backend

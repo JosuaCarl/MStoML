@@ -56,7 +56,7 @@ def main():
         It will construct a new model from the condiguration space, train, test and plot it.
         Its verbosity is set to 1, meaning surface level output.
         ```
-        VAE.py -d "../data" -r "../runs" -b "tensorflow" -c "gpu" -n "1" -bat 16 -e 10000 -s "new" "train" "test" "plot" -v 1
+        vae.py -d "../data" -r "../runs" -b "tensorflow" -c "gpu" -n "1" -bat 16 -e 10000 -s "new" "train" "test" "plot" -v 1
         ```
     """
     data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
@@ -107,8 +107,8 @@ def main():
 
     callbacks = []
     if verbosity >= 2:
-        log_dir = os.path.join(log_dir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-        callbacks.append( TensorBoard(log_dir=log_dir, write_graph=True, write_images=True, update_freq='epoch') )
+        log_dir = os.path.join(outdir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+        callbacks.append( TensorBoard(log_dir=log_dir, histogram_freq=100, write_graph=True, write_images=True, update_freq='epoch') )
 
     if "train" in steps:
         model.fit(x=data, y=data, validation_split=0.2,

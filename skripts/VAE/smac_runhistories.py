@@ -33,7 +33,7 @@ def main():
     parser.add_argument('-v', '--verbosity', required=True)
     args = parser.parse_args()
 
-    out_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.out_dir]]
+    out_dir = os.path.normpath(os.path.join(os.getcwd(), args.out_dir))
     verbosity =  int(args.verbosity) if args.verbosity else 0
     backend_name = args.backend
     computation = args.computation

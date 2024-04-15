@@ -54,20 +54,20 @@ def main(args):
     configuration_space = ConfigurationSpace(seed=42)
     hyperparameters = [
         Constant(       "original_dim",             X.shape[1]),
-        Float(          "input_dropout",            (0.0, 0.5), default=0.25),
-        Integer(        "intermediate_layers",      (1, 5), default=2),
-        Integer(        "intermediate_dimension",   (100, 500), log=True, default=500),
-        Categorical(    "intermediate_activation",  ["relu", "selu", "tanh", "leakyrelu"], default="selu"),
-        Integer(        "latent_dimension",         (10, 100), log=False, default=100),
-        Categorical(    "solver",                   ["nadam"], default="nadam"),
-        Float(          "learning_rate",            (1e-4, 1e-2), log=True, default=1e-3)
+        Constant(       "input_dropout",            0.1),
+        Integer(        "intermediate_layers",      (2, 5), default=2),
+        Integer(        "intermediate_dimension",   (100, 10000), log=True, default=1000),
+        Constant(    "intermediate_activation",     "relu"),
+        Integer(        "latent_dimension",         (10, 1000), log=False, default=100),
+        Constant(    "solver",                      "nadam"),
+        Constant(          "learning_rate",         1e-4)
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [
         ForbiddenGreaterThanRelation(configuration_space["latent_dimension"], configuration_space["intermediate_dimension"])
     ]
     configuration_space.add_forbidden_clauses(forbidden_clauses)
-    if verbosity > 0: 
+    if verbosity >= 1: 
         print(f"Configuration space defined with estimated {configuration_space.estimate_size()} possible combinations.\n")
 
 
@@ -76,7 +76,7 @@ def main(args):
 
 
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,
-                         n_trials=100000, min_budget=2, max_budget=100,
+                         n_trials=10000, min_budget=2, max_budget=1000,
                          n_workers=1, output_directory=outdir,
                          walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None )   # Max RAM in Bytes (not MB)
                         
@@ -87,7 +87,7 @@ def main(args):
                                   overwrite=overwrite, logging_level=30-verbosity*10 )
     time_step(message=f"SMAC defined. Overwriting: {overwrite}", verbosity=verbosity, min_verbosity=1)
 
-    incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=10, verbosity=verbosity)
+    incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=100, verbosity=verbosity)
 
     best_hp = validate_incumbent(incumbent=incumbent, fascade=facade, verbosity=verbosity)
 
@@ -128,7 +128,7 @@ def ask_tell_optimization(facade, smac_model, n:int=10, verbosity:int=0):
         acc_time = time.time()
         info = facade.ask()
         assert info.seed is not None
-        if verbosity >= 2:
+        if verbosity >= 1:
             print(f"Configuration: {dict(info.config)}")
         loss = smac_model.train(info.config, seed=info.seed, budget=info.budget)
         value = TrialValue(cost=loss, time=time.time()-acc_time, starttime=acc_time, endtime=time.time())

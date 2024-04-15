@@ -12,7 +12,7 @@ print(f"Available GPUs: {getAvailable(limit=10)}")
 showUtilization(all=True)
 
 import torch
-# import tensorflow as tf
+import tensorflow as tf
 
-print(torch.cuda.is_available())
-# print("GPUs Available: ", tf.config.list_physical_devices())
+print("Torch found: ", torch.cuda.is_available())
+print("Tensorflow found: ", tf.config.list_physical_devices())

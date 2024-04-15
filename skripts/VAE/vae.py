@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_training
-#SBATCH --time 12:00:00
+#SBATCH --time 24:00:00
 #SBATCH --mem 400G
 #SBATCH --nodes 2
 #SBATCH --ntasks-per-node 1
@@ -69,6 +69,7 @@ def main():
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
 
+    print(f"Using backend: {keras.backend.backend}")
     if verbosity > 0 and gpu:
         print_available_gpus()
         if "tensorflow" in backend_name:
@@ -198,7 +199,7 @@ def get_solver(solver:str):
     solvers = {"adam": optimizers.Adam, "nadam": optimizers.Nadam, "adamw": optimizers.AdamW}
     return solvers[solver]
 
-
+@keras.saving.register_keras_serializable(package="FIA_VAE")
 class Sampling(layers.Layer):
         """
         Uses (z_mean, z_log_var) to sample z, the vector encoding a digit.
@@ -211,6 +212,7 @@ class Sampling(layers.Layer):
             epsilon = keras.random.normal(shape=(batch,dim))
             return ops.multiply(ops.add(z_mean, ops.exp(0.5 * z_log_var)), epsilon)
 
+@keras.saving.register_keras_serializable(package="FIA_VAE")
 class FIA_VAE(Model):
     """
     A variational autoencoder for flow injection analysis
@@ -253,6 +255,9 @@ class FIA_VAE(Model):
     @property
     def metrics(self):
         return [self.loss_tracker, self.reconstruction_loss, self.kl_loss]
+    
+    def get_config(self):
+        return {"config": self.config}
 
     def call(self, data, training=False):
         x = self.dropout(data, training=training)

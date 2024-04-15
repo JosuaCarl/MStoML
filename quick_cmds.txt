@@ -4,6 +4,9 @@ sacct --format="User,JobID,Start,Timelimit,End,CPUTime,MaxRSS,Reserved,ReqMem,Ma
 # Open run (8 h)
 srun -t 08:00:00 --cpus-per-task=2 --ntasks=1 --mem-per-cpu=8G --pty bash -i
 
+# Check GPUs
+sbatch --partition gpu-a30 --gres gpu:1 --output ../../runs/slurm_check_gpus.out check_gpus.py -b "tensorflow"
+
 # vae
 sbatch --partition cpu1 --output ../../runs/VAE/hyperparameter_optimization/slurm_test.out vae.py -d "../../runs/FIA/Com8_grown_together/oms" -r "../../runs/VAE/training" -b 
 "tensorflow" -c "gpu" -n "test" -e 10 -s "new" "train" "test" "plot" -v 2

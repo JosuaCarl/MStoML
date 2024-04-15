@@ -18,10 +18,10 @@ print("Tensorflow found: ", tf.config.list_physical_devices())
 
 parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-parser.add_argument('-b', '--backend', nargs=1, required=True)
+parser.add_argument('-b', '--backend', required=False)
 args = parser.parse_args()
 
-os.environ["KERAS_BACKEND"] = args.backend
+os.environ["KERAS_BACKEND"] = args.backend if args.backend else "tensorflow"
 import keras
 import numpy as np
 

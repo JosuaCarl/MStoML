@@ -218,10 +218,6 @@ class FIA_VAE_tune:
 
         # Fitting
         callbacks = []
-        if self.verbosity >= 2:
-            log_dir = os.path.join(self.log_dir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-            callbacks.append( TensorBoard(log_dir=log_dir, write_graph=True, write_images=True, update_freq='epoch') )
-
         model.fit(x=self.training_data, y=self.training_data, validation_split=0.2,
                   batch_size=self.batch_size, epochs=int(budget),
                   callbacks=callbacks, verbose=self.verbosity)

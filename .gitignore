@@ -198,3 +198,4 @@ cython_debug/
 ./runs/FIA/Com8_grown_together/oms/data_matrix.tsv ./runs/VAE/training/vae_tensorflow_cpu_test/vae_tensorflow_cpu_test.keras ./runs/VAE/training/vae_tensorflow_cpu_test/vae_tensorflow_cpu_test.weights.h5 ./runs/VAE/results/model_torch_lm_1
 ./runs/FIA/Com8_grown_together/oms/data_matrix.tsv ./runs/VAE/training/vae_tensorflow_cpu_test/vae_tensorflow_cpu_test.keras ./runs/VAE/training/vae_tensorflow_cpu_test/vae_tensorflow_cpu_test.weights.h5 ./runs/VAE/results/model_torch_lm_1
 ./runs/FIA/Com8_grown_together/oms/data_matrix.tsv ./runs/VAE/training/vae_tensorflow_cpu_test/vae_tensorflow_cpu_test.keras ./runs/VAE/training/vae_tensorflow_cpu_test/vae_tensorflow_cpu_test.weights.h5 ./runs/VAE/results/model_torch_lm_1
+./runs/FIA/Com8_grown_together/oms/data_matrix.tsv ./runs/VAE/training/vae_tensorflow_cpu_test/vae_tensorflow_cpu_test.keras ./runs/VAE/training/vae_tensorflow_cpu_test/vae_tensorflow_cpu_test.weights.h5 ./runs/VAE/results/model_torch_lm_1

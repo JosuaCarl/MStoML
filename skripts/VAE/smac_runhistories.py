@@ -50,6 +50,7 @@ def main():
         print("Saved Runhistories.")
 
 
+
 def read_runhistories(folder_paths:list, skip_dirs:list, verbosity:int=0) -> RunHistory:
     """
     Read in different runhistories

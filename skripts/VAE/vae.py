@@ -239,7 +239,7 @@ class FIA_VAE(Model):
                                               [ Dense( config["intermediate_dimension"] // 2**i,
                                                        activation=activation_function )
                                                for i in reversed(intermediate_dims) ] +
-                                              [ Dense(config["original_dim"]) ] , name="Decoder")
+                                              [ Dense(config["original_dim"], activation="relu") ] , name="Decoder")
 
         # Loss trackers
         self.reconstruction_loss    = metrics.Mean(name="reconstruction_loss")
@@ -250,7 +250,7 @@ class FIA_VAE(Model):
         self.optimizer = get_solver( config["solver"] )( config["learning_rate"] )
 
         # Compile VAE
-        self.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss, metrics = [ "mse" ])
+        self.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss)
 
     @property
     def metrics(self):

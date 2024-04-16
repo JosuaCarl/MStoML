@@ -17,6 +17,7 @@ import datetime
 import numpy as np
 import pandas as pd
 
+from typing import Union
 from ConfigSpace import Configuration, ConfigurationSpace
 
 sys.path.append( '..' )
@@ -212,13 +213,13 @@ class Sampling(layers.Layer):
             epsilon = keras.random.normal(shape=(batch,dim))
             return ops.multiply(ops.add(z_mean, ops.exp(0.5 * z_log_var)), epsilon)
 
-@keras.saving.register_keras_serializable(package="FIA_VAE")
 class FIA_VAE(Model):
     """
     A variational autoencoder for flow injection analysis
     """
-    def __init__(self, config:Configuration):
+    def __init__(self, config:Union[Configuration, dict]):
         super().__init__()
+        self.config             = config
         intermediate_dims       = [i for i in range(config["intermediate_layers"]) 
                                     if config["intermediate_dimension"] // 2**i > config["latent_dimension"]]
         activation_function     = get_activation_function( config["intermediate_activation"] )
@@ -257,7 +258,7 @@ class FIA_VAE(Model):
         return [self.loss_tracker, self.reconstruction_loss, self.kl_loss]
     
     def get_config(self):
-        return {"config": self.config}
+        return {"config": dict(self.config)}
 
     def call(self, data, training=False):
         x = self.dropout(data, training=training)
@@ -276,7 +277,8 @@ class FIA_VAE(Model):
     
     def decode(self, x):
         return self.decoder(x)
-         
+    
+    @keras.saving.register_keras_serializable(package="FIA_VAE")
     def kl_reconstruction_loss(self, y_true, y_pred):
         """
         Loss function for Kullback-Leibler + Reconstruction loss

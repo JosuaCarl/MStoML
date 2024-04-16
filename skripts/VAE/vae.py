@@ -66,13 +66,13 @@ def main():
     gpu = computation == "gpu"
     name = args.name if args.name else None
     project = f"vae_{backend_name}_{computation}_{name}" if name else f"vae_{backend_name}_{computation}"
-    batch_size = int(args.batch_size) if args.batch_size else None
+    batch_size = args.batch_size if args.batch_size else None
     epochs = args.epochs
     steps = args.steps
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
 
-    print(f"Using backend: {keras.backend.backend.__name__}")
+    print(f"Using backend: {keras.backend.backend()}")
     if verbosity > 0 and gpu:
         print_available_gpus()
         if "tensorflow" in backend_name:
@@ -89,8 +89,8 @@ def main():
 
     if "new" in steps:
         config_space = ConfigurationSpace(
-                {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 20,
-                'intermediate_layers': 1, 'latent_dimension': 10, 'learning_rate': 0.001,
+                {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 5000,
+                'intermediate_layers': 4, 'latent_dimension': 500, 'learning_rate': 0.001,
                 'original_dim': 825000, 'solver': 'nadam'}
             )
         config = config_space.get_default_configuration()
@@ -107,9 +107,9 @@ def main():
 
     callbacks = []
     if "train" in steps:
-        callbacks.append(  keras.callbacks.ModelCheckpoint( filepath=str(outdir) + f"vae_{backend_name}_{computation}_{name}" + "_{epoch}.keras",
-                                                            save_best_only=True, monitor="val_loss",
-                                                            verbose=verbosity ))
+        callbacks.append( keras.callbacks.ModelCheckpoint( filepath=str(outdir) + f"/vae_{backend_name}_{computation}_{name}" + "_{epoch}.keras",
+                                                           save_best_only=True, monitor="val_loss",
+                                                           verbose=verbosity ) )
 
         history = model.fit(data, data, validation_split=0.2,
                             batch_size=batch_size, epochs=epochs,
@@ -298,7 +298,6 @@ class FIA_VAE(Model):
 
     def train_step(self, data):
         x, y = data
-        print("start")
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)  # Forward pass
             # Compute our own loss
@@ -314,7 +313,6 @@ class FIA_VAE(Model):
         self.reconstruction_loss.update_state( loss["reconstruction_loss"] )
         self.kl_loss.update_state( loss["kl_loss"] )
         self.loss_tracker.update_state( loss["loss"] )
-        print(loss)
         return loss
     
     def test_step(self, data):

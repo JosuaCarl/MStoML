@@ -66,11 +66,13 @@ def main():
     gpu = computation == "gpu"
     name = args.name if args.name else None
     project = f"vae_{backend_name}_{computation}_{name}" if name else f"vae_{backend_name}_{computation}"
+    batch_size = int(args.batch_size) if args.batch_size else None
+    epochs = args.epochs
     steps = args.steps
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
 
-    print(f"Using backend: {keras.backend.backend}")
+    print(f"Using backend: {keras.backend.backend.__name__}")
     if verbosity > 0 and gpu:
         print_available_gpus()
         if "tensorflow" in backend_name:
@@ -82,45 +84,37 @@ def main():
 
     data = read_data(data_dir, verbosity=verbosity)
 
-    batch_size = args.batch_size if args.batch_size else None
-    epochs = args.epochs
-
     time_step("Start", verbosity=verbosity, min_verbosity=2)
     keras.utils.set_random_seed( 42 )
 
     if "new" in steps:
         config_space = ConfigurationSpace(
-                {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 500,
-                'intermediate_layers': 4, 'latent_dimension': 10, 'learning_rate': 0.001,
+                {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 20,
+                'intermediate_layers': 1, 'latent_dimension': 10, 'learning_rate': 0.001,
                 'original_dim': 825000, 'solver': 'nadam'}
             )
         config = config_space.get_default_configuration()
     
         model = FIA_VAE(config)
         if verbosity >= 3:
-            model.vae.summary()
+            model.summary()
             print_utilization(gpu=gpu)
     else:
-        model = keras.saving.load_model(os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.keras"),
-                                            custom_objects=None, compile=True, safe_mode=True)
+        model = keras.saving.load_model(os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.keras"), safe_mode=True)
         model.load_weights(os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.weights.h5"))
     
     time_step("Model built", verbosity=verbosity, min_verbosity=2)
 
     callbacks = []
-    if verbosity >= 2:
-        log_dir = os.path.join(outdir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-        callbacks.append( TensorBoard(log_dir=log_dir, histogram_freq=100, write_graph=True, write_images=True, update_freq='epoch') )
-    callbacks.append(  keras.callbacks.ModelCheckpoint( filepath=os.path.join(outdir, "mymodel_{epoch}.keras"),
-                                                       save_best_only=True, monitor="val_loss",
-                                                       verbose=verbosity ))
-
-
     if "train" in steps:
-        model.fit(x=data, y=data, validation_split=0.2,
-                  batch_size=batch_size, epochs=epochs,
-                  callbacks=callbacks, verbose=verbosity)
+        callbacks.append(  keras.callbacks.ModelCheckpoint( filepath=str(outdir) + f"vae_{backend_name}_{computation}_{name}" + "_{epoch}.keras",
+                                                            save_best_only=True, monitor="val_loss",
+                                                            verbose=verbosity ))
 
+        history = model.fit(data, data, validation_split=0.2,
+                            batch_size=batch_size, epochs=epochs,
+                            callbacks=callbacks, verbose=verbosity)
+        
         if verbosity >= 3:
             print("After training utilization:")
             print_utilization(gpu=gpu)
@@ -128,6 +122,8 @@ def main():
         
         model.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.weights.h5"), overwrite=True )
         model.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.keras"), overwrite=True )
+        hist_df = pd.DataFrame(history.history) 
+        hist_df.to_csv( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.history.tsv"), sep="\t")
         time_step("Model trained", verbosity=verbosity, min_verbosity=2)        
 
     if "test" in steps:
@@ -180,7 +176,49 @@ def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
     step += 1
 
 
-def get_activation_function(activation_function:str):
+@keras.saving.register_keras_serializable(package="FIA_VAE")
+class FIA_VAE(Model):
+    """
+    A variational autoencoder for flow injection analysis
+    """
+    def __init__(self, config:Union[Configuration, dict]):
+        super().__init__()
+        self.config             = config
+        intermediate_dims       = [i for i in range(config["intermediate_layers"]) 
+                                    if config["intermediate_dimension"] // 2**i > config["latent_dimension"]]
+        activation_function     = self.get_activation_function( config["intermediate_activation"] )
+
+        # Encoder (with sucessive halfing of intermediate dimension)
+        self.dropout            = Dropout( config["input_dropout"] , name="dropout")        
+        self.intermediate_enc   = Sequential ( [ Input(shape=(config["original_dim"],), name='encoder_input') ] +
+                                               [ Dense( config["intermediate_dimension"] // 2**i,
+                                                        activation=activation_function ) 
+                                                for i in intermediate_dims] , name="encoder_intermediate")
+
+        self.mu_encoder         = Dense( config["latent_dimension"], name='latent_mu' )
+        self.sigma_encoder      = Dense( config["latent_dimension"], name='latent_sigma' )
+        self.z_encoder          = self.Sampling(name="latent_reparametrization") 
+
+        # Decoder
+        self.decoder            = Sequential( [ Input(shape=(config["latent_dimension"], ), name='decoder_input') ] +
+                                              [ Dense( config["intermediate_dimension"] // 2**i,
+                                                       activation=activation_function )
+                                               for i in reversed(intermediate_dims) ] +
+                                              [ Dense(config["original_dim"], activation="relu") ] , name="Decoder")
+
+        # Define optimizer
+        self.optimizer          = self.get_solver( config["solver"] )( config["learning_rate"] )
+
+        # Compile VAE
+        self.compile(optimizer=self.optimizer)
+
+        # Loss trackers
+        self.reconstruction_loss    = metrics.Mean(name="reconstruction_loss")
+        self.kl_loss                = metrics.Mean(name="kl_loss")
+        self.loss_tracker           = metrics.Mean(name="loss")
+
+    
+    def get_activation_function(self, activation_function:str):
         """
         Convert an activation function string into a keras function
 
@@ -191,22 +229,21 @@ def get_activation_function(activation_function:str):
         """
         activation_functions = {"relu": activations.relu, "leakyrelu" :layers.LeakyReLU(), "selu": activations.selu, "tanh": activations.tanh}
         return activation_functions[activation_function]
+
     
-def get_solver(solver:str):
-    """
-    Convert an solver string into a keras function
+    def get_solver(self, solver:str):
+        """
+        Convert an solver string into a keras function
 
-    Args:
-        solver (str): Solver in string representation 
-    Returns:
-        solver as a keras.optimizers class
-    """
-    solvers = {"adam": optimizers.Adam, "nadam": optimizers.Nadam, "adamw": optimizers.AdamW}
-    return solvers[solver]
-
-
-@keras.saving.register_keras_serializable(package="FIA_VAE")
-class Sampling(layers.Layer):
+        Args:
+            solver (str): Solver in string representation 
+        Returns:
+            solver as a keras.optimizers class
+        """
+        solvers = {"adam": optimizers.Adam, "nadam": optimizers.Nadam, "adamw": optimizers.AdamW}
+        return solvers[solver]
+    
+    class Sampling(layers.Layer):
         """
         Uses (z_mean, z_log_var) to sample z, the vector encoding a digit.
         """
@@ -218,64 +255,21 @@ class Sampling(layers.Layer):
             epsilon = keras.random.normal(shape=(batch,dim))
             return ops.multiply(ops.add(z_mean, ops.exp(0.5 * z_log_var)), epsilon)
 
+    def kl_reconstruction_loss(self, y_true, y_pred):
+        """
+        Loss function for Kullback-Leibler + Reconstruction loss
 
-@keras.saving.register_keras_serializable(package="FIA_VAE")
-def kl_reconstruction_loss(y_true, y_pred, sigma, mu):
-    """
-    Loss function for Kullback-Leibler + Reconstruction loss
-
-    Args:
-        true: True values
-        pred: Predicted values
-    Returns:
-        Loss = Kullback-Leibler + Reconstruction loss
-    """
-    reconstruction_loss = losses.mean_absolute_error(y_true, y_pred)
-    kl_loss = -0.5 * ops.sum( 1.0 + sigma - ops.square(mu) - ops.exp(sigma) )
-    loss = reconstruction_loss + kl_loss
-    
-    return {"reconstruction_loss": reconstruction_loss, "kl_loss": kl_loss, "loss": loss}
-
-@keras.saving.register_keras_serializable(package="FIA_VAE")
-class FIA_VAE(Model):
-    """
-    A variational autoencoder for flow injection analysis
-    """
-    def __init__(self, config:Union[Configuration, dict]):
-        super().__init__()
-        self.config             = config
-        intermediate_dims       = [i for i in range(config["intermediate_layers"]) 
-                                    if config["intermediate_dimension"] // 2**i > config["latent_dimension"]]
-        activation_function     = get_activation_function( config["intermediate_activation"] )
-
-        # Encoder (with sucessive halfing of intermediate dimension)
-        self.dropout            = Dropout( config["input_dropout"] , name="dropout")        
-        self.intermediate_enc   = Sequential ( [ Input(shape=(config["original_dim"],), name='encoder_input') ] +
-                                               [ Dense( config["intermediate_dimension"] // 2**i,
-                                                        activation=activation_function ) 
-                                                for i in intermediate_dims] , name="encoder_intermediate")
-
-        self.mu_encoder         = Dense( config["latent_dimension"], name='latent_mu' )
-        self.sigma_encoder      = Dense( config["latent_dimension"], name='latent_sigma' )
-        self.z_encoder          = Sampling(name="latent_reparametrization") 
-
-        # Decoder
-        self.decoder            = Sequential( [ Input(shape=(config["latent_dimension"], ), name='decoder_input') ] +
-                                              [ Dense( config["intermediate_dimension"] // 2**i,
-                                                       activation=activation_function )
-                                               for i in reversed(intermediate_dims) ] +
-                                              [ Dense(config["original_dim"], activation="relu") ] , name="Decoder")
-
-        # Loss trackers
-        self.reconstruction_loss    = metrics.Mean(name="reconstruction_loss")
-        self.kl_loss                = metrics.Mean(name="kl_loss")
-        self.loss_tracker           = metrics.Mean(name="loss")
-
-        # Define optimizer
-        self.optimizer = get_solver( config["solver"] )( config["learning_rate"] )
-
-        # Compile VAE
-        self.compile(optimizer=self.optimizer, loss=kl_reconstruction_loss)
+        Args:
+            true: True values
+            pred: Predicted values
+        Returns:
+            Loss = Kullback-Leibler + Reconstruction loss
+        """
+        reconstruction_loss = losses.mean_absolute_error(y_true, y_pred)
+        kl_loss = -0.5 * ops.sum( 1.0 + self.sigma - ops.square(self.mu) - ops.exp(self.sigma) )
+        loss = reconstruction_loss + kl_loss
+        
+        return {"reconstruction_loss": reconstruction_loss, "kl_loss": kl_loss, "loss": loss}
 
     @property
     def metrics(self):
@@ -301,14 +295,14 @@ class FIA_VAE(Model):
     
     def decode(self, x):
         return self.decoder(x)
-    
+
     def train_step(self, data):
         x, y = data
-
+        print("start")
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)  # Forward pass
             # Compute our own loss
-            loss = kl_reconstruction_loss(y, y_pred, self.sigma, self.mu)
+            loss = self.kl_reconstruction_loss(y, y_pred)
 
         # Compute gradients
         trainable_vars = self.trainable_variables
@@ -320,16 +314,18 @@ class FIA_VAE(Model):
         self.reconstruction_loss.update_state( loss["reconstruction_loss"] )
         self.kl_loss.update_state( loss["kl_loss"] )
         self.loss_tracker.update_state( loss["loss"] )
+        print(loss)
         return loss
     
     def test_step(self, data):
         x, y = data
         y_pred = self(x, training=False)
-        loss = kl_reconstruction_loss(y, y_pred, self.sigma, self.mu)
+        loss = self.kl_reconstruction_loss(y, y_pred)
         self.reconstruction_loss.update_state( loss["reconstruction_loss"] )
         self.kl_loss.update_state( loss["kl_loss"] )
         self.loss_tracker.update_state( loss["loss"] )
         return loss
+
 
 
 if __name__ == "__main__":

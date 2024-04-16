@@ -111,6 +111,10 @@ def main():
     if verbosity >= 2:
         log_dir = os.path.join(outdir,  datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
         callbacks.append( TensorBoard(log_dir=log_dir, histogram_freq=100, write_graph=True, write_images=True, update_freq='epoch') )
+    callbacks.append(  keras.callbacks.ModelCheckpoint( filepath=os.path.join(outdir, "mymodel_{epoch}.keras"),
+                                                       save_best_only=True, monitor="val_loss",
+                                                       verbose=verbosity ))
+
 
     if "train" in steps:
         model.fit(x=data, y=data, validation_split=0.2,
@@ -200,6 +204,7 @@ def get_solver(solver:str):
     solvers = {"adam": optimizers.Adam, "nadam": optimizers.Nadam, "adamw": optimizers.AdamW}
     return solvers[solver]
 
+
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 class Sampling(layers.Layer):
         """
@@ -213,6 +218,25 @@ class Sampling(layers.Layer):
             epsilon = keras.random.normal(shape=(batch,dim))
             return ops.multiply(ops.add(z_mean, ops.exp(0.5 * z_log_var)), epsilon)
 
+
+@keras.saving.register_keras_serializable(package="FIA_VAE")
+def kl_reconstruction_loss(y_true, y_pred, sigma, mu):
+    """
+    Loss function for Kullback-Leibler + Reconstruction loss
+
+    Args:
+        true: True values
+        pred: Predicted values
+    Returns:
+        Loss = Kullback-Leibler + Reconstruction loss
+    """
+    reconstruction_loss = losses.mean_absolute_error(y_true, y_pred)
+    kl_loss = -0.5 * ops.sum( 1.0 + sigma - ops.square(mu) - ops.exp(sigma) )
+    loss = reconstruction_loss + kl_loss
+    
+    return {"reconstruction_loss": reconstruction_loss, "kl_loss": kl_loss, "loss": loss}
+
+@keras.saving.register_keras_serializable(package="FIA_VAE")
 class FIA_VAE(Model):
     """
     A variational autoencoder for flow injection analysis
@@ -251,7 +275,7 @@ class FIA_VAE(Model):
         self.optimizer = get_solver( config["solver"] )( config["learning_rate"] )
 
         # Compile VAE
-        self.compile(optimizer=self.optimizer, loss=self.kl_reconstruction_loss)
+        self.compile(optimizer=self.optimizer, loss=kl_reconstruction_loss)
 
     @property
     def metrics(self):
@@ -278,33 +302,13 @@ class FIA_VAE(Model):
     def decode(self, x):
         return self.decoder(x)
     
-    @keras.saving.register_keras_serializable(package="FIA_VAE")
-    def kl_reconstruction_loss(self, y_true, y_pred):
-        """
-        Loss function for Kullback-Leibler + Reconstruction loss
-
-        Args:
-            true: True values
-            pred: Predicted values
-        Returns:
-            Loss = Kullback-Leibler + Reconstruction loss
-        """
-        reconstruction_loss = losses.mean_absolute_error(y_true, y_pred)
-        self.reconstruction_loss.update_state(reconstruction_loss)
-        kl_loss = -0.5 * ops.sum( 1.0 + self.sigma - ops.square(self.mu) - ops.exp(self.sigma) )
-        self.kl_loss.update_state(kl_loss)
-        loss = reconstruction_loss + kl_loss
-        self.loss_tracker.update_state( loss )
-        return loss
-    
-    """
     def train_step(self, data):
         x, y = data
 
         with tf.GradientTape() as tape:
             y_pred = self(x, training=True)  # Forward pass
             # Compute our own loss
-            loss = self.kl_reconstruction_loss(y, y_pred)
+            loss = kl_reconstruction_loss(y, y_pred, self.sigma, self.mu)
 
         # Compute gradients
         trainable_vars = self.trainable_variables
@@ -312,10 +316,20 @@ class FIA_VAE(Model):
 
         # Update weights
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
-        return {"loss": self.loss_tracker.result(),
-                "reconstruction_loss": self.reconstruction_loss.result(), 
-                "kl_loss": self.kl_loss.result()}
-    """
+
+        self.reconstruction_loss.update_state( loss["reconstruction_loss"] )
+        self.kl_loss.update_state( loss["kl_loss"] )
+        self.loss_tracker.update_state( loss["loss"] )
+        return loss
+    
+    def test_step(self, data):
+        x, y = data
+        y_pred = self(x, training=False)
+        loss = kl_reconstruction_loss(y, y_pred, self.sigma, self.mu)
+        self.reconstruction_loss.update_state( loss["reconstruction_loss"] )
+        self.kl_loss.update_state( loss["kl_loss"] )
+        self.loss_tracker.update_state( loss["loss"] )
+        return loss
 
 
 if __name__ == "__main__":

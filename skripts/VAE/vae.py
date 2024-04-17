@@ -122,6 +122,11 @@ def main():
         
         model.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.weights.h5"), overwrite=True )
         model.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.keras"), overwrite=True )
+        model.encoder.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.encoder.weights.h5"), overwrite=True )
+        model.encoder.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.encoder.keras"), overwrite=True )
+        model.decoder.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.decoder.weights.h5"), overwrite=True )
+        model.decoder.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.decoder.keras"), overwrite=True )
+        
         hist_df = pd.DataFrame(history.history) 
         hist_df.to_csv( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.history.tsv"), sep="\t")
         time_step("Model trained", verbosity=verbosity, min_verbosity=2)        
@@ -200,6 +205,8 @@ class FIA_VAE(Model):
         self.mu_encoder         = Dense( config["latent_dimension"], name='latent_mu' )
         self.sigma_encoder      = Dense( config["latent_dimension"], name='latent_sigma' )
         self.z_encoder          = self.Sampling(name="latent_reparametrization") 
+
+        self.encoder            = Model(self.intermediate_enc, [self.mu_encoder, self.sigma_encoder, self.z_encoder], name='Encoder')
 
         # Decoder
         self.decoder            = Sequential( [ Input(shape=(config["latent_dimension"], ), name='decoder_input') ] +

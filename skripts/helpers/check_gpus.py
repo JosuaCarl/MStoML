@@ -11,7 +11,6 @@ parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
 parser.add_argument('-b', '--backend', required=True)
 args = parser.parse_args()
-print(args.backend)
 
 os.environ["KERAS_BACKEND"] = args.backend
 import keras

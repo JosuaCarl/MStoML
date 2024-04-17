@@ -6,35 +6,49 @@
 
 import os
 import argparse
+
+parser = argparse.ArgumentParser(prog='VAE_smac_run',
+                                     description='Hyperparameter tuning for Variational Autoencoder with SMAC')
+parser.add_argument('-b', '--backend', required=True)
+args = parser.parse_args()
+print(args.backend)
+
+os.environ["KERAS_BACKEND"] = args.backend
+import keras
+import numpy as np
 from GPUtil import showUtilization, getAvailable
 import torch
 import tensorflow as tf
 
+
+
 print(f"Available GPUs: {getAvailable(limit=10)}")
 showUtilization(all=True)
-
-print("Torch available: ", torch.cuda.is_available())
-print("Tensorflow found: ", tf.config.list_physical_devices())
-print("Tensorflow available: ", tf.test.is_gpu_available())
+print()
 
 
-parser = argparse.ArgumentParser(prog='VAE_smac_run',
-                                     description='Hyperparameter tuning for Variational Autoencoder with SMAC')
-parser.add_argument('-b', '--backend', required=False)
-args = parser.parse_args()
+print("Torch GPU available: ", torch.cuda.is_available())
+print("Tensorflow devices found: ", tf.config.list_physical_devices())
 
-os.environ["KERAS_BACKEND"] = args.backend if args.backend else "tensorflow"
-import keras
-import numpy as np
+if torch.cuda.is_available():
+    torch.cuda.set_device(torch.device("cuda:0"))
 
-data = np.random.rand(20,100)
+
+
+data = np.random.rand(20,1000)
 target = np.random.randint(0, 2, size=20)
 
+print(f"Using backend: {keras.backend.backend()}\n")
 model = keras.Sequential([keras.layers.Input(shape=(data.shape[1],)),
-                          keras.layers.Dense(units=5, activation="selu"),
+                          keras.layers.Dense(units=50000, activation="selu"),
                           keras.layers.Dense(units=1, activation="sigmoid")])
 
+print()
+model.summary()
+
 model.compile(optimizer="nadam", loss=keras.losses.binary_crossentropy, metrics=["accuracy"])
+print("\nAfter compiliation:")
+showUtilization(all=True)
 history = model.fit(data, target, verbose=2, epochs=5)
-print("After training:")
+print("\nAfter training:")
 showUtilization(all=True)

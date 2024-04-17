@@ -13,8 +13,10 @@ import tensorflow as tf
 print(f"Available GPUs: {getAvailable(limit=10)}")
 showUtilization(all=True)
 
-print("Torch found: ", torch.cuda.is_available())
+print("Torch available: ", torch.cuda.is_available())
 print("Tensorflow found: ", tf.config.list_physical_devices())
+print("Tensorflow available: ", tf.test.is_gpu_available())
+
 
 parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
@@ -27,7 +29,6 @@ import numpy as np
 
 data = np.random.rand(20,100)
 target = np.random.randint(0, 2, size=20)
-
 
 model = keras.Sequential([keras.layers.Input(shape=(data.shape[1],)),
                           keras.layers.Dense(units=5, activation="selu"),

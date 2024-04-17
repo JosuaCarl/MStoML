@@ -134,7 +134,9 @@ def main():
         
     if "predict" in steps:
         prediction = model.predict(data, batch_size=batch_size, verbose=verbosity, callbacks=callbacks)
-        print(prediction)
+        time_step("Prediction made", verbosity=verbosity, min_verbosity=2)
+        prediction_df = pd.DataFrame(prediction)
+        prediction_df.to_csv( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.prediction.tsv"), sep="\t" )
 
     if "plot" in steps:
         keras.utils.plot_model( model,

@@ -39,8 +39,7 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
 
 import tensorflow as tf
-import wandb
-from wandb.keras import WandbMetricsLogger, WandbModelCheckpoint
+import mlflow
 
 last_timestamp = time.time()
 step = 0
@@ -110,20 +109,20 @@ def main():
     
     time_step("Model built", verbosity=verbosity, min_verbosity=2)
 
-    run = wandb.init( project="FIA_VAE",
-                      name=f"vae_{backend_name}_{computation}_{name}",
-                      dir=outdir,
-                      config=dict(config) )
     callbacks = []
     if "train" in steps:
         callbacks.append( keras.callbacks.ModelCheckpoint( filepath=str(outdir) + f"/vae_{backend_name}_{computation}_{name}" + "_{epoch}.keras",
                                                            save_best_only=True, monitor="val_loss",
                                                            verbose=verbosity ) )
-        callbacks.append( WandbMetricsLogger(log_freq="epoch", initial_global_step=previous_epochs + 1) )
 
-        history = model.fit(data, data, validation_split=0.2,
-                            batch_size=batch_size, epochs=epochs,
-                            callbacks=callbacks, verbose=verbosity)
+        mlflow.set_tracking_uri(outdir)
+        mlflow.set_experiment(f"FIA_VAE")
+        mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity <= 2)
+        with mlflow.start_run(run_name=f"fia_vae_hptune_test"):
+            mlflow.log_params(config)
+            history = model.fit(data, data, validation_split=0.2,
+                                batch_size=batch_size, epochs=epochs,
+                                callbacks=callbacks, verbose=verbosity)
         
         if verbosity >= 3:
             print("After training utilization:")
@@ -137,8 +136,6 @@ def main():
         if previous_history:
             history_df = pd.concat([previous_history, history_df], ignore_index=True)
         history_df.to_csv( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.history.tsv"), sep="\t")
-
-        wandb.finish()
 
         time_step("Model trained", verbosity=verbosity, min_verbosity=2)        
 

@@ -24,7 +24,7 @@ from smac import MultiFidelityFacade
 from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
 from smac.runhistory.dataclasses import TrialValue
-import wandb
+import mlflow
 
 # Logging (time and steps)
 last_timestamp = time.time()
@@ -55,13 +55,15 @@ def main(args):
     configuration_space = ConfigurationSpace(seed=42)
     hyperparameters = [
         Constant(       "original_dim",             X.shape[1]),
-        Constant(       "input_dropout",            0.1),
-        Integer(        "intermediate_layers",      (2, 5), default=2),
-        Integer(        "intermediate_dimension",   (100, 10000), log=True, default=1000),
-        Constant(       "intermediate_activation",     "relu"),
-        Integer(        "latent_dimension",         (10, 1000), log=False, default=100),
-        Constant(       "solver",                      "nadam"),
-        Constant(       "learning_rate",             1e-4)
+        Float(          "input_dropout",            (0.0, 0.5), default=0.25),
+        Integer(        "intermediate_layers",      (1, 5), default=2),
+        Integer(        "intermediate_dimension",   (100, 2000), log=True, default=1000),
+        Categorical(    "intermediate_activation",  ["relu", "selu", "leakyrelu"], default="relu"),
+        Integer(        "latent_dimension",         (10, 500), log=False, default=100),
+        Categorical(    "solver",                   ["nadam", "adamw"], default="nadam"),
+        Float(          "learning_rate",            (1e-4, 1e-2), log=True, default=1e-3),
+        Categorical(    "tied",                     [0, 1], default=1),
+        Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0),
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [
@@ -78,7 +80,7 @@ def main(args):
 
 
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,
-                         n_trials=10000, min_budget=2, max_budget=1000,
+                         n_trials=10000, min_budget=2, max_budget=50,
                          n_workers=1, output_directory=outdir,
                          walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None )   # Max RAM in Bytes (not MB)
                         
@@ -89,7 +91,12 @@ def main(args):
                                   overwrite=overwrite, logging_level=30-verbosity*10 )
     time_step(message=f"SMAC defined. Overwriting: {overwrite}", verbosity=verbosity, min_verbosity=1)
 
-    incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=100, verbosity=verbosity)
+    mlflow.set_tracking_uri(outdir)
+    mlflow.set_experiment(f"FIA_VAE_smac")
+    mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity <= 2)
+    with mlflow.start_run(run_name=project):
+        mlflow.set_tag("test_identifier", "parent")
+        incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=100, verbosity=verbosity)
 
     best_hp = validate_incumbent(incumbent=incumbent, fascade=facade, verbosity=verbosity)
 
@@ -186,16 +193,18 @@ class FIA_VAE_tune:
     """
     Class for running the SMAC3 tuning
     """
-    def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
+    def __init__(self, data, test_size:float, configuration_space:ConfigurationSpace, model_builder,
                  log_dir:str, batch_size:int=16, verbosity:int=0, gpu:bool=False, name:str="smac_vae"):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
-        self.training_data, self.test_data = train_test_split(X, test_size=test_size)
+        self.data = data
+        self.training_data, self.test_data = train_test_split(data, test_size=test_size)
         self.batch_size = batch_size
         self.log_dir = log_dir
         self.verbosity = verbosity
         self.gpu = gpu
         self.name = name
+        self.count = 0
 
     def train(self, config:Configuration, seed:int=0, budget:int=25) -> float:
         """
@@ -221,22 +230,30 @@ class FIA_VAE_tune:
 
         # Fitting
         callbacks = []
-        model.fit(x=self.training_data, y=self.training_data, validation_split=0.2,
-                  batch_size=self.batch_size, epochs=int(budget),
-                  callbacks=callbacks, verbose=self.verbosity)
+        mlflow.autolog(log_datasets=False, log_models=False, silent=self.verbosity <= 2)
+        with mlflow.start_run(run_name=f"fia_vae_hptune_{self.count}", nested=True):
+            mlflow.set_tag("test_identifier", f"child_{self.count}")
+            model.fit(x=self.training_data, y=self.training_data, validation_split=0.2,
+                      batch_size=self.batch_size, epochs=int(budget),
+                      callbacks=callbacks, verbose=self.verbosity)
 
-        if self.verbosity >= 3:
-            print("After training utilization:")
-            print_utilization(gpu=self.gpu)
-        time_step("Model trained", verbosity=self.verbosity, min_verbosity=2)
+            if self.verbosity >= 3:
+                print("After training utilization:")
+                print_utilization(gpu=self.gpu)
+            time_step("Model trained", verbosity=self.verbosity, min_verbosity=2)
 
-        # Evaluation
-        loss, recon_loss, kl_loss = model.evaluate(self.test_data, self.test_data,
-                                                   batch_size=self.batch_size, verbose=self.verbosity)
-        time_step("Model evaluated", verbosity=self.verbosity, min_verbosity=2)
+            # Evaluation
+            loss, recon_loss, kl_loss = model.evaluate(self.test_data, self.test_data,
+                                                    batch_size=self.batch_size, verbose=self.verbosity)
+            
+            mlflow.log_params(config)
+            mlflow.log_metrics({"eval-loss": loss, "eval-reconstruction_loss": recon_loss, "eval-kl_loss": kl_loss},
+                            step=int(budget) + 1)
+        time_step("Model evaluated", verbosity=self.verbosity, min_verbosity=2)        
         
         # Clearing model parameters
         keras.backend.clear_session()
+        self.count += 1
         time_step("Session cleared", verbosity=self.verbosity, min_verbosity=2)
                 
         return loss

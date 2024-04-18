@@ -28,17 +28,12 @@ scipy = "^1.13.0"
 pyopenms = "^3.1.0"
 pydot = "^2.0.0"
 
-tensorflow = {extras = ["and-cuda"], version = "^2.16.1", optional = true }
-
-#torch = { version = "^2.2.2", optional = true}
-#pytorch-cuda = { version = "^12.1", optional = true}
-#torchvision = { version = "^0.17.2", optional = true}
-#torchaudio = { version = "^2.2.2", optional = true}
-
-
-[tool.poetry.extras]
-torch = ["torch", "pytorch-cuda", "torchvision", "torchaudio"]
-tensorflow = ["tensorflow"]
+tensorflow = "^2.16.1"
+torch = "^2.2.2"
+pytorch-cuda = "^12.1"
+torchvision = "^0.17.2"
+torchaudio = "^2.2.2"
+wandb = "^0.16.6"
 
 
 [build-system]

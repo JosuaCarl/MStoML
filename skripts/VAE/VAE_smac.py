@@ -57,10 +57,10 @@ def main(args):
         Constant(       "input_dropout",            0.1),
         Integer(        "intermediate_layers",      (2, 5), default=2),
         Integer(        "intermediate_dimension",   (100, 10000), log=True, default=1000),
-        Constant(    "intermediate_activation",     "relu"),
+        Constant(       "intermediate_activation",     "relu"),
         Integer(        "latent_dimension",         (10, 1000), log=False, default=100),
-        Constant(    "solver",                      "nadam"),
-        Constant(          "learning_rate",         1e-4)
+        Constant(       "solver",                      "nadam"),
+        Constant(       "learning_rate",             1e-4)
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [

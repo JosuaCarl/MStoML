@@ -8,7 +8,7 @@ srun -t 08:00:00 --cpus-per-task=2 --ntasks=1 --mem-per-cpu=8G --pty bash -i
 sbatch --partition gpu-a30 --gres gpu:1 --output ../../runs/slurm_check_gpus.out check_gpus.py -b "tensorflow"
 
 # vae
-sbatch --partition cpu1 --output ../../runs/VAE/hyperparameter_optimization/slurm_test.out vae.py -d "../../runs/FIA/Com8_grown_together/oms" -r "../../runs/VAE/training" -b "tensorflow" -c "gpu" -n "test" -e 10 -s "new" "train" "test" "plot" -v 2
+sbatch --partition cpu1 --output ../../runs/VAE/training/slurm_test.out vae.py -d "../../runs/FIA/Com8_grown_together/oms" -r "../../runs/VAE/training" -b "tensorflow" -c "cpu" -n "test" -e 10 -s "new" "train" "test" "plot" -v 2
 
 # VAE_smac
 sbatch --partition gpu-a30 --gres gpu:1  --output ../../runs/VAE/hyperparameter_optimization/slurm_test.out VAE_smac.py -d "../../runs/FIA/Com8_grown_together/oms" -r "../../runs/VAE/hyperparameter_optimization" -b "tensorflow" -c "gpu" -n "test" -v 1

@@ -24,6 +24,7 @@ from smac import MultiFidelityFacade
 from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
 from smac.runhistory.dataclasses import TrialValue
+import wandb
 
 # Logging (time and steps)
 last_timestamp = time.time()
@@ -72,7 +73,8 @@ def main(args):
 
 
     fia_vae_hptune = FIA_VAE_tune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
-                                   batch_size=64, log_dir=os.path.join(outdir, "log"), verbosity=verbosity, gpu=gpu)
+                                   batch_size=64, log_dir=os.path.join(outdir, "log"), verbosity=verbosity, gpu=gpu,
+                                   name=project)
 
 
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,
@@ -185,7 +187,7 @@ class FIA_VAE_tune:
     Class for running the SMAC3 tuning
     """
     def __init__(self, X, test_size:float, configuration_space:ConfigurationSpace, model_builder,
-                 log_dir:str, batch_size:int=16, verbosity:int=0, gpu:bool=False):
+                 log_dir:str, batch_size:int=16, verbosity:int=0, gpu:bool=False, name:str="smac_vae"):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
         self.training_data, self.test_data = train_test_split(X, test_size=test_size)
@@ -193,8 +195,9 @@ class FIA_VAE_tune:
         self.log_dir = log_dir
         self.verbosity = verbosity
         self.gpu = gpu
+        self.name = name
 
-    def train(self, config: Configuration, seed: int = 0, budget:int=25) -> float:
+    def train(self, config:Configuration, seed:int=0, budget:int=25) -> float:
         """
         Method to train the model
 
@@ -212,10 +215,14 @@ class FIA_VAE_tune:
         # Definition
         model = self.model_builder(config)
         if self.verbosity >= 3:
-            model.vae.summary()
+            model.summary()
             print_utilization(gpu=self.gpu)
         time_step("Model built", verbosity=self.verbosity, min_verbosity=2)
 
+        run = wandb.init( project="SMAC_FIA_VAE",
+                          name=self.name,
+                          dir=self.log_dir,
+                          config=dict(config) )
         # Fitting
         callbacks = []
         model.fit(x=self.training_data, y=self.training_data, validation_split=0.2,

@@ -91,9 +91,9 @@ def main():
 
     if "new" in steps:
         config_space = ConfigurationSpace(
-                {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 5000,
-                'intermediate_layers': 4, 'latent_dimension': 500, 'learning_rate': 0.001,
-                'original_dim': 825000, 'solver': 'nadam'}
+                {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 200,
+                'intermediate_layers': 3, 'latent_dimension': 20, 'learning_rate': 0.001,
+                'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 0.1}
             )
         config = config_space.get_default_configuration()
     
@@ -119,8 +119,7 @@ def main():
         callbacks.append( keras.callbacks.ModelCheckpoint( filepath=str(outdir) + f"/vae_{backend_name}_{computation}_{name}" + "_{epoch}.keras",
                                                            save_best_only=True, monitor="val_loss",
                                                            verbose=verbosity ) )
-        callbacks.append( WandbMetricsLogger(log_freq="epoch", initial_global_step=previous_epochs + 1),
-                          WandbModelCheckpoint("models") )
+        callbacks.append( WandbMetricsLogger(log_freq="epoch", initial_global_step=previous_epochs + 1) )
 
         history = model.fit(data, data, validation_split=0.2,
                             batch_size=batch_size, epochs=epochs,
@@ -133,8 +132,8 @@ def main():
         
         model.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.weights.h5"), overwrite=True )
         model.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.keras"), overwrite=True )
-        model.encoder.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.encoder.weights.h5"), overwrite=True )
-        model.encoder.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.encoder.keras"), overwrite=True )
+        model.intermediate_enc.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.encoder.weights.h5"), overwrite=True )
+        model.intermediate_enc.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.encoder.keras"), overwrite=True )
         model.decoder.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.decoder.weights.h5"), overwrite=True )
         model.decoder.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.decoder.keras"), overwrite=True )
         

@@ -42,6 +42,7 @@ def main(args):
     computation = args.computation
     gpu = computation == "gpu"
     name = args.name if args.name else None
+    batch_size = args.batch_size if args.batch_size else None
     project = f"smac_vae_{backend_name}_{computation}_{name}" if name else f"smac_vae_{backend_name}_{computation}"
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
@@ -63,7 +64,7 @@ def main(args):
         Categorical(    "solver",                   ["nadam", "adamw"], default="nadam"),
         Float(          "learning_rate",            (1e-4, 1e-2), log=True, default=1e-3),
         Categorical(    "tied",                     [0, 1], default=1),
-        Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0),
+        Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0)
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [
@@ -75,7 +76,7 @@ def main(args):
 
 
     fia_vae_hptune = FIA_VAE_tune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
-                                   batch_size=64, log_dir=os.path.join(outdir, "log"), verbosity=verbosity, gpu=gpu,
+                                   batch_size=batch_size, log_dir=os.path.join(outdir, "log"), verbosity=verbosity, gpu=gpu,
                                    name=project)
 
 
@@ -91,7 +92,7 @@ def main(args):
                                   overwrite=overwrite, logging_level=30-verbosity*10 )
     time_step(message=f"SMAC defined. Overwriting: {overwrite}", verbosity=verbosity, min_verbosity=1)
 
-    mlflow.set_tracking_uri(outdir)
+    mlflow.set_tracking_uri(Path(os.path.join(outdir, "mlruns")))
     mlflow.set_experiment(f"FIA_VAE_smac")
     mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity <= 2)
     with mlflow.start_run(run_name=project):
@@ -230,12 +231,12 @@ class FIA_VAE_tune:
 
         # Fitting
         callbacks = []
-        mlflow.autolog(log_datasets=False, log_models=False, silent=self.verbosity <= 2)
-        with mlflow.start_run(run_name=f"fia_vae_hptune_{self.count}", nested=True):
+        mlflow.autolog(log_datasets=False, log_models=False, silent=self.verbosity < 2)
+        with mlflow.start_run(run_name=f"smac_vae_{self.count}", nested=True):
             mlflow.set_tag("test_identifier", f"child_{self.count}")
-            model.fit(x=self.training_data, y=self.training_data, validation_split=0.2,
-                      batch_size=self.batch_size, epochs=int(budget),
-                      callbacks=callbacks, verbose=self.verbosity)
+            model.fit( x=self.training_data, y=self.training_data, validation_split=0.2,
+                       batch_size=self.batch_size, epochs=int(budget),
+                       callbacks=callbacks, verbose=self.verbosity )
 
             if self.verbosity >= 3:
                 print("After training utilization:")
@@ -268,6 +269,7 @@ if __name__ == "__main__":
     parser.add_argument('-b', '--backend',  required=True)
     parser.add_argument('-c', '--computation', required=True)
     parser.add_argument('-n', '--name', required=False)
+    parser.add_argument('-bat', '--batch_size', type=int, required=False)
     parser.add_argument('-v', '--verbosity', type=int, required=True)
     args = parser.parse_args()
 
@@ -280,6 +282,6 @@ if __name__ == "__main__":
     """
     sys.path.append("..")
     from helpers.pc_stats import *
-    from VAE.vae import keras, np, datetime, read_data, TensorBoard, FIA_VAE
+    from VAE.vae import keras, np, datetime, read_data, FIA_VAE
 
     main(args=args)

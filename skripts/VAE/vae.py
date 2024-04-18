@@ -23,15 +23,13 @@ from ConfigSpace import Configuration, ConfigurationSpace
 sys.path.append( '..' )
 from helpers.normalization import *
 from helpers.pc_stats import *
-
+import mlflow
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import keras
 from keras import Model, Sequential
 from keras.layers import Input, Dense, Dropout
 from keras import backend, ops, layers, activations, metrics, losses, optimizers
-from keras.callbacks import TensorBoard
-
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import torch
@@ -39,7 +37,6 @@ torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.enabled = True
 
 import tensorflow as tf
-import mlflow
 
 last_timestamp = time.time()
 step = 0
@@ -115,9 +112,9 @@ def main():
                                                            save_best_only=True, monitor="val_loss",
                                                            verbose=verbosity ) )
 
-        mlflow.set_tracking_uri(outdir)
+        mlflow.set_tracking_uri(Path(os.path.join(outdir, "mlruns")))
         mlflow.set_experiment(f"FIA_VAE")
-        mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity <= 2)
+        mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity < 2)
         with mlflow.start_run(run_name=f"fia_vae_hptune_test"):
             mlflow.log_params(config)
             history = model.fit(data, data, validation_split=0.2,

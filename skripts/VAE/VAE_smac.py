@@ -219,10 +219,6 @@ class FIA_VAE_tune:
             print_utilization(gpu=self.gpu)
         time_step("Model built", verbosity=self.verbosity, min_verbosity=2)
 
-        run = wandb.init( project="SMAC_FIA_VAE",
-                          name=self.name,
-                          dir=self.log_dir,
-                          config=dict(config) )
         # Fitting
         callbacks = []
         model.fit(x=self.training_data, y=self.training_data, validation_split=0.2,

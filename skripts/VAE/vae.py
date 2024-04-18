@@ -132,10 +132,6 @@ def main():
         
         model.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.weights.h5"), overwrite=True )
         model.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.keras"), overwrite=True )
-        model.intermediate_enc.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.encoder.weights.h5"), overwrite=True )
-        model.intermediate_enc.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.encoder.keras"), overwrite=True )
-        model.decoder.save_weights( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.decoder.weights.h5"), overwrite=True )
-        model.decoder.save( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.decoder.keras"), overwrite=True )
         
         history_df = pd.DataFrame(history.history)
         if previous_history:

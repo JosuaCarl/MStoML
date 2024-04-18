@@ -1,0 +1,15 @@
+artifact_uri: file:///mnt/lustre/groups/link/linca945/MStoML/skripts/VAE/mlruns/0/53008c4c614f4a2d93bd838370db0ee7/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 53008c4c614f4a2d93bd838370db0ee7
+run_name: fia_vae_hptune_18
+run_uuid: 53008c4c614f4a2d93bd838370db0ee7
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1713448865281
+status: 1
+tags: []
+user_id: linca945

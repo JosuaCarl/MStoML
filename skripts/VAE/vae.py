@@ -116,10 +116,10 @@ def main():
         mlflow.set_experiment(f"FIA_VAE")
         mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity < 2)
         with mlflow.start_run(run_name=f"fia_vae_hptune_test"):
-            mlflow.log_params(config)
             history = model.fit(data, data, validation_split=0.2,
                                 batch_size=batch_size, epochs=epochs,
                                 callbacks=callbacks, verbose=verbosity)
+            mlflow.log_params(model.config)
         
         if verbosity >= 3:
             print("After training utilization:")
@@ -225,7 +225,7 @@ class FIA_VAE(Model):
         super().__init__()
         self.config             = config
         self.tied               = config["tied"] if "tied" in dict(config) else False
-        intermediate_dims       = [i for i in range(config["intermediate_layers"]) 
+        intermediate_layers     = [i for i in range(config["intermediate_layers"]) 
                                     if config["intermediate_dimension"] // 2**i > config["latent_dimension"]]
         activation_function     = self.get_activation_function( config["intermediate_activation"] )
 
@@ -234,7 +234,7 @@ class FIA_VAE(Model):
         self.intermediate_enc   = Sequential ( [ Input(shape=(config["original_dim"],), name='encoder_input') ] +
                                                [ Dense( config["intermediate_dimension"] // 2**i,
                                                         activation=activation_function ) 
-                                                for i in intermediate_dims] +
+                                                for i in intermediate_layers] +
                                                [ Dense( config["latent_dimension"] ) ] , name="encoder_intermediate")
 
         self.mu_encoder         = Dense( config["latent_dimension"], name='latent_mu' )
@@ -248,7 +248,7 @@ class FIA_VAE(Model):
                                                 if self.tied else
                                                 Dense( config["intermediate_dimension"] // 2**i,
                                                        activation=activation_function )
-                                               for i in reversed(intermediate_dims) ] +
+                                               for i in reversed(intermediate_layers) ] +
                                               [ DenseTied(tie=self.intermediate_enc.get_layer(index=0), activation="relu")
                                                 if self.tied else
                                                 Dense(config["original_dim"], activation="relu") ] , name="Decoder")
@@ -264,7 +264,10 @@ class FIA_VAE(Model):
 
         # Compile VAE
         self.compile(optimizer=self.optimizer)
-    
+
+        # Config correction
+        self.config["intermediate_dimension"]  = len(intermediate_layers)
+
     def get_activation_function(self, activation_function:str):
         """
         Convert an activation function string into a keras function

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_tuning
-#SBATCH --time 24:00:00
-#SBATCH --mem 400G
-#SBATCH --nodes 2
-#SBATCH --ntasks-per-node 1
-#SBATCH --cpus-per-task 1
+#SBATCH --mem=400G
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mail-user=josua.carl@student.uni-tuebingen.de   # email address
+#SBATCH --mail-type=END
+#SBATCH --mail-type=FAIL
 
 # available processors: cpu1, cpu2-hm, gpu-a30
 
@@ -247,7 +249,7 @@ class FIA_VAE_tune:
             loss, recon_loss, kl_loss = model.evaluate(self.test_data, self.test_data,
                                                     batch_size=self.batch_size, verbose=self.verbosity)
             
-            mlflow.log_params(config)
+            mlflow.log_params(model.config)
             mlflow.log_metrics({"eval-loss": loss, "eval-reconstruction_loss": recon_loss, "eval-kl_loss": kl_loss},
                             step=int(budget) + 1)
         time_step("Model evaluated", verbosity=self.verbosity, min_verbosity=2)        

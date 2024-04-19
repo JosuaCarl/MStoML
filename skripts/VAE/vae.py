@@ -223,8 +223,8 @@ class FIA_VAE(Model):
     """
     def __init__(self, config:Union[Configuration, dict]):
         super().__init__()
-        self.config             = config
-        self.tied               = config["tied"] if "tied" in dict(config) else False
+        self.config             = dict(config)
+        self.tied               = config["tied"] if "tied" in self.config else False
         intermediate_layers     = [i for i in range(config["intermediate_layers"]) 
                                     if config["intermediate_dimension"] // 2**i > config["latent_dimension"]]
         activation_function     = self.get_activation_function( config["intermediate_activation"] )

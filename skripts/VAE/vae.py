@@ -166,7 +166,7 @@ def read_data(data_dir:str, verbosity:int=0):
     Returns:
         X: matrix with total ion count (TIC) normalized data (transposed)
     """
-    binned_dfs = pd.read_csv(os.path.join(data_dir, "data_matrix.tsv"), sep="\t", index_col="mz", engine="pyarrow")
+    binned_dfs = pd.read_csv(os.path.join(data_dir, "data_matrix.tsv"), sep="\t", index_col="mz")
     binned_dfs[:] =  total_ion_count_normalization(binned_dfs)
 
     X = binned_dfs.transpose()
@@ -198,7 +198,7 @@ class Sampling(layers.Layer):
         z_mean_shape = ops.shape(z_mean)
         batch   = z_mean_shape[0]
         dim     = z_mean_shape[1]
-        epsilon = keras.random.normal(shape=(batch,dim))
+        epsilon = keras.random.normal(shape=(batch, dim))
         return ops.multiply(ops.add(z_mean, ops.exp(0.5 * z_log_var)), epsilon)
     
 @keras.saving.register_keras_serializable(package="FIA_VAE")

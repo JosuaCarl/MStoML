@@ -62,8 +62,8 @@ def main(args):
         Integer(        "intermediate_layers",      (1, 5), default=2),
         Integer(        "intermediate_dimension",   (100, 2000), log=True, default=1000),
         Categorical(    "intermediate_activation",  ["relu", "selu", "leakyrelu"], default="relu"),
-        Integer(        "latent_dimension",         (10, 500), log=False, default=100),
-        Categorical(    "solver",                   ["nadam", "adamw"], default="nadam"),
+        Integer(        "latent_dimension",         (10, 400), log=False, default=100),
+        Categorical(    "solver",                   ["nadam", "adamw"], default="adamw"),
         Float(          "learning_rate",            (1e-4, 1e-2), log=True, default=1e-3),
         Categorical(    "tied",                     [0, 1], default=1),
         Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0)

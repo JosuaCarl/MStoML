@@ -9,6 +9,7 @@ from copy import deepcopy
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
+import polars as pl
 import scipy as sci
 import pyopenms as oms
 import matplotlib.pyplot as plt
@@ -130,14 +131,14 @@ def load_names_batch(experiments:Union[Sequence[Union[oms.MSExperiment,str]], st
             return [load_name(experiment, str(i)) for i, experiment in enumerate(tqdm(experiments))]
     
 
-def load_fia_df(data_dir:str, file_ending:str, separator:str="\t", data_load:bool=True) -> pd.DataFrame:
+def load_fia_df(data_dir:str, file_ending:str, separator:str="\t", data_load:bool=True, backend=pd) -> Union[pd.DataFrame, pl.DataFrame]:
     print("Loading names:")
     names = load_names_batch(data_dir, file_ending)
     samples = [name.split("_")[0] for name in names]
     polarities = [{"pos": 1, "neg": -1}.get(name.split("_")[-1]) for name in names]
     print("Loading experiments:")
     experiments = load_experiments(data_dir, file_ending, separator=separator, data_load=data_load)
-    fia_df = pd.DataFrame([samples, polarities, experiments])
+    fia_df = backend.DataFrame([samples, polarities, experiments])
     fia_df = fia_df.transpose()
     fia_df.columns = ["sample", "polarity", "experiment"]
     return fia_df
@@ -334,27 +335,30 @@ def merge_compounds(path_to_tsv:str) -> pd.DataFrame:
 
 ### MS DATA TRANSFORMATION ###
 # Binning
-def bin_df_stepwise(df:pd.DataFrame, binning_var="mz", binned_var="inty", statistic="sum", start:float=0.0, stop:float=2000.0, step:float=0.001) -> pd.DataFrame:
+def bin_df_stepwise(df:Union[pd.DataFrame, pl.DataFrame], binning_var="mz", binned_var="inty", statistic="sum",
+                    start:float=0.0, stop:float=2000.0, step:float=0.001, backend=pd) -> Union[pd.DataFrame, pl.DataFrame]:
     bins = np.append(np.arange(start, stop, step), stop)
     statistic, bin_edges, bin_nrs = sci.stats.binned_statistic(df[binning_var], df[binned_var],
                                                                statistic=statistic, bins=bins, range=(start, stop))
     bin_means = np.mean([bins[1:], bins[:-1]], axis=0)
                          
-    binned_df = pd.DataFrame({"mz": bin_means, "inty": statistic})
-    binned_df.set_index("mz", inplace=True)
+    binned_df = backend.DataFrame({"mz": bin_means, "inty": statistic})
+    binned_df.set_index("mz", inplace=True) 
     return binned_df
 
-def bin_df_stepwise_batch(experiments:pd.DataFrame,
+def bin_df_stepwise_batch(experiments:Union[pd.DataFrame, pl.DataFrame],
                           sample_var:str="sample", experiment_var:str="experiment",
                           binning_var="mz", binned_var="inty", statistic="sum",
-                          start:float=0.0, stop:float=2000.0, step:float=0.001) -> pd.DataFrame:
-    binned_dfs = pd.DataFrame()
+                          start:float=0.0, stop:float=2000.0, step:float=0.001,
+                          backend=pd) -> Union[pd.DataFrame, pl.DataFrame]:
+    binned_dfs = backend.DataFrame()
     for i, row in tqdm(experiments.iterrows(), total=len(experiments)):
         experiment = row[experiment_var]
-        if not isinstance(experiment, pd.DataFrame):
+        if not isinstance(experiment, backend.DataFrame):
             experiment = experiment.get_df(long=True)
         binned_df = bin_df_stepwise(experiment, binning_var=binning_var, binned_var=binned_var,
-                                    statistic=statistic, start=start, stop=stop, step=step)
+                                    statistic=statistic, start=start, stop=stop, step=step,
+                                    backend=backend)
         if binned_dfs.empty:
             binned_dfs = binned_df
         else:

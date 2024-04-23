@@ -20,19 +20,12 @@ import torch
 import tensorflow as tf
 
 
-
 print(f"Available GPUs: {getAvailable(limit=10)}")
 showUtilization(all=True)
 print()
 
-
 print("Torch GPU available: ", torch.cuda.is_available())
 print("Tensorflow devices found: ", tf.config.list_physical_devices())
-
-if torch.cuda.is_available():
-    torch.cuda.set_device(torch.device("cuda:0"))
-
-
 
 data = np.random.rand(20,1000)
 target = np.random.randint(0, 2, size=20)
@@ -41,6 +34,12 @@ print(f"Using backend: {keras.backend.backend()}\n")
 model = keras.Sequential([keras.layers.Input(shape=(data.shape[1],)),
                           keras.layers.Dense(units=50000, activation="selu"),
                           keras.layers.Dense(units=1, activation="sigmoid")])
+
+if torch.cuda.is_available() and keras.backend.backend() == "torch":
+    torch.cuda.set_device(torch.device("cuda:0"))
+    model = model.to("cuda")
+    data = torch.tensor(data).to("cuda")
+    target = torch.tensor(target).to("cuda")
 
 print()
 model.summary()

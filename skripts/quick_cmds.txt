@@ -19,3 +19,21 @@ sbatch --output ../../runs/VAE/hyperparameter_optimization/slurm_test.out smac_r
 # Git
 git_auto -r ../.. -m "Quick safe"
 
+
+# FIX WRONG CUDA version
+mamba install -c conda-forge libstdcxx-ng
+export LD_LIBRARY_PATH=$WORK/.conda/envs/VAE/lib:$LD_LIBRARY_PATH
+
+#check
+strings /mnt/lustre/groups/link/linca945/.conda/envs/VAE/lib/libstdc++.so.6 | grep GLIBCXX
+
+#revert 
+export LD_LIBRARY_PATH=""
+
+# TensorRT
+pip install nvidia-pyindex
+pip install --pre --upgrade tensorrt
+pip install --upgrade nvidia-tensorrt
+
+# cuda-nvcc
+pip install nvidia-cuda-nvcc-cu12

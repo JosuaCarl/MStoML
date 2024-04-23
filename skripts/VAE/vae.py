@@ -28,7 +28,7 @@ import mlflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import keras
 from keras import Model, Sequential
-from keras.layers import Input, Dense, Dropout
+from keras.layers import Input, Dense, Dropout, GaussianNoise
 from keras import backend, ops, layers, activations, metrics, losses, optimizers
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -73,23 +73,20 @@ def main():
     if verbosity > 0 and gpu:
         print_available_gpus()
         if "tensorflow" in backend_name:
-            print("Available GPUs: ", tf.config.list_physical_devices('GPU'))
-        if "torch" in backend_name:
+            print("Tensorflow devices found: ", tf.config.list_physical_devices())
+            print(f"Keras Devices found: {keras.distribution.list_devices(device_type=None)}")
+        elif "torch" in backend_name:
             print("GPU available: ", torch.cuda.is_available())
     
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
-    data = read_data(data_dir, verbosity=verbosity)
-
-    time_step("Start", verbosity=verbosity, min_verbosity=2)
     keras.utils.set_random_seed( 42 )
     previous_history = []
-
     if "new" in steps:
         config_space = ConfigurationSpace(
                 {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 200,
                 'intermediate_layers': 3, 'latent_dimension': 20, 'learning_rate': 0.001,
-                'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 0.1}
+                'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 0.1, "stdev_noise": 0.00001}
             )
         config = config_space.get_default_configuration()
     
@@ -105,6 +102,12 @@ def main():
     previous_epochs = len(previous_history)
     
     time_step("Model built", verbosity=verbosity, min_verbosity=2)
+
+    data = read_data(data_dir, verbosity=verbosity)
+    if backend.backend() == "torch":
+        data = torch.tensor( data.to_numpy() ).to( model.device )
+
+    time_step("Data read", verbosity=verbosity, min_verbosity=2)
 
     callbacks = []
     if "train" in steps:
@@ -223,6 +226,7 @@ class FIA_VAE(Model):
     """
     def __init__(self, config:Union[Configuration, dict]):
         super().__init__()
+        self.device             = "cuda" if torch.cuda.is_available() else "cpu"
         self.config             = dict(config)
         self.tied               = config["tied"] if "tied" in self.config else False
         intermediate_layers     = [i for i in range(config["intermediate_layers"]) 
@@ -230,7 +234,8 @@ class FIA_VAE(Model):
         activation_function     = self.get_activation_function( config["intermediate_activation"] )
 
         # Encoder (with sucessive halfing of intermediate dimension)
-        self.dropout            = Dropout( config["input_dropout"] , name="dropout")        
+        self.dropout            = Dropout( config["input_dropout"] , name="dropout")
+        self.noise              = GaussianNoise( config["stdev_noise"] )
         self.intermediate_enc   = Sequential ( [ Input(shape=(config["original_dim"],), name='encoder_input') ] +
                                                [ Dense( config["intermediate_dimension"] // 2**i,
                                                         activation=activation_function ) 
@@ -266,7 +271,10 @@ class FIA_VAE(Model):
         self.compile(optimizer=self.optimizer)
 
         # Config correction
-        self.config["intermediate_dimension"]  = len(intermediate_layers)
+        self.config["intermediate_layers"]  = len(intermediate_layers)
+
+        if backend.backend() == "torch":
+            self.to( self.device )
 
     def get_activation_function(self, activation_function:str):
         """
@@ -277,7 +285,9 @@ class FIA_VAE(Model):
         Returns:
             Activation function as keras.activations or keras.layers
         """
-        activation_functions = {"relu": activations.relu, "leakyrelu" :layers.LeakyReLU(), "selu": activations.selu, "tanh": activations.tanh}
+        activation_functions = {"relu": activations.relu, "leaky_relu" : activations.leaky_relu,
+                                "selu": activations.selu, "tanh": activations.tanh,
+                                "silu": activations.silu, "mish": activations.mish}
         return activation_functions[activation_function]
 
     
@@ -318,6 +328,7 @@ class FIA_VAE(Model):
 
     def call(self, data, training=False):
         x = self.dropout(data, training=training)
+        x = self.noise(data, training=training)
         return self.decode(self.encode(x))
 
     def encode(self, data):
@@ -336,17 +347,29 @@ class FIA_VAE(Model):
 
     def train_step(self, data):
         x, y = data
-        with tf.GradientTape() as tape:
-            y_pred = self(x, training=True)  # Forward pass
-            # Compute our own loss
+        if backend.backend() == "torch":
+            x, y = (x.to(self.device) , y.to(self.device))
+            self.zero_grad()
+            y_pred = self(x, training=True)
             loss = self.kl_reconstruction_loss(y, y_pred)
+            loss.backward()
 
-        # Compute gradients
-        trainable_vars = self.trainable_variables
-        gradients = tape.gradient(loss, trainable_vars)
+            trainable_weights = [v for v in self.trainable_weights]
+            gradients = [v.value.grad for v in trainable_weights]
 
-        # Update weights
-        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+            with torch.no_grad():
+                self.optimizer.apply(gradients, trainable_weights)
+
+        elif backend.backend() == "tensorflow":
+            with tf.GradientTape() as tape:
+                y_pred = self(x, training=True)
+                loss = self.kl_reconstruction_loss(y, y_pred)
+
+            # Compute gradients
+            trainable_vars = self.trainable_variables
+            gradients = tape.gradient(loss, trainable_vars)
+
+            self.optimizer.apply_gradients(zip(gradients, trainable_vars))
 
         self.reconstruction_loss.update_state( loss["reconstruction_loss"] )
         self.kl_loss.update_state( loss["kl_loss"] )

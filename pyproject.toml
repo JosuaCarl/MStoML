@@ -36,7 +36,14 @@ mlflow = "^2.12.1"
 databricks-sdk = "^0.25.1"
 polars = "^0.20.21"
 pyzmq = "26.0.0"
+cuda-python = "^12.4.0"
+pip = "^24.0"
 
+
+[[tool.poetry.source]]
+name = "nvidia"
+url = "https://anaconda.org/nvidia/repo"
+priority = "primary"
 
 [build-system]
 requires = ["poetry-core"]

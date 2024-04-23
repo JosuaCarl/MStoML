@@ -42,7 +42,6 @@ def main(args):
     overwrite =  bool(args.overwrite)
     backend_name = args.backend
     computation = args.computation
-    gpu = computation == "gpu"
     name = args.name if args.name else None
     batch_size = args.batch_size if args.batch_size else None
     project = f"smac_vae_{backend_name}_{computation}_{name}" if name else f"smac_vae_{backend_name}_{computation}"
@@ -60,13 +59,14 @@ def main(args):
         Constant(       "original_dim",             X.shape[1]),
         Float(          "input_dropout",            (0.0, 0.5), default=0.25),
         Integer(        "intermediate_layers",      (1, 5), default=2),
-        Integer(        "intermediate_dimension",   (10, 500), log=True, default=200),
-        Categorical(    "intermediate_activation",  ["relu", "selu", "leakyrelu"], default="relu"),
+        Integer(        "intermediate_dimension",   (10, 400), log=True, default=200),
+        Categorical(    "intermediate_activation",  ["relu", "silu", "leaky_relu", "mish", "selu"], default="relu"),
         Integer(        "latent_dimension",         (10, 200), log=False, default=100),
         Categorical(    "solver",                   ["nadam", "adamw"], default="adamw"),
         Float(          "learning_rate",            (1e-4, 1e-2), log=True, default=1e-3),
         Categorical(    "tied",                     [0, 1], default=1),
-        Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0)
+        Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0),
+        Float(          "stdev_noise",              (1e-10, 1e-4), log=True, default=1e-10),
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [
@@ -78,7 +78,7 @@ def main(args):
 
 
     fia_vae_hptune = FIA_VAE_tune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
-                                   batch_size=batch_size, log_dir=os.path.join(outdir, "log"), verbosity=verbosity, gpu=gpu,
+                                   batch_size=batch_size, log_dir=os.path.join(outdir, "log"), verbosity=verbosity, device=computation,
                                    name=project)
 
 
@@ -197,15 +197,20 @@ class FIA_VAE_tune:
     Class for running the SMAC3 tuning
     """
     def __init__(self, data, test_size:float, configuration_space:ConfigurationSpace, model_builder,
-                 log_dir:str, batch_size:int=16, verbosity:int=0, gpu:bool=False, name:str="smac_vae"):
+                 log_dir:str, batch_size:int=16, verbosity:int=0, device:str="cpu", name:str="smac_vae"):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
+        self.device = device
         self.data = data
         self.training_data, self.test_data = train_test_split(data, test_size=test_size)
+
+        if backend.backend() == "torch":
+            self.training_data = torch.tensor( self.training_data ).to( self.device )
+            self.test_data     = torch.tensor( self.test_data ).to( self.device )
+
         self.batch_size = batch_size
         self.log_dir = log_dir
         self.verbosity = verbosity
-        self.gpu = gpu
         self.name = name
         self.count = 0
 
@@ -228,7 +233,7 @@ class FIA_VAE_tune:
         model = self.model_builder(config)
         if self.verbosity >= 3:
             model.summary()
-            print_utilization(gpu=self.gpu)
+            print_utilization(gpu=self.device == "gpu")
         time_step("Model built", verbosity=self.verbosity, min_verbosity=2)
 
         # Fitting
@@ -242,7 +247,7 @@ class FIA_VAE_tune:
 
             if self.verbosity >= 3:
                 print("After training utilization:")
-                print_utilization(gpu=self.gpu)
+                print_utilization(gpu=self.device == "gpu")
             time_step("Model trained", verbosity=self.verbosity, min_verbosity=2)
 
             # Evaluation
@@ -284,6 +289,6 @@ if __name__ == "__main__":
     """
     sys.path.append("..")
     from helpers.pc_stats import *
-    from VAE.vae import keras, np, datetime, read_data, FIA_VAE
+    from VAE.vae import keras, np, datetime, read_data, FIA_VAE, backend, torch
 
     main(args=args)

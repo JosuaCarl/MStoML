@@ -81,6 +81,14 @@ python-versions = "*"
 files = []
 
 [[package]]
+name = "openpyxl"
+version = "3.1.2"
+description = "A Python library to read/write Excel 2010 xlsx/xlsm files"
+optional = false
+python-versions = "*"
+files = []
+
+[[package]]
 name = "pandas"
 version = "2.2.2"
 description = "Powerful data structures for data analysis, time series, and statistics"
@@ -193,6 +201,14 @@ python-versions = "*"
 files = []
 
 [[package]]
+name = "statsmodels"
+version = "0.14.2"
+description = "Statistical computations and models for Python"
+optional = false
+python-versions = "*"
+files = []
+
+[[package]]
 name = "swig"
 version = "4.2.1"
 description = "SWIG is a software development tool that connects programs written in C and C++ with a variety of high-level programming languages."
@@ -243,4 +259,4 @@ files = []
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "95d3068c37b55fdf6d4178736443a6ac7b50d86ad4671f29cf3ae7f093986db8"
+content-hash = "8ad1998e0034208052772553057d1fbe2bcdd2822b27bd510e7904efc99a8f13"

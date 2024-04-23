@@ -38,6 +38,8 @@ polars = "^0.20.21"
 pyzmq = "26.0.0"
 cuda-python = "^12.4.0"
 pip = "^24.0"
+openpyxl = "^3.1.2"
+statsmodels = "^0.14.2"
 
 
 [[tool.poetry.source]]

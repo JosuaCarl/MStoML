@@ -13,6 +13,7 @@
 # imports
 import sys
 import os
+import gc
 import time
 import argparse
 from tqdm import tqdm
@@ -59,14 +60,14 @@ def main(args):
         Constant(       "original_dim",             X.shape[1]),
         Float(          "input_dropout",            (0.0, 0.5), default=0.25),
         Integer(        "intermediate_layers",      (1, 8), default=2),
-        Integer(        "intermediate_dimension",   (10, 160), log=True, default=160),
+        Integer(        "intermediate_dimension",   (10, 200), log=True, default=200),
         Categorical(    "intermediate_activation",  ["relu", "silu", "leaky_relu", "mish", "selu"], default="relu"),
-        Integer(        "latent_dimension",         (10, 80), log=False, default=80),
+        Integer(        "latent_dimension",         (10, 100), log=False, default=100),
         Categorical(    "solver",                   ["nadam", "adamw"], default="adamw"),
         Float(          "learning_rate",            (1e-4, 1e-2), log=True, default=1e-3),
         Categorical(    "tied",                     [0, 1], default=1),
         Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0),
-        Float(          "stdev_noise",              (1e-10, 1e-4), log=True, default=1e-10),
+        Float(          "stdev_noise",              (1e-12, 1e-4), log=True, default=1e-10),
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [
@@ -78,8 +79,8 @@ def main(args):
 
 
     fia_vae_hptune = FIA_VAE_tune( X, test_size=0.2, configuration_space=configuration_space, model_builder=FIA_VAE,
-                                   batch_size=batch_size, log_dir=os.path.join(outdir, "log"), verbosity=verbosity, device=computation,
-                                   name=project)
+                                   batch_size=batch_size, log_dir=os.path.join(outdir, "log"), verbosity=verbosity,
+                                   device=computation, name=project )
 
 
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,
@@ -95,8 +96,9 @@ def main(args):
     time_step(message=f"SMAC defined. Overwriting: {overwrite}", verbosity=verbosity, min_verbosity=1)
 
     mlflow.set_tracking_uri(Path(os.path.join(outdir, "mlruns")))
-    mlflow.set_experiment(f"FIA_VAE_smac")
+    mlflow.set_experiment(f"FIA_VAE_smac_{name}")
     mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity <= 2)
+    mlflow.tensorflow.autolog(log_datasets=False, log_models=False, checkpoint=False, silent=verbosity <= 2)
     with mlflow.start_run(run_name=project):
         mlflow.set_tag("test_identifier", "parent")
         incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=100, verbosity=verbosity)
@@ -238,7 +240,6 @@ class FIA_VAE_tune:
 
         # Fitting
         callbacks = []
-        mlflow.autolog(log_datasets=False, log_models=False, silent=self.verbosity < 2)
         with mlflow.start_run(run_name=f"smac_vae_{self.count}", nested=True):
             mlflow.set_tag("test_identifier", f"child_{self.count}")
             model.fit( x=self.training_data, y=self.training_data, validation_split=0.2,
@@ -261,6 +262,7 @@ class FIA_VAE_tune:
         
         # Clearing model parameters
         keras.backend.clear_session()
+        gc.collect()
         self.count += 1
         time_step("Session cleared", verbosity=self.verbosity, min_verbosity=2)
                 

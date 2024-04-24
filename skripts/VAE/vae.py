@@ -68,6 +68,7 @@ def main():
     steps = args.steps
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
+    precision = args.precision if args.precision else "float32"
 
     print(f"Using backend: {keras.backend.backend()}")
     if verbosity > 0 and gpu:
@@ -77,6 +78,8 @@ def main():
             print(f"Keras Devices found: {keras.distribution.list_devices(device_type=None)}")
         elif "torch" in backend_name:
             print("GPU available: ", torch.cuda.is_available())
+    
+    keras.backend.set_floatx(precision)
     
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
@@ -408,6 +411,7 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--run_dir', required=True)
     parser.add_argument('-b', '--backend', required=True)
     parser.add_argument('-c', '--computation', required=True)
+    parser.add_argument('-p', '--precision', required=False)
     parser.add_argument('-n', '--name', required=False)
     parser.add_argument('-bat', '--batch_size', type=int, required=False)
     parser.add_argument('-e', '--epochs', type=int, required=True)

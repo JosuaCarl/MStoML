@@ -48,9 +48,13 @@ def main(args):
     project = f"smac_vae_{backend_name}_{computation}_{name}" if name else f"smac_vae_{backend_name}_{computation}"
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
+    precision = args.precision if args.precision else "float32"
 
     if verbosity > 0:
         print(f"Using {keras.backend.backend()} as backend")
+
+    keras.backend.set_floatx(precision)
+
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
     X = read_data(data_dir, verbosity=verbosity)
@@ -278,6 +282,7 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--overwrite', action="store_true", required=False)
     parser.add_argument('-b', '--backend',  required=True)
     parser.add_argument('-c', '--computation', required=True)
+    parser.add_argument('-p', '--precision', required=False)
     parser.add_argument('-n', '--name', required=False)
     parser.add_argument('-bat', '--batch_size', type=int, required=False)
     parser.add_argument('-v', '--verbosity', type=int, required=True)

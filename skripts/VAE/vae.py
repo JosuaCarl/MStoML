@@ -86,7 +86,8 @@ def main():
         config_space = ConfigurationSpace(
                 {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 200,
                 'intermediate_layers': 3, 'latent_dimension': 20, 'learning_rate': 0.001,
-                'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 0.1, "stdev_noise": 0.00001}
+                'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 0.1, "stdev_noise": 0.00001,
+                "reconstruction_loss_function": "cosine"}
             )
         config = config_space.get_default_configuration()
     
@@ -229,7 +230,7 @@ class FIA_VAE(Model):
         self.device             = "cuda" if torch.cuda.is_available() else "cpu"
         self.config             = dict(config)
         self.tied               = config["tied"] if "tied" in self.config else False
-        intermediate_layers     = [i for i in range(config["intermediate_layers"]) 
+        intermediate_layers     = [i for i in range( config["intermediate_layers"] ) 
                                     if config["intermediate_dimension"] // 2**i > config["latent_dimension"]]
         activation_function     = self.get_activation_function( config["intermediate_activation"] )
 
@@ -263,6 +264,7 @@ class FIA_VAE(Model):
 
         # Loss weight + trackers
         self.kld_weight             = config["kld_weight"] if "kld_weight" in dict(config) else 1.0
+        self.reconstruction_loss_function = self.get_reconstruction_loss_function( config["reconstruction_loss_function"] )
         self.reconstruction_loss    = metrics.Mean(name="reconstruction_loss")
         self.kl_loss                = metrics.Mean(name="kl_loss")
         self.loss_tracker           = metrics.Mean(name="loss")
@@ -290,6 +292,18 @@ class FIA_VAE(Model):
                                 "silu": activations.silu, "mish": activations.mish}
         return activation_functions[activation_function]
 
+    def get_reconstruction_loss_function(self, reconstruction_loss_function:str):
+        """
+        Convert an activation function string into a keras function
+
+        Args:
+            activation_function (str): Activation function in string representation
+        Returns:
+            Activation function as keras.activations or keras.layers
+        """
+        reconstruction_loss_functions = {"mea": losses.mean_absolute_error, "mse": losses.mean_squared_error,
+                                         "cosine": lambda y_true, y_pred: 1 + keras.losses.cosine_similarity(y_true, y_pred)}
+        return reconstruction_loss_functions[reconstruction_loss_function]
     
     def get_solver(self, solver:str):
         """
@@ -313,7 +327,7 @@ class FIA_VAE(Model):
         Returns:
             Loss = Kullback-Leibler + Reconstruction loss
         """
-        reconstruction_loss = losses.mean_absolute_error(y_true, y_pred)
+        reconstruction_loss = self.reconstruction_loss_function(y_true, y_pred)
         kl_loss = -0.5 * ops.sum( 1.0 + self.sigma - ops.square(self.mu) - ops.exp(self.sigma) )
         loss = reconstruction_loss + self.kld_weight * kl_loss
         

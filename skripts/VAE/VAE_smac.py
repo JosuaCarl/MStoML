@@ -68,6 +68,7 @@ def main(args):
         Categorical(    "tied",                     [0, 1], default=1),
         Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0),
         Float(          "stdev_noise",              (1e-12, 1e-4), log=True, default=1e-10),
+        Constant(       "reconstruction_loss_function", "cosine"),
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [

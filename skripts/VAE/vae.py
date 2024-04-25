@@ -248,7 +248,7 @@ class FIA_VAE(Model):
 
         self.mu_encoder         = Dense( config["latent_dimension"], name='latent_mu' )
         self.sigma_encoder      = Dense( config["latent_dimension"], name='latent_sigma' )
-        self.z_encoder          = Sampling(name="latent_reparametrization") 
+        self.z_encoder          = Sampling( name="latent_reparametrization" ) 
 
         # Decoder
         self.decoder            = Sequential( [ Input(shape=(config["latent_dimension"], ), name='decoder_input') ] +
@@ -304,7 +304,7 @@ class FIA_VAE(Model):
         Returns:
             Activation function as keras.activations or keras.layers
         """
-        reconstruction_loss_functions = {"mea": losses.mean_absolute_error, "mse": losses.mean_squared_error,
+        reconstruction_loss_functions = {"mae": losses.mean_absolute_error, "mse": losses.mean_squared_error,
                                          "cosine": lambda y_true, y_pred: 1 + keras.losses.cosine_similarity(y_true, y_pred)}
         return reconstruction_loss_functions[reconstruction_loss_function]
     

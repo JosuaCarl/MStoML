@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_tuning
 #SBATCH --mem=400G
-#SBATCH --nodes=2
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mail-user=josua.carl@student.uni-tuebingen.de   # email address
@@ -62,17 +62,17 @@ def main(args):
     configuration_space = ConfigurationSpace(seed=42)
     hyperparameters = [
         Constant(       "original_dim",             X.shape[1]),
-        Float(          "input_dropout",            (0.0, 0.5), default=0.25),
-        Integer(        "intermediate_layers",      (1, 8), default=2),
-        Integer(        "intermediate_dimension",   (10, 200), log=True, default=200),
-        Categorical(    "intermediate_activation",  ["relu", "silu", "leaky_relu", "mish", "selu"], default="relu"),
-        Integer(        "latent_dimension",         (10, 100), log=False, default=100),
-        Categorical(    "solver",                   ["nadam", "adamw"], default="adamw"),
-        Float(          "learning_rate",            (1e-4, 1e-2), log=True, default=1e-3),
-        Categorical(    "tied",                     [0, 1], default=1),
-        Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0),
-        Float(          "stdev_noise",              (1e-12, 1e-4), log=True, default=1e-10),
-        Constant(       "reconstruction_loss_function", "cosine"),
+        Constant(       "stdev_noise",              1e-12),
+        Constant(       "input_dropout",            0.4),
+        Constant(       "intermediate_layers",      5),
+        Integer(        "intermediate_dimension",   (100, 5000), log=True, default=1000),
+        Constant(       "intermediate_activation",  "silu"),
+        Integer(        "latent_dimension",         (10, 1000), log=False, default=100),
+        Constant(       "solver",                   "nadam"),
+        Constant(       "learning_rate",            1e-4),
+        Constant(       "tied",                     0),
+        Float(          "kld_weight",               (1e-3, 1e3), log=True, default=1.0),
+        Constant(       "reconstruction_loss_function", "mae"),
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [

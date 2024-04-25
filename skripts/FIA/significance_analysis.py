@@ -193,11 +193,13 @@ def significance_plot_batch(targets_of_interest, includes, p_vals, x_label_rot:i
     return (plots, axs)
 
 
-def importance_plot(imp_df, title, importance_cutoff:float=0.05, ax=None, x_label_rot=90, x_labelsize=10):
+def importance_plot(imp_df, title, importance_cutoff=0.05, ax=None, x_label_rot=90, x_labelsize=10):
     """
     Plot the feature importance
     """
     fig = plt.figure()
+    if isinstance(importance_cutoff, int):
+        importance_cutoff = imp_df.sort_values(title, ascending=False)[title].to_numpy()[importance_cutoff]
     imp_df = imp_df.loc[imp_df[title] > importance_cutoff , [title, "metNames"]]
     imp_df.rename(columns={title: "feature importance"}, inplace=True)
 
@@ -259,7 +261,7 @@ def importance_significance_plot(sig_df, imp_df, includes, title, ax=None, impor
 
     return (fig, ax)
 
-def importance_significance_plot_batch(targets_of_interest, importances_df, includes, axes=None, importance_cutoff:float=0.05,
+def importance_significance_plot_batch(targets_of_interest, importances_df, includes, axes=None, importance_cutoff=0.05,
                                        x_label_rot=90, x_labelsize=8, plottype="violin"):
     plots = {}
     axs = {}

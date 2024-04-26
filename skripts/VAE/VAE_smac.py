@@ -63,16 +63,16 @@ def main(args):
     hyperparameters = [
         Constant(       "original_dim",             X.shape[1]),
         Constant(       "stdev_noise",              1e-12),
-        Constant(       "input_dropout",            0.4),
+        Constant(       "input_dropout",            0.15),
         Constant(       "intermediate_layers",      5),
-        Integer(        "intermediate_dimension",   (100, 2000), log=True, default=1000),
-        Constant(       "intermediate_activation",  "silu"),
+        Integer(        "intermediate_dimension",   (10, 2000), log=True, default=1000),
+        Constant(       "intermediate_activation",  "leaky_relu"),
         Integer(        "latent_dimension",         (10, 800), log=False, default=100),
         Constant(       "solver",                   "nadam"),
-        Constant(       "learning_rate",            1e-4),
+        Constant(       "learning_rate",            5e-4),
         Constant(       "tied",                     0),
         Float(          "kld_weight",               (1e-3, 1e3), log=True, default=1.0),
-        Constant(       "reconstruction_loss_function", "mae"),
+        Constant(       "reconstruction_loss_function", "cosine"),
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [

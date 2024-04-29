@@ -356,7 +356,7 @@ class FIA_VAE(Model):
     
     def encode_mu(self, data):
         x = self.intermediate_enc(data)
-        return self.mu(x)
+        return self.mu_encoder(x)
     
     def decode(self, x):
         return self.decoder(x)

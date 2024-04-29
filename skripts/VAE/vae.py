@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_training
-#SBATCH --time 24:00:00
-#SBATCH --mem 400G
-#SBATCH --nodes 2
+#SBATCH --mem 200G
+#SBATCH --nodes 1
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
 
@@ -87,10 +86,10 @@ def main():
     previous_history = []
     if "new" in steps:
         config_space = ConfigurationSpace(
-                {'input_dropout': 0.1, 'intermediate_activation': "relu", 'intermediate_dimension': 200,
-                'intermediate_layers': 3, 'latent_dimension': 20, 'learning_rate': 0.001,
-                'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 0.1, "stdev_noise": 0.00001,
-                "reconstruction_loss_function": "cosine"}
+                {'input_dropout': 0.4, 'intermediate_activation': "silu", 'intermediate_dimension': 750,
+                'intermediate_layers': 5, 'latent_dimension': 20, 'learning_rate': 1e-4,
+                'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 1, "stdev_noise": 1e-12,
+                "reconstruction_loss_function": "mae"}
             )
         config = config_space.get_default_configuration()
     

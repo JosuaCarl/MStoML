@@ -87,3 +87,10 @@ hyperparameters = [
         Float(          "kld_weight",               (1e-3, 1e3), log=True, default=1.0),
         Constant(       "reconstruction_loss_function", "mae"),
     ]
+
+config_space = ConfigurationSpace(
+                {'input_dropout': 0.4, 'intermediate_activation': "silu", 'intermediate_dimension': 750,
+                'intermediate_layers': 5, 'latent_dimension': 20, 'learning_rate': 1e-4,
+                'original_dim': 825000, 'solver': 'nadam', 'tied': 0, 'kld_weight': 1, "stdev_noise": 1e-12,
+                "reconstruction_loss_function": "mae"}
+            )

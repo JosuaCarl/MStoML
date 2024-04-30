@@ -72,6 +72,13 @@ hyperparameters = [
         Constant(       "reconstruction_loss_function", "cosine"),
     ]
 
+config_space = ConfigurationSpace(
+                {'input_dropout': 0.15, 'intermediate_activation': "leaky_relu", 'intermediate_dimension': 750,
+                'intermediate_layers': 2, 'latent_dimension': 250, 'learning_rate': 5e-4,
+                'original_dim': 825000, 'solver': 'nadam', 'tied': 0, 'kld_weight': 1, "stdev_noise": 1e-12,
+                "reconstruction_loss_function": "cosine"}
+            )
+
 ## MAE
 hyperparameters = [
         Constant(       "original_dim",             X.shape[1]),

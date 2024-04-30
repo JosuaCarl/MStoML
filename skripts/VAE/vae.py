@@ -86,10 +86,10 @@ def main():
     previous_history = []
     if "new" in steps:
         config_space = ConfigurationSpace(
-                {'input_dropout': 0.4, 'intermediate_activation': "silu", 'intermediate_dimension': 750,
-                'intermediate_layers': 5, 'latent_dimension': 20, 'learning_rate': 1e-4,
+                {'input_dropout': 0.15, 'intermediate_activation': "leaky_relu", 'intermediate_dimension': 750,
+                'intermediate_layers': 2, 'latent_dimension': 250, 'learning_rate': 5e-4,
                 'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 1, "stdev_noise": 1e-12,
-                "reconstruction_loss_function": "mae"}
+                "reconstruction_loss_function": "cosine"}
             )
         config = config_space.get_default_configuration()
     
@@ -102,7 +102,6 @@ def main():
         model.load_weights(os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.weights.h5"))
         if os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.history.tsv"):
             previous_history = pd.read_csv( os.path.join(outdir, f"vae_{backend_name}_{computation}_{name}.history.tsv"), sep="\t" )
-    previous_epochs = len(previous_history)
     
     time_step("Model built", verbosity=verbosity, min_verbosity=2)
 
@@ -114,14 +113,14 @@ def main():
 
     callbacks = []
     if "train" in steps:
-        callbacks.append( keras.callbacks.ModelCheckpoint( filepath=str(outdir) + f"/vae_{backend_name}_{computation}_{name}" + "_{epoch}.keras",
+        callbacks.append( keras.callbacks.ModelCheckpoint( filepath=str(outdir) + f"/vae_{backend_name}_{computation}_{name}" + "_best.keras",
                                                            save_best_only=True, monitor="val_loss",
                                                            verbose=verbosity ) )
 
         mlflow.set_tracking_uri(Path(os.path.join(outdir, "mlruns")))
         mlflow.set_experiment(f"FIA_VAE")
         mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity < 2)
-        with mlflow.start_run(run_name=f"fia_vae", run_id=project):
+        with mlflow.start_run(run_name=f"fia_vae"):
             history = model.fit(data, data, validation_split=0.2,
                                 batch_size=batch_size, epochs=epochs,
                                 callbacks=callbacks, verbose=verbosity)

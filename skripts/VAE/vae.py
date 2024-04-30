@@ -121,7 +121,7 @@ def main():
         mlflow.set_tracking_uri(Path(os.path.join(outdir, "mlruns")))
         mlflow.set_experiment(f"FIA_VAE")
         mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity < 2)
-        with mlflow.start_run(run_name=f"fia_vae_hptune_test"):
+        with mlflow.start_run(run_name=f"fia_vae", run_id=project):
             history = model.fit(data, data, validation_split=0.2,
                                 batch_size=batch_size, epochs=epochs,
                                 callbacks=callbacks, verbose=verbosity)

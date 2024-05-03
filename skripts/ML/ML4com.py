@@ -20,6 +20,8 @@ from sklearn import svm
 import seaborn as sns
 import matplotlib.pyplot as plt
 from ConfigSpace import Configuration, ConfigurationSpace
+import mlflow
+from pathlib import Path
 
 
 # Combination of pos/neg 
@@ -117,11 +119,23 @@ class SKL_Classifier:
         self.cv = cv
         self.configuration_space = configuration_space
         self.classifier = classifier
+        self.count = 0
 
-    def train(self, config: Configuration, seed: int = 0) -> np.float64:
-        scores = cross_val_score(self.classifier(**config, random_state=seed),
-                                 self.X, self.ys, cv=self.cv)
-        return 1 - np.mean(scores)
+    def train(self, config: Configuration, seed:int=0) -> np.float64:
+        with mlflow.start_run(run_name=f"run_{self.count}", nested=True):
+            mlflow.set_tag("test_identifier", f"child_{self.count}")
+            splitter = KFold(n_splits=self.cv, shuffle=True, random_state=seed)
+            scores = []
+            for train, test in splitter.split(self.X, self.ys):
+                model = self.classifier(**config, random_state=seed)
+                model.fit(self.X.loc[train], self.ys.loc[train])
+                y_pred = model.predict(self.X.loc[test])
+                scores.append( np.mean( y_pred == self.ys.loc[test].values) )
+            score = np.mean( scores )
+            mlflow.log_params( config )
+            mlflow.log_metrics( {"accuracy": score} )
+            self.count += 1
+        return 1.0 - score
 
 def extract_metrics(true_labels, prediction, run_label, cv_i,
                     metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):

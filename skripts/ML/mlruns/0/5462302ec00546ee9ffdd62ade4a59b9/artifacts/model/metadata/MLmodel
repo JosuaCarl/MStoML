@@ -1,0 +1,191 @@
+artifact_path: model
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.11.8
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.4.2
+mlflow_version: 2.12.1
+model_size_bytes: 3362
+model_uuid: bd18b4ea5cf94983aa95896c6520e00f
+run_id: 5462302ec00546ee9ffdd62ade4a59b9
+signature:
+  inputs: '[{"type": "double", "name": "0", "required": true}, {"type": "double",
+    "name": "1", "required": true}, {"type": "double", "name": "2", "required": true},
+    {"type": "double", "name": "3", "required": true}, {"type": "double", "name":
+    "4", "required": true}, {"type": "double", "name": "5", "required": true}, {"type":
+    "double", "name": "6", "required": true}, {"type": "double", "name": "7", "required":
+    true}, {"type": "double", "name": "8", "required": true}, {"type": "double", "name":
+    "9", "required": true}, {"type": "double", "name": "10", "required": true}, {"type":
+    "double", "name": "11", "required": true}, {"type": "double", "name": "12", "required":
+    true}, {"type": "double", "name": "13", "required": true}, {"type": "double",
+    "name": "14", "required": true}, {"type": "double", "name": "15", "required":
+    true}, {"type": "double", "name": "16", "required": true}, {"type": "double",
+    "name": "17", "required": true}, {"type": "double", "name": "18", "required":
+    true}, {"type": "double", "name": "19", "required": true}, {"type": "double",
+    "name": "20", "required": true}, {"type": "double", "name": "21", "required":
+    true}, {"type": "double", "name": "22", "required": true}, {"type": "double",
+    "name": "23", "required": true}, {"type": "double", "name": "24", "required":
+    true}, {"type": "double", "name": "25", "required": true}, {"type": "double",
+    "name": "26", "required": true}, {"type": "double", "name": "27", "required":
+    true}, {"type": "double", "name": "28", "required": true}, {"type": "double",
+    "name": "29", "required": true}, {"type": "double", "name": "30", "required":
+    true}, {"type": "double", "name": "31", "required": true}, {"type": "double",
+    "name": "32", "required": true}, {"type": "double", "name": "33", "required":
+    true}, {"type": "double", "name": "34", "required": true}, {"type": "double",
+    "name": "35", "required": true}, {"type": "double", "name": "36", "required":
+    true}, {"type": "double", "name": "37", "required": true}, {"type": "double",
+    "name": "38", "required": true}, {"type": "double", "name": "39", "required":
+    true}, {"type": "double", "name": "40", "required": true}, {"type": "double",
+    "name": "41", "required": true}, {"type": "double", "name": "42", "required":
+    true}, {"type": "double", "name": "43", "required": true}, {"type": "double",
+    "name": "44", "required": true}, {"type": "double", "name": "45", "required":
+    true}, {"type": "double", "name": "46", "required": true}, {"type": "double",
+    "name": "47", "required": true}, {"type": "double", "name": "48", "required":
+    true}, {"type": "double", "name": "49", "required": true}, {"type": "double",
+    "name": "50", "required": true}, {"type": "double", "name": "51", "required":
+    true}, {"type": "double", "name": "52", "required": true}, {"type": "double",
+    "name": "53", "required": true}, {"type": "double", "name": "54", "required":
+    true}, {"type": "double", "name": "55", "required": true}, {"type": "double",
+    "name": "56", "required": true}, {"type": "double", "name": "57", "required":
+    true}, {"type": "double", "name": "58", "required": true}, {"type": "double",
+    "name": "59", "required": true}, {"type": "double", "name": "60", "required":
+    true}, {"type": "double", "name": "61", "required": true}, {"type": "double",
+    "name": "62", "required": true}, {"type": "double", "name": "63", "required":
+    true}, {"type": "double", "name": "64", "required": true}, {"type": "double",
+    "name": "65", "required": true}, {"type": "double", "name": "66", "required":
+    true}, {"type": "double", "name": "67", "required": true}, {"type": "double",
+    "name": "68", "required": true}, {"type": "double", "name": "69", "required":
+    true}, {"type": "double", "name": "70", "required": true}, {"type": "double",
+    "name": "71", "required": true}, {"type": "double", "name": "72", "required":
+    true}, {"type": "double", "name": "73", "required": true}, {"type": "double",
+    "name": "74", "required": true}, {"type": "double", "name": "75", "required":
+    true}, {"type": "double", "name": "76", "required": true}, {"type": "double",
+    "name": "77", "required": true}, {"type": "double", "name": "78", "required":
+    true}, {"type": "double", "name": "79", "required": true}, {"type": "double",
+    "name": "80", "required": true}, {"type": "double", "name": "81", "required":
+    true}, {"type": "double", "name": "82", "required": true}, {"type": "double",
+    "name": "83", "required": true}, {"type": "double", "name": "84", "required":
+    true}, {"type": "double", "name": "85", "required": true}, {"type": "double",
+    "name": "86", "required": true}, {"type": "double", "name": "87", "required":
+    true}, {"type": "double", "name": "88", "required": true}, {"type": "double",
+    "name": "89", "required": true}, {"type": "double", "name": "90", "required":
+    true}, {"type": "double", "name": "91", "required": true}, {"type": "double",
+    "name": "92", "required": true}, {"type": "double", "name": "93", "required":
+    true}, {"type": "double", "name": "94", "required": true}, {"type": "double",
+    "name": "95", "required": true}, {"type": "double", "name": "96", "required":
+    true}, {"type": "double", "name": "97", "required": true}, {"type": "double",
+    "name": "98", "required": true}, {"type": "double", "name": "99", "required":
+    true}, {"type": "double", "name": "100", "required": true}, {"type": "double",
+    "name": "101", "required": true}, {"type": "double", "name": "102", "required":
+    true}, {"type": "double", "name": "103", "required": true}, {"type": "double",
+    "name": "104", "required": true}, {"type": "double", "name": "105", "required":
+    true}, {"type": "double", "name": "106", "required": true}, {"type": "double",
+    "name": "107", "required": true}, {"type": "double", "name": "108", "required":
+    true}, {"type": "double", "name": "109", "required": true}, {"type": "double",
+    "name": "110", "required": true}, {"type": "double", "name": "111", "required":
+    true}, {"type": "double", "name": "112", "required": true}, {"type": "double",
+    "name": "113", "required": true}, {"type": "double", "name": "114", "required":
+    true}, {"type": "double", "name": "115", "required": true}, {"type": "double",
+    "name": "116", "required": true}, {"type": "double", "name": "117", "required":
+    true}, {"type": "double", "name": "118", "required": true}, {"type": "double",
+    "name": "119", "required": true}, {"type": "double", "name": "120", "required":
+    true}, {"type": "double", "name": "121", "required": true}, {"type": "double",
+    "name": "122", "required": true}, {"type": "double", "name": "123", "required":
+    true}, {"type": "double", "name": "124", "required": true}, {"type": "double",
+    "name": "125", "required": true}, {"type": "double", "name": "126", "required":
+    true}, {"type": "double", "name": "127", "required": true}, {"type": "double",
+    "name": "128", "required": true}, {"type": "double", "name": "129", "required":
+    true}, {"type": "double", "name": "130", "required": true}, {"type": "double",
+    "name": "131", "required": true}, {"type": "double", "name": "132", "required":
+    true}, {"type": "double", "name": "133", "required": true}, {"type": "double",
+    "name": "134", "required": true}, {"type": "double", "name": "135", "required":
+    true}, {"type": "double", "name": "136", "required": true}, {"type": "double",
+    "name": "137", "required": true}, {"type": "double", "name": "138", "required":
+    true}, {"type": "double", "name": "139", "required": true}, {"type": "double",
+    "name": "140", "required": true}, {"type": "double", "name": "141", "required":
+    true}, {"type": "double", "name": "142", "required": true}, {"type": "double",
+    "name": "143", "required": true}, {"type": "double", "name": "144", "required":
+    true}, {"type": "double", "name": "145", "required": true}, {"type": "double",
+    "name": "146", "required": true}, {"type": "double", "name": "147", "required":
+    true}, {"type": "double", "name": "148", "required": true}, {"type": "double",
+    "name": "149", "required": true}, {"type": "double", "name": "150", "required":
+    true}, {"type": "double", "name": "151", "required": true}, {"type": "double",
+    "name": "152", "required": true}, {"type": "double", "name": "153", "required":
+    true}, {"type": "double", "name": "154", "required": true}, {"type": "double",
+    "name": "155", "required": true}, {"type": "double", "name": "156", "required":
+    true}, {"type": "double", "name": "157", "required": true}, {"type": "double",
+    "name": "158", "required": true}, {"type": "double", "name": "159", "required":
+    true}, {"type": "double", "name": "160", "required": true}, {"type": "double",
+    "name": "161", "required": true}, {"type": "double", "name": "162", "required":
+    true}, {"type": "double", "name": "163", "required": true}, {"type": "double",
+    "name": "164", "required": true}, {"type": "double", "name": "165", "required":
+    true}, {"type": "double", "name": "166", "required": true}, {"type": "double",
+    "name": "167", "required": true}, {"type": "double", "name": "168", "required":
+    true}, {"type": "double", "name": "169", "required": true}, {"type": "double",
+    "name": "170", "required": true}, {"type": "double", "name": "171", "required":
+    true}, {"type": "double", "name": "172", "required": true}, {"type": "double",
+    "name": "173", "required": true}, {"type": "double", "name": "174", "required":
+    true}, {"type": "double", "name": "175", "required": true}, {"type": "double",
+    "name": "176", "required": true}, {"type": "double", "name": "177", "required":
+    true}, {"type": "double", "name": "178", "required": true}, {"type": "double",
+    "name": "179", "required": true}, {"type": "double", "name": "180", "required":
+    true}, {"type": "double", "name": "181", "required": true}, {"type": "double",
+    "name": "182", "required": true}, {"type": "double", "name": "183", "required":
+    true}, {"type": "double", "name": "184", "required": true}, {"type": "double",
+    "name": "185", "required": true}, {"type": "double", "name": "186", "required":
+    true}, {"type": "double", "name": "187", "required": true}, {"type": "double",
+    "name": "188", "required": true}, {"type": "double", "name": "189", "required":
+    true}, {"type": "double", "name": "190", "required": true}, {"type": "double",
+    "name": "191", "required": true}, {"type": "double", "name": "192", "required":
+    true}, {"type": "double", "name": "193", "required": true}, {"type": "double",
+    "name": "194", "required": true}, {"type": "double", "name": "195", "required":
+    true}, {"type": "double", "name": "196", "required": true}, {"type": "double",
+    "name": "197", "required": true}, {"type": "double", "name": "198", "required":
+    true}, {"type": "double", "name": "199", "required": true}, {"type": "double",
+    "name": "200", "required": true}, {"type": "double", "name": "201", "required":
+    true}, {"type": "double", "name": "202", "required": true}, {"type": "double",
+    "name": "203", "required": true}, {"type": "double", "name": "204", "required":
+    true}, {"type": "double", "name": "205", "required": true}, {"type": "double",
+    "name": "206", "required": true}, {"type": "double", "name": "207", "required":
+    true}, {"type": "double", "name": "208", "required": true}, {"type": "double",
+    "name": "209", "required": true}, {"type": "double", "name": "210", "required":
+    true}, {"type": "double", "name": "211", "required": true}, {"type": "double",
+    "name": "212", "required": true}, {"type": "double", "name": "213", "required":
+    true}, {"type": "double", "name": "214", "required": true}, {"type": "double",
+    "name": "215", "required": true}, {"type": "double", "name": "216", "required":
+    true}, {"type": "double", "name": "217", "required": true}, {"type": "double",
+    "name": "218", "required": true}, {"type": "double", "name": "219", "required":
+    true}, {"type": "double", "name": "220", "required": true}, {"type": "double",
+    "name": "221", "required": true}, {"type": "double", "name": "222", "required":
+    true}, {"type": "double", "name": "223", "required": true}, {"type": "double",
+    "name": "224", "required": true}, {"type": "double", "name": "225", "required":
+    true}, {"type": "double", "name": "226", "required": true}, {"type": "double",
+    "name": "227", "required": true}, {"type": "double", "name": "228", "required":
+    true}, {"type": "double", "name": "229", "required": true}, {"type": "double",
+    "name": "230", "required": true}, {"type": "double", "name": "231", "required":
+    true}, {"type": "double", "name": "232", "required": true}, {"type": "double",
+    "name": "233", "required": true}, {"type": "double", "name": "234", "required":
+    true}, {"type": "double", "name": "235", "required": true}, {"type": "double",
+    "name": "236", "required": true}, {"type": "double", "name": "237", "required":
+    true}, {"type": "double", "name": "238", "required": true}, {"type": "double",
+    "name": "239", "required": true}, {"type": "double", "name": "240", "required":
+    true}, {"type": "double", "name": "241", "required": true}, {"type": "double",
+    "name": "242", "required": true}, {"type": "double", "name": "243", "required":
+    true}, {"type": "double", "name": "244", "required": true}, {"type": "double",
+    "name": "245", "required": true}, {"type": "double", "name": "246", "required":
+    true}, {"type": "double", "name": "247", "required": true}, {"type": "double",
+    "name": "248", "required": true}, {"type": "double", "name": "249", "required":
+    true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float64", "shape": [-1,
+    8]}}]'
+  params: null
+utc_time_created: '2024-05-03 11:45:56.154553'

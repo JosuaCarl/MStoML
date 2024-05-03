@@ -303,7 +303,9 @@ class FIA_VAE(Model):
             Activation function as keras.activations or keras.layers
         """
         reconstruction_loss_functions = {"mae": losses.mean_absolute_error, "mse": losses.mean_squared_error,
-                                         "cosine": lambda y_true, y_pred: 1 + keras.losses.cosine_similarity(y_true, y_pred)}
+                                         "cosine": lambda y_true, y_pred: 1 + losses.cosine_similarity(y_true, y_pred),
+                                         "mae+cosine": lambda y_true, y_pred:
+                                         1 + losses.cosine_similarity(y_true, y_pred) + losses.mean_absolute_error(y_true, y_pred)}
         return reconstruction_loss_functions[reconstruction_loss_function]
     
     def get_solver(self, solver:str):

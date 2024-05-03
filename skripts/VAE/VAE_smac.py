@@ -62,17 +62,17 @@ def main(args):
     configuration_space = ConfigurationSpace(seed=42)
     hyperparameters = [
         Constant(       "original_dim",             X.shape[1]),
-        Constant(       "stdev_noise",              1e-12),
-        Constant(       "input_dropout",            0.15),
-        Constant(       "intermediate_layers",      5),
-        Integer(        "intermediate_dimension",   (10, 2000), log=True, default=1000),
-        Constant(       "intermediate_activation",  "leaky_relu"),
-        Integer(        "latent_dimension",         (10, 800), log=False, default=100),
+        Float(          "input_dropout",            (0.0, 0.5), default=0.25),
+        Integer(        "intermediate_layers",      (1, 8), default=2),
+        Integer(        "intermediate_dimension",   (10, 200), log=True, default=200),
+        Categorical(    "intermediate_activation",  ["relu", "silu", "leaky_relu", "mish", "selu"], default="relu"),
+        Integer(        "latent_dimension",         (10, 100), log=False, default=100),
         Constant(       "solver",                   "nadam"),
-        Constant(       "learning_rate",            5e-4),
+        Float(          "learning_rate",            (1e-4, 1e-2), log=True, default=1e-3),
         Constant(       "tied",                     0),
-        Float(          "kld_weight",               (1e-3, 1e3), log=True, default=1.0),
-        Constant(       "reconstruction_loss_function", "cosine"),
+        Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0),
+        Float(          "stdev_noise",              (1e-12, 1e-4), log=True, default=1e-10),
+        Constant(       "reconstruction_loss_function", "mae+cosine"),
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [
@@ -260,9 +260,9 @@ class FIA_VAE_tune:
             loss, recon_loss, kl_loss = model.evaluate(self.test_data, self.test_data,
                                                     batch_size=self.batch_size, verbose=self.verbosity)
             
-            mlflow.log_params(model.config)
-            mlflow.log_metrics({"eval-loss": loss, "eval-reconstruction_loss": recon_loss, "eval-kl_loss": kl_loss},
-                            step=int(budget) + 1)
+            mlflow.log_params( model.config )
+            mlflow.log_metrics( {"eval-loss": loss, "eval-reconstruction_loss": recon_loss, "eval-kl_loss": kl_loss},
+                                step=int(budget) + 1 )
         time_step("Model evaluated", verbosity=self.verbosity, min_verbosity=2)        
         
         # Clearing model parameters

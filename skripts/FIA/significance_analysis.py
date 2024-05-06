@@ -30,7 +30,7 @@ def test_metabolites_organism(data, community_composition, organism_idx, alpha, 
 
 
 
-def plot_volcanos(data, strains, community_composition,
+def plot_volcanos(data, strains, community_composition, ref_masses,
                   color_map:dict, sig_p:float=None, sig_fc_pos:float=None, sig_fc_neg:float=None,
                   show_labels:bool=True, width:int=1600, height:int=900, outfolder:str="."):
     
@@ -86,7 +86,10 @@ def plot_volcanos(data, strains, community_composition,
         df["-log10 p-value"] =  test_stat.loc["-log10p"]
         df["fold-change"] =  test_stat.loc["fc"]
         df["p-value"] =  test_stat.loc["p"]
+        df["ref_mass"] = ref_masses
+        test_stat.loc["ref_mass"] = ref_masses
         text = text if show_labels else [""]*len(test_stat.columns)
+        hover_data = ["p-value", "fold-change", "ref_mass"]
         title = str(org)
         figure = px.scatter(df,
                             x = "log2 fold-change",
@@ -94,7 +97,7 @@ def plot_volcanos(data, strains, community_composition,
                             title = title,
                             text = text,
                             hover_name = labels,
-                            hover_data=["p-value", "fold-change"],
+                            hover_data=hover_data,
                             color = colors,
                             color_discrete_map = color_map)
         if sig_fc_pos:

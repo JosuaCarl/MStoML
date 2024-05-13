@@ -25,17 +25,21 @@ from pathlib import Path
 
 
 # Combination of pos/neg 
-def join_df_metNames(df):
+def join_df_metNames(df, include_mass=False):
     """
     Combines positively and negatively charged dataframes along their metabolite Names
     """
-    cols = ["metNames"] + [f"MS{i+1}" for i in range(len(df.columns) - 6)]
+    cols = ["metNames", "ref_mass"] + [f"MS{i+1}" for i in range(len(df.columns) - 6)]
     comb = pd.DataFrame(columns=cols)
     for pid in df["peakID"].unique():
         comb_met_name = ""
-        for met_name in df.loc[df["peakID"] == pid]["MetName"]:
-            comb_met_name += met_name + "\n"
-        comb.loc[len(comb.index)] = [comb_met_name[:-2]] + list(df.loc[df["peakID"] == pid].iloc[0, 6:])
+        for i, row in df.loc[df["peakID"] == pid].iterrows():
+            comb_met_name += row["MetName"] + "\n"
+            ref_mass = row["ref_mass"]
+        if include_mass:
+            comb.loc[len(comb.index)] = [comb_met_name[:-2], ref_mass] + list(df.loc[df["peakID"] == pid].iloc[0, 6:])
+        else:
+            comb.loc[len(comb.index)] = [comb_met_name[:-2]] + list(df.loc[df["peakID"] == pid].iloc[0, 6:])
     comb = comb.set_index('metNames')
     return comb
 

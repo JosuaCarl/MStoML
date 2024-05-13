@@ -194,6 +194,18 @@ def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
 
 
 @keras.saving.register_keras_serializable(package="FIA_VAE")
+def spectral_entropy(spectrum):
+    return -ops.sum(spectrum * ops.log( ops.add(spectrum, 1e-24) ))
+
+@keras.saving.register_keras_serializable(package="FIA_VAE")
+def spectral_entropy_divergence(y_true, y_pred):
+    y_comb = ops.add(y_true, y_pred)
+    return ( 2  * spectral_entropy( y_comb / ops.sum(y_comb) )
+             -    spectral_entropy( y_true / ops.sum(y_true) )
+             -    spectral_entropy( y_pred / ops.sum(y_pred) )
+           ) / ops.log(4)
+
+@keras.saving.register_keras_serializable(package="FIA_VAE")
 class Sampling(layers.Layer):
     """
     Uses (z_mean, z_log_var) to sample z, the vector encoding a digit.
@@ -305,7 +317,9 @@ class FIA_VAE(Model):
         reconstruction_loss_functions = {"mae": losses.mean_absolute_error, "mse": losses.mean_squared_error,
                                          "cosine": lambda y_true, y_pred: 1 + losses.cosine_similarity(y_true, y_pred),
                                          "mae+cosine": lambda y_true, y_pred:
-                                         1 + losses.cosine_similarity(y_true, y_pred) + losses.mean_absolute_error(y_true, y_pred)}
+                                         1 + losses.cosine_similarity(y_true, y_pred) + losses.mean_absolute_error(y_true, y_pred),
+                                         "spectral_entropy": spectral_entropy_divergence
+                                         }
         return reconstruction_loss_functions[reconstruction_loss_function]
     
     def get_solver(self, solver:str):

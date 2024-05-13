@@ -1,0 +1,29 @@
+- Classification
+	- Viele Metabolite (fast alle) nicht in AGORA SBML Modell
+		- kaum Zeit für weitere Kuration
+	- Visualisierung mit Cobra / Escher
+		- Medium mGAM Metabolitzusammensetzung ? 
+- VAE
+	- Ergebnisse in MAE & Klassifikation schlecht
+		- 0 Baseline (MSE)
+		- scaling (cosine)
+			- Zusätzlicher Schritt wäre kein Problem
+		- Fourier transform sieht ganz anders aus -> Erkennt gedachte Verteilungsfrequenz nicht <- Uniforme Verteilung
+	- 825000 bins > 1000 samples
+	- MSE + Cosine Error -> Bessere convergence in Hyperparameter search
+- Sonstiges
+    - Andere Arten der Dimensionsreduktion
+		- Letzter Arbeitsmonat für Übertragung + Anpassung des Matlab-Skripts für Untargeted peak picking
+			- Centroiding & Peak Picking mit OpenMS
+    - Biologische Interpretation erst mal droppen
+		- Gradient Boosting für Co-occurrence
+- Weiteres Vorgehen
+	- Comm8 Training -> Comm20 Testing
+		- Übertragbarkeit auf größere Kolonien
+		- An Generalisierbarkeit arbeiten
+	- VAE mit mehr FIA Daten + Neuem Loss
+	- Gegenüberstellung der 5 Algorithmen
+		- Figures !
+	- Paper von Linklab für Figures
+	- Graphische Bearbeitung von Figures (SVGs)
+	- Latent space als Spektrum zeigen ?

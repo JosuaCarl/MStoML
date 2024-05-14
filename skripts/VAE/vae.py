@@ -195,15 +195,17 @@ def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
 
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 def spectral_entropy(spectrum):
-    return -ops.sum(spectrum * ops.log( ops.add(spectrum, 1e-24) ))
+    spectrum = ops.normalize(spectrum, order=1) # Total count normalization
+    return ops.sum( ops.multiply( spectrum, ops.log( ops.add(spectrum, 1e-32) ) ) )
 
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 def spectral_entropy_divergence(y_true, y_pred):
     y_comb = ops.add(y_true, y_pred)
-    return ( 2  * spectral_entropy( y_comb / ops.sum(y_comb) )
-             -    spectral_entropy( y_true / ops.sum(y_true) )
-             -    spectral_entropy( y_pred / ops.sum(y_pred) )
-           ) / ops.log(4)
+    return ops.abs(                     # floating point errors can lead to small negative values
+                ops.divide(
+                    ops.subtract( ops.add( spectral_entropy( y_true ), spectral_entropy( y_pred ) ),
+                                  ops.multiply(2, spectral_entropy( y_comb ) ) ),
+                    ops.log(4) ) )
 
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 class Sampling(layers.Layer):

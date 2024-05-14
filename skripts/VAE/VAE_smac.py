@@ -44,8 +44,9 @@ def main(args):
     backend_name = args.backend
     computation = args.computation
     name = args.name if args.name else None
+    loss = args.loss
     batch_size = args.batch_size if args.batch_size else None
-    project = f"smac_vae_{backend_name}_{computation}_{name}" if name else f"smac_vae_{backend_name}_{computation}"
+    project = f"smac_vae_{backend_name}_{computation}_{loss}_{name}" if name else f"smac_vae_{backend_name}_{computation}_{loss}"
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
     precision = args.precision if args.precision else "float32"
@@ -72,7 +73,7 @@ def main(args):
         Constant(       "tied",                     0),
         Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0),
         Float(          "stdev_noise",              (1e-12, 1e-4), log=True, default=1e-10),
-        Constant(       "reconstruction_loss_function", "spectral_entropy"),
+        Constant(       "reconstruction_loss_function", loss),
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [
@@ -89,7 +90,7 @@ def main(args):
 
 
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,
-                         n_trials=10000, min_budget=2, max_budget=50,
+                         n_trials=500, min_budget=2, max_budget=50,
                          n_workers=1, output_directory=outdir,
                          walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None )   # Max RAM in Bytes (not MB)
                         
@@ -101,12 +102,12 @@ def main(args):
     time_step(message=f"SMAC defined. Overwriting: {overwrite}", verbosity=verbosity, min_verbosity=1)
 
     mlflow.set_tracking_uri(Path(os.path.join(outdir, "mlruns")))
-    mlflow.set_experiment(f"FIA_VAE_smac_{name}")
+    mlflow.set_experiment(f"FIA_VAE_smac_{name}_{loss}")
     mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity <= 2)
     mlflow.tensorflow.autolog(log_datasets=False, log_models=False, checkpoint=False, silent=verbosity <= 2)
     with mlflow.start_run(run_name=project):
         mlflow.set_tag("test_identifier", "parent")
-        incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=100, verbosity=verbosity)
+        incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=10, verbosity=verbosity)
 
     best_hp = validate_incumbent(incumbent=incumbent, fascade=facade, verbosity=verbosity)
 
@@ -283,6 +284,7 @@ if __name__ == "__main__":
     parser.add_argument('-b', '--backend',  required=True)
     parser.add_argument('-c', '--computation', required=True)
     parser.add_argument('-p', '--precision', required=False)
+    parser.add_argument('-l', '--loss', required=True)
     parser.add_argument('-n', '--name', required=False)
     parser.add_argument('-bat', '--batch_size', type=int, required=False)
     parser.add_argument('-v', '--verbosity', type=int, required=True)

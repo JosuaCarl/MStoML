@@ -88,7 +88,7 @@ def main():
         config_space = ConfigurationSpace(
                 {'input_dropout': 0.2, 'intermediate_activation': "relu", 'intermediate_dimension': 180,
                 'intermediate_layers': 1, 'latent_dimension': 130, 'learning_rate': 6.5e-4,
-                'original_dim': 825000, 'solver': 'nadam', 'tied': 0, 'kld_weight': 2.385, "stdev_noise": 1e-12,
+                'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 2.385, "stdev_noise": 1e-12,
                 "reconstruction_loss_function": "mae+cosine"}
             )
         config = config_space.get_default_configuration()

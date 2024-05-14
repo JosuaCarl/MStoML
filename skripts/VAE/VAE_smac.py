@@ -64,15 +64,15 @@ def main(args):
         Constant(       "original_dim",             X.shape[1]),
         Float(          "input_dropout",            (0.0, 0.5), default=0.25),
         Integer(        "intermediate_layers",      (1, 8), default=2),
-        Integer(        "intermediate_dimension",   (10, 1000), log=True, default=1000),
+        Integer(        "intermediate_dimension",   (10, 2000), log=True, default=2000),
         Categorical(    "intermediate_activation",  ["relu", "silu", "leaky_relu", "mish", "selu"], default="relu"),
         Integer(        "latent_dimension",         (10, 500), log=False, default=500),
         Constant(       "solver",                   "nadam"),
-        Float(          "learning_rate",            (1e-4, 1e-2), log=True, default=1e-3),
+        Float(          "learning_rate",            (1e-5, 1e-2), log=True, default=1e-3),
         Constant(       "tied",                     0),
         Float(          "kld_weight",               (1e-3, 1e2), log=True, default=1.0),
         Float(          "stdev_noise",              (1e-12, 1e-4), log=True, default=1e-10),
-        Constant(       "reconstruction_loss_function", "mae+cosine"),
+        Constant(       "reconstruction_loss_function", "spectral_entropy"),
     ]
     configuration_space.add_hyperparameters(hyperparameters)
     forbidden_clauses = [
@@ -93,7 +93,7 @@ def main(args):
                          n_workers=1, output_directory=outdir,
                          walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None )   # Max RAM in Bytes (not MB)
                         
-    initial_design = MultiFidelityFacade.get_initial_design(scenario, n_configs=10)
+    initial_design = MultiFidelityFacade.get_initial_design(scenario, n_configs=100)
     intensifier = Hyperband(scenario, incumbent_selection="highest_budget")
     facade = MultiFidelityFacade( scenario, fia_vae_hptune.train, 
                                   initial_design=initial_design, intensifier=intensifier,

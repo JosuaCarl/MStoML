@@ -195,17 +195,23 @@ def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
 
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 def spectral_entropy(spectrum):
+    """
+    Computes the spectral entropy for a spectra $S_i \in S$ with elements $s_i \in S_i$: -sum(s_i * ln(s_i))
+    """
     spectrum = ops.normalize(spectrum, order=1) # Total count normalization
-    return ops.sum( ops.multiply( spectrum, ops.log( ops.add(spectrum, 1e-32) ) ) )
+    return -ops.sum( ops.multiply( spectrum, ops.log( ops.add(spectrum, 1e-32) ) ), axis=-1 )
 
 @keras.saving.register_keras_serializable(package="FIA_VAE")
-def spectral_entropy_divergence(y_true, y_pred):
+def mean_spectral_entropy_divergence(y_true, y_pred):
+    """
+    Computes the mean spectral entropy divergence over a given list of spectra
+    """
     y_comb = ops.add(y_true, y_pred)
-    return ops.abs(                     # floating point errors can lead to small negative values
+    return ops.mean( ops.abs(                     # floating point errors can lead to small negative values
                 ops.divide(
-                    ops.subtract( ops.add( spectral_entropy( y_true ), spectral_entropy( y_pred ) ),
-                                  ops.multiply(2, spectral_entropy( y_comb ) ) ),
-                    ops.log(4) ) )
+                    ops.subtract( ops.multiply(2, spectral_entropy( y_comb ) ) ,
+                                  ops.add( spectral_entropy( y_true ), spectral_entropy( y_pred ) ) ),
+                    ops.log(4) ) ) )
 
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 class Sampling(layers.Layer):
@@ -222,6 +228,9 @@ class Sampling(layers.Layer):
     
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 class DenseTied(keras.layers.Layer):
+    """
+    A Layer Tied to another Dense Layer with shared weights.
+    """
     def __init__(self, tie, activation=None, **kwargs):
         self.tie = tie
         self.activation = keras.activations.get(activation)
@@ -320,7 +329,7 @@ class FIA_VAE(Model):
                                          "cosine": lambda y_true, y_pred: 1 + losses.cosine_similarity(y_true, y_pred),
                                          "mae+cosine": lambda y_true, y_pred:
                                          1 + losses.cosine_similarity(y_true, y_pred) + losses.mean_absolute_error(y_true, y_pred),
-                                         "spectral_entropy": spectral_entropy_divergence
+                                         "spectral_entropy": mean_spectral_entropy_divergence
                                          }
         return reconstruction_loss_functions[reconstruction_loss_function]
     

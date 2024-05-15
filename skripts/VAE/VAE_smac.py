@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-#SBATCH --job-name VAE_tuning
 #SBATCH --mem=400G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1

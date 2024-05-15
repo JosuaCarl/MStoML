@@ -20,7 +20,6 @@
 - Weiteres Vorgehen
 	- Comm8 Training -> Comm20 Testing
 		- Übertragbarkeit auf größere Kolonien
-		- An Generalisierbarkeit arbeiten
 	- VAE mit mehr FIA Daten + Neuem Loss
 	- Gegenüberstellung der 5 Algorithmen
 		- Figures !

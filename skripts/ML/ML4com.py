@@ -142,56 +142,6 @@ class SKL_Classifier:
             self.count += 1
         return 1.0 - score
 
-def extract_metrics(true_labels, prediction, run_label=None, cv_i=None,
-                    metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):
-    fpr, tpr, threshold = roc_curve(true_labels,  prediction)
-    auc = roc_auc_score(true_labels,  prediction)
-    conf_mat = confusion_matrix(true_labels,  prediction)
-    accuracy = accuracy_score(true_labels,  prediction)
-    
-    if cv_i and run_label:
-        metrics_df.loc[len(metrics_df)] = [run_label, cv_i, accuracy, auc, tpr, fpr, threshold, conf_mat]
-    elif run_label:
-        metrics_df.loc[len(metrics_df)] = [run_label, accuracy, auc, tpr, fpr, threshold, conf_mat]
-    else:
-        metrics_df.loc[len(metrics_df)] = [accuracy, auc, tpr, fpr, threshold, conf_mat]
-
-    return metrics_df
-
-
-def cross_validate_model_sklearn(model_in, X, ys, labels, config, fold:Union[KFold, StratifiedKFold]=KFold(), verbosity=0):
-    """
-    Cross-validate a model against the given hyperparameters for all organisms
-    """
-    metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
-    organism_metrics_df = pd.DataFrame(columns=["Organism", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
-    overall_metrics_df = pd.DataFrame(columns=["Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
-
-    all_predictions = np.array()
-    for i, y in enumerate(tqdm(ys.columns)):
-        y = ys[y]
-        predictions = np.array()
-        for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
-            model = model_in(**config)		# Ensures model resetting for each cross-validation
-            training_data = X.iloc[train_index]
-            training_labels = y.iloc[train_index]
-            validation_data = X.iloc[val_index]
-            validation_labels = y.iloc[val_index]
-
-            model.fit(np.array(training_data), np.array(training_labels))
-
-            prediction = model.predict(np.array(validation_data))
-            metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
-			
-            if verbosity != 0:
-                model.evaluate(validation_data,  validation_labels, verbose=verbosity) # type: ignore
-
-            predictions = np.append(predictions, prediction)
-        organism_metrics_df = extract_metrics(y, predictions, labels[i], metrics_df=metrics_df)
-        all_predictions = np.append(all_predictions, predictions)
-
-    overall_metrics_df = extract_metrics(ys.to_numpy().flatten(), all_predictions, metrics_df=metrics_df)
-    return (metrics_df, organism_metrics_df, overall_metrics_df)
 
 def tune_classifier(X, y, classifier, configuration_space, n_trials, name, algorithm_name, outdir, verbosity):
     classifier = SKL_Classifier(X, y, cv=5, configuration_space=configuration_space, classifier=classifier)
@@ -211,17 +161,70 @@ def tune_classifier(X, y, classifier, configuration_space, n_trials, name, algor
 
     return incumbent
 
+
+def extract_metrics(true_labels, prediction, run_label=None, cv_i=None,
+                    metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):
+    fpr, tpr, threshold = roc_curve(true_labels,  prediction)
+    auc = roc_auc_score(true_labels,  prediction)
+    conf_mat = confusion_matrix(true_labels,  prediction)
+    accuracy = accuracy_score(true_labels,  prediction)
+    
+    if cv_i and run_label:
+        metrics_df.loc[len(metrics_df)] = [run_label, cv_i, accuracy, auc, tpr, fpr, threshold, conf_mat]
+    elif run_label:
+        metrics_df.loc[len(metrics_df)] = [run_label, accuracy, auc, tpr, fpr, threshold, conf_mat]
+    else:
+        metrics_df.loc[len(metrics_df)] = [accuracy, auc, tpr, fpr, threshold, conf_mat]
+
+    return metrics_df
+
+def cross_validate_model_sklearn(model_in, X, ys, labels, config, fold:Union[KFold, StratifiedKFold]=KFold(), verbosity=0):
+    """
+    Cross-validate a model against the given hyperparameters for all organisms
+    """
+    metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+    organism_metrics_df = pd.DataFrame(columns=["Organism", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+    overall_metrics_df = pd.DataFrame(columns=["Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+
+    all_predictions = np.ndarray((0))
+    for i, y in enumerate(tqdm(ys.columns)):
+        y = ys[y]
+        predictions = np.ndarray((0))
+        for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
+            model = model_in(**config)		# Ensures model resetting for each cross-validation
+            training_data = X.iloc[train_index]
+            training_labels = y.iloc[train_index]
+            validation_data = X.iloc[val_index]
+            validation_labels = y.iloc[val_index]
+
+            model.fit(np.array(training_data), np.array(training_labels))
+
+            prediction = model.predict(np.array(validation_data))
+            metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
+			
+            if verbosity != 0:
+                model.evaluate(validation_data,  validation_labels, verbose=verbosity) # type: ignore
+
+            predictions = np.append(predictions, prediction)
+        organism_metrics_df = extract_metrics(y, predictions, labels[i], metrics_df=organism_metrics_df)
+        all_predictions = np.append(all_predictions, predictions)
+
+    overall_metrics_df = extract_metrics(ys.to_numpy().flatten(), all_predictions, metrics_df=overall_metrics_df)
+    return (metrics_df, organism_metrics_df, overall_metrics_df)
+
 def cross_validate_classifier(X, y, targets, incumbent, classifier, algorithm_name, outdir):
     if isinstance(incumbent, list):
         best_hp = incumbent[0]
     else: 
         best_hp = incumbent
 
-    metrics_df = cross_validate_model_sklearn(classifier, X, y, targets, config=best_hp,
-                                            fold=StratifiedKFold(n_splits=5), verbosity=0)
+    metrics_df, organism_metrics_df, overall_metrics_df = cross_validate_model_sklearn(classifier, X, y, targets, config=best_hp,
+                                                                                       fold=StratifiedKFold(n_splits=5), verbosity=0)
     metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_metrics.tsv"), sep="\t")
+    organism_metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_organism_metrics.tsv"), sep="\t")
+    overall_metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_overall_metrics.tsv"), sep="\t")
 
-    return metrics_df
+    return (metrics_df, organism_metrics_df, overall_metrics_df)
    
 
 # PLOTTING
@@ -252,3 +255,22 @@ def plot_decision_trees(model, feature_names, class_names, outdir, name):
                 filled = True)
     plt.savefig(os.path.join(outdir, f"{name}.png"))
     plt.close()
+
+
+def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir):
+    ax = sns.heatmap(metrics_df.pivot(index="Organism", columns="Cross-Validation run", values="Accuracy"),
+                    vmin=0, vmax=1.0, annot=True, cmap=sns.diverging_palette(328.87,  221.63, center="light", as_cmap=True))
+    fig = ax.get_figure()
+    fig.savefig(os.path.join(outdir, f"{algorithm_name}_heatmap_accuracies.svg"), bbox_inches="tight")
+    plt.show()
+
+    ax = sns.lineplot( overall_metrics_df.explode(["TPR", "FPR"]), x="TPR", y="FPR", hue="AUC")
+    ax = sns.lineplot( organism_metrics_df.explode(["TPR", "FPR"]), x="TPR", y="FPR", hue="Organism", alpha=0.5, ax=ax)
+    ax.set_title("AUC")
+    leg = ax.axes.get_legend()
+    leg.set_title("Organism (AUC)")
+    for t, l in zip(leg.texts, [f'{row["Organism"]} (AUC={str(row["AUC"])})' for i, row in organism_metrics_df.iterrows()]+ [f"Overall (AUC={overall_metrics_df.loc[0, 'AUC']})"]):
+        t.set_text(l)
+    fig = ax.get_figure()
+    fig.savefig(os.path.join(outdir, f"{algorithm_name}_AUC.svg"), bbox_inches="tight")
+    plt.show()

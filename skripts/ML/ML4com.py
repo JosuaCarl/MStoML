@@ -20,6 +20,7 @@ from sklearn import svm
 import seaborn as sns
 import matplotlib.pyplot as plt
 from ConfigSpace import Configuration, ConfigurationSpace
+from smac import HyperparameterOptimizationFacade, Scenario
 import mlflow
 from pathlib import Path
 
@@ -141,14 +142,19 @@ class SKL_Classifier:
             self.count += 1
         return 1.0 - score
 
-def extract_metrics(true_labels, prediction, run_label, cv_i,
+def extract_metrics(true_labels, prediction, run_label=None, cv_i=None,
                     metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):
     fpr, tpr, threshold = roc_curve(true_labels,  prediction)
     auc = roc_auc_score(true_labels,  prediction)
     conf_mat = confusion_matrix(true_labels,  prediction)
     accuracy = accuracy_score(true_labels,  prediction)
-
-    metrics_df.loc[len(metrics_df)] = [run_label, cv_i, accuracy, auc, tpr, fpr, threshold, conf_mat]
+    
+    if cv_i and run_label:
+        metrics_df.loc[len(metrics_df)] = [run_label, cv_i, accuracy, auc, tpr, fpr, threshold, conf_mat]
+    elif run_label:
+        metrics_df.loc[len(metrics_df)] = [run_label, accuracy, auc, tpr, fpr, threshold, conf_mat]
+    else:
+        metrics_df.loc[len(metrics_df)] = [accuracy, auc, tpr, fpr, threshold, conf_mat]
 
     return metrics_df
 
@@ -158,9 +164,13 @@ def cross_validate_model_sklearn(model_in, X, ys, labels, config, fold:Union[KFo
     Cross-validate a model against the given hyperparameters for all organisms
     """
     metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+    organism_metrics_df = pd.DataFrame(columns=["Organism", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+    overall_metrics_df = pd.DataFrame(columns=["Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
 
+    all_predictions = np.array()
     for i, y in enumerate(tqdm(ys.columns)):
         y = ys[y]
+        predictions = np.array()
         for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
             model = model_in(**config)		# Ensures model resetting for each cross-validation
             training_data = X.iloc[train_index]
@@ -175,9 +185,44 @@ def cross_validate_model_sklearn(model_in, X, ys, labels, config, fold:Union[KFo
 			
             if verbosity != 0:
                 model.evaluate(validation_data,  validation_labels, verbose=verbosity) # type: ignore
+
+            predictions = np.append(predictions, prediction)
+        organism_metrics_df = extract_metrics(y, predictions, labels[i], metrics_df=metrics_df)
+        all_predictions = np.append(all_predictions, predictions)
+
+    overall_metrics_df = extract_metrics(ys.to_numpy().flatten(), all_predictions, metrics_df=metrics_df)
+    return (metrics_df, organism_metrics_df, overall_metrics_df)
+
+def tune_classifier(X, y, classifier, configuration_space, n_trials, name, algorithm_name, outdir, verbosity):
+    classifier = SKL_Classifier(X, y, cv=5, configuration_space=configuration_space, classifier=classifier)
+
+    scenario = Scenario( classifier.configuration_space, deterministic=True, 
+                        n_workers=1, n_trials=n_trials,
+                        walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None,
+                        output_directory=outdir)
+
+    facade = HyperparameterOptimizationFacade(scenario, classifier.train, overwrite=True, logging_level=30-verbosity*10)
+
+    mlflow.set_tracking_uri(Path(os.path.join(outdir, "mlruns")))
+    mlflow.set_experiment(f"{name}_{algorithm_name}")
+    with mlflow.start_run(run_name=f"{name}_{algorithm_name}"):
+        mlflow.set_tag("test_identifier", "parent")
+        incumbent = facade.optimize()
+
+    return incumbent
+
+def cross_validate_classifier(X, y, targets, incumbent, classifier, algorithm_name, outdir):
+    if isinstance(incumbent, list):
+        best_hp = incumbent[0]
+    else: 
+        best_hp = incumbent
+
+    metrics_df = cross_validate_model_sklearn(classifier, X, y, targets, config=best_hp,
+                                            fold=StratifiedKFold(n_splits=5), verbosity=0)
+    metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_metrics.tsv"), sep="\t")
+
     return metrics_df
-
-
+   
 
 # PLOTTING
 def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, name):

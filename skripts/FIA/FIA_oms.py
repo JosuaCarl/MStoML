@@ -21,6 +21,8 @@ def main():
     data_dir, run_dir = (args.data_dir, args.run_dir)
     data_dir = os.path.normpath(os.path.join(os.getcwd(), data_dir))
     run_dir = os.path.normpath(os.path.join(os.getcwd(), run_dir))
+    if not os.path.isdir(run_dir):
+        os.mkdir(run_dir)
     file_ending = args.file_ending if args.file_ending else ".mzML"
     steps = args.steps if args.steps else ["trim", "centroid", "merge", "pos_neg_merge"]
 

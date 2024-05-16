@@ -18,6 +18,7 @@ from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCo
 from smac import MultiFidelityFacade, HyperparameterOptimizationFacade
 from smac import Scenario
 from smac.intensifier.hyperband import Hyperband
+import smac
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append( os.path.join( dir_path, '../..' ))
@@ -117,25 +118,16 @@ class Classifier:
 
 
 # Evaluation
-def extract_metrics(true_labels, prediction, run_label, cv_i,
-                    metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):
-    fpr, tpr, threshold = roc_curve(true_labels,  prediction)
-    auc = roc_auc_score(true_labels,  prediction)
-
-    prediction_labels = [0.0 if pred[0] < 0.5 else 1.0 for pred in prediction]
-    conf_mat = confusion_matrix(true_labels,  prediction_labels)
-    accuracy = accuracy_score(true_labels,  prediction_labels)
-
-    metrics_df.loc[len(metrics_df)] = [run_label, cv_i, accuracy, auc, tpr, fpr, threshold, conf_mat]
-
-    return metrics_df
-
 def cross_validate_model(X, ys, labels, config, classes=1, fold:Union[KFold, StratifiedKFold]=KFold(), patience:int=100, epochs:int=1000, verbosity=0):
     """
     Cross-validate a model against the given hyperparameters for all organisms
     """
     metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
 
+    organism_metrics_df = pd.DataFrame(columns=["Organism", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+    overall_metrics_df = pd.DataFrame(columns=["Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+
+    all_predictions = np.ndarray((0))
     for i, y in enumerate(tqdm(ys.columns)):
         y = ys[y]
         for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
@@ -154,5 +146,11 @@ def cross_validate_model(X, ys, labels, config, classes=1, fold:Union[KFold, Str
             if verbosity != 0:
                 model.evaluate(validation_data,  validation_labels, verbose=verbosity) # type: ignore
 
+            predictions = np.append(predictions, prediction)
             keras.backend.clear_session()
-    return metrics_df
+            
+        organism_metrics_df = extract_metrics(y, predictions, labels[i], metrics_df=organism_metrics_df)
+        all_predictions = np.append(all_predictions, predictions)
+
+    overall_metrics_df = extract_metrics(ys.to_numpy().flatten(), all_predictions, metrics_df=overall_metrics_df)
+    return (metrics_df, organism_metrics_df, overall_metrics_df)

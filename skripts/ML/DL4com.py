@@ -92,33 +92,42 @@ def build_classification_model(config:Configuration, classes:int=1):
     return model
 
 class Classifier:
-    def __init__(self, X, ys, test_size:float, configuration_space:ConfigurationSpace, model_builder, model_args):
+    def __init__(self, X, ys, cv, configuration_space:ConfigurationSpace, model_builder, model_args):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
         self.model_args = model_args
-        self.training_data, self.test_data, self.training_labels, self.test_labels = train_test_split(X, ys, test_size=test_size)
+        self.fold = KFold(n_splits=cv)
+        self.X = X
+        self.ys = ys
 
     def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> np.float64:
         model = self.model_builder(config=config, **self.model_args)
         losses = []
-        for y in self.training_labels.columns:
-            keras.utils.set_random_seed(seed)
-    
-            y_train = self.training_labels[y]
-            y_test= self.test_labels[y]
+        for train_index, val_index in self.fold.split(self.X, self.ys):
+            training_data = self.X.iloc[train_index]
+            training_labels = self.ys.iloc[train_index]
+            validation_data = self.X.iloc[val_index]
+            validation_labels = self.ys.iloc[val_index]
             
-            callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)
-            model.fit(self.training_data, y_train, epochs=int(budget), verbose=0, callbacks=[callback])
+            for y in training_labels.columns:
+                keras.utils.set_random_seed(seed)
+        
+                y_train = training_labels[y]
+                y_test= validation_labels[y]
+                
+                callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)
+                model.fit(training_data, y_train, epochs=int(budget), verbose=0, callbacks=[callback])
 
-            val_loss, val_acc = model.evaluate(self.test_data,  y_test, verbose=0)
-            losses.append(val_loss)
-            keras.backend.clear_session()
+                val_loss, val_acc = model.evaluate(validation_data,  y_test, verbose=0)
+                losses.append(val_loss)
+                keras.backend.clear_session()
 
         return np.mean(losses)
 
 
 # Evaluation
-def cross_validate_model(X, ys, labels, config, classes=1, fold:Union[KFold, StratifiedKFold]=KFold(), patience:int=100, epochs:int=1000, verbosity=0):
+def nested_cross_validate_model(X, ys, labels, configuration_space, classes=1, fold:Union[KFold, StratifiedKFold]=KFold(),
+                                patience:int=100, epochs:int=1000, outdir=".", verbosity=0):
     """
     Cross-validate a model against the given hyperparameters for all organisms
     """
@@ -131,11 +140,36 @@ def cross_validate_model(X, ys, labels, config, classes=1, fold:Union[KFold, Str
     for i, y in enumerate(tqdm(ys.columns)):
         y = ys[y]
         for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
-            model = build_classification_model(config, classes)		# Ensures model resetting for each cross-validation
             training_data = X.iloc[train_index]
             training_labels = y.iloc[train_index]
             validation_data = X.iloc[val_index]
             validation_labels = y.iloc[val_index]
+
+            classifier = Classifier(training_data, ys, test_size=1/3, configuration_space=configuration_space,
+                                    model_builder=build_classification_model, model_args={"classes": 1})
+
+            scenario = Scenario( classifier.configuration_space, n_trials=1000,
+                                deterministic=True,
+                                min_budget=5, max_budget=1000,
+                                n_workers=1, output_directory=outdir,
+                                walltime_limit=12*60*60, cputime_limit=np.inf, trial_memory_limit=int(6e10)    # Max RAM in Bytes (not MB) 3600 = 1h
+                                )
+
+            initial_design = MultiFidelityFacade.get_initial_design(scenario, n_configs=100)
+            intensifier = Hyperband(scenario, incumbent_selection="highest_budget")
+            facade = MultiFidelityFacade( scenario, classifier.train, 
+                                        initial_design=initial_design, intensifier=intensifier,
+                                        overwrite=True, logging_level=20
+                                        )
+
+            incumbent = facade.optimize()
+
+            if isinstance(incumbent, list):
+                best_hp = incumbent[0]
+            else: 
+                best_hp = incumbent
+
+            model = build_classification_model(best_hp, classes)		# Ensures model resetting for each cross-validation
 
             callback = keras.callbacks.EarlyStopping(monitor='loss', patience=patience)
             model.fit(training_data, training_labels, epochs=epochs, verbose=0, callbacks=[callback]) # type: ignore

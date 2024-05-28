@@ -108,7 +108,7 @@ class Classifier:
             training_labels = self.ys.iloc[train_index]
             validation_data = self.X.iloc[val_index]
             validation_labels = self.ys.iloc[val_index]
-            
+
             for y in training_labels.columns:
                 keras.utils.set_random_seed(seed)
         
@@ -145,7 +145,7 @@ def nested_cross_validate_model(X, ys, labels, configuration_space, classes=1, f
             validation_data = X.iloc[val_index]
             validation_labels = y.iloc[val_index]
 
-            classifier = Classifier(training_data, ys, test_size=1/3, configuration_space=configuration_space,
+            classifier = Classifier(training_data, ys, cv=3 , configuration_space=configuration_space,
                                     model_builder=build_classification_model, model_args={"classes": 1})
 
             scenario = Scenario( classifier.configuration_space, n_trials=1000,

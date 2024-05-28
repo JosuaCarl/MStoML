@@ -49,6 +49,7 @@ def main(args):
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
     precision = args.precision if args.precision else "float32"
+    n_trials = args.trials if args.trials else 500
 
     if verbosity > 0:
         print(f"Using {keras.backend.backend()} as backend")
@@ -89,7 +90,7 @@ def main(args):
 
 
     scenario = Scenario( fia_vae_hptune.configuration_space, deterministic=True,
-                         n_trials=500, min_budget=2, max_budget=50,
+                         n_trials=n_trials, min_budget=2, max_budget=50,
                          n_workers=1, output_directory=outdir,
                          walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None )   # Max RAM in Bytes (not MB)
                         
@@ -99,6 +100,8 @@ def main(args):
                                   initial_design=initial_design, intensifier=intensifier,
                                   overwrite=overwrite, logging_level=30-verbosity*10 )
     time_step(message=f"SMAC defined. Overwriting: {overwrite}", verbosity=verbosity, min_verbosity=1)
+    print(f"Ran {len(facade.runhistory)} out of {n_trials} trials")
+
 
     mlflow.set_tracking_uri(Path(os.path.join(outdir, "mlruns")))
     mlflow.set_experiment(f"FIA_VAE_smac_{name}_{loss}")
@@ -286,6 +289,7 @@ if __name__ == "__main__":
     parser.add_argument('-l', '--loss', required=True)
     parser.add_argument('-n', '--name', required=False)
     parser.add_argument('-bat', '--batch_size', type=int, required=False)
+    parser.add_argument('-t', '--trials', type=int, required=False)
     parser.add_argument('-v', '--verbosity', type=int, required=True)
     args = parser.parse_args()
 

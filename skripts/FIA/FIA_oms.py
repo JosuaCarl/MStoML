@@ -6,18 +6,18 @@ import argparse
 
 # import methods from FIA python script
 sys.path.append("..")
-from FIA import *
-
-# Argument parser
-parser = argparse.ArgumentParser(prog='FIA_oms',
-                                description='Flow-injection analysis with OpenMS python bindings.')
-parser.add_argument('-d', '--data_dir', required=True)      # option that takes a value
-parser.add_argument('-e', '--file_ending', required=False)
-parser.add_argument('-r', '--run_dir', required=True)
-parser.add_argument('-s', '--steps', nargs="*", required=True)
-args = parser.parse_args()
+from FIA.FIA import *
 
 def main():
+    # Argument parser
+    parser = argparse.ArgumentParser(prog='FIA_oms',
+                                     description='Flow-injection analysis with OpenMS python bindings.')
+    parser.add_argument('-d', '--data_dir', required=True)      # option that takes a value
+    parser.add_argument('-e', '--file_ending', required=False)
+    parser.add_argument('-r', '--run_dir', required=True)
+    parser.add_argument('-s', '--steps', nargs="*", required=True)
+    args = parser.parse_args()
+
     data_dir, run_dir = (args.data_dir, args.run_dir)
     data_dir = os.path.normpath(os.path.join(os.getcwd(), data_dir))
     run_dir = os.path.normpath(os.path.join(os.getcwd(), run_dir))
@@ -26,7 +26,7 @@ def main():
     file_ending = args.file_ending if args.file_ending else ".mzML"
     steps = args.steps if args.steps else ["trim", "centroid", "merge", "pos_neg_merge"]
 
-    runner = Runner(steps, data_dir, run_dir, file_ending, runtimes={}, start_time=time.time())
+    runner = Runner(data_dir, run_dir, file_ending, runtimes={}, start_time=time.time())
     methods = {"trim": runner.trim,
                "centroid": runner.centroid,
                "merge":runner.merge,
@@ -37,8 +37,7 @@ def main():
 
 
 class Runner:
-    def __init__(self, steps, data_dir, run_dir, file_ending, runtimes, start_time) -> None:
-        self.steps = steps
+    def __init__(self, data_dir, run_dir, file_ending, runtimes, start_time) -> None:
         self.run_dir = run_dir
         self.last_dir = data_dir
         self.file_ending = file_ending

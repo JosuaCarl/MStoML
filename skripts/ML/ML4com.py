@@ -276,6 +276,7 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
 def build_classification_model(config:Configuration, classes:int=1):
     backend.clear_session()
     gc.collect()
+
     # Model definition
     model = keras.Sequential(name="MS_community_classifier")
     model.add( keras.layers.Dropout( config["dropout_in"] ) )
@@ -320,24 +321,20 @@ class Keras_Classifier:
             validation_data = self.X.iloc[val_index]
             validation_labels = self.ys.iloc[val_index]
 
-            for y in training_labels.columns:
-                keras.utils.set_random_seed(seed)
-        
-                y_train = training_labels[y]
-                y_test= validation_labels[y]
-                
-                callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)
-                model.fit(training_data, y_train, epochs=int(budget), verbose=0, callbacks=[callback])
+            keras.utils.set_random_seed(seed)
+    
+            callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)
+            model.fit(training_data, training_labels, epochs=int(budget), verbose=0, callbacks=[callback])
 
-                val_loss, val_acc = model.evaluate(validation_data,  y_test, verbose=0)
-                losses.append(val_loss)
-                keras.backend.clear_session()
+            val_loss, val_acc = model.evaluate(validation_data,  validation_labels, verbose=0)
+            losses.append(val_loss)
+            keras.backend.clear_session()
 
         return np.mean(losses)
 
 
 # Evaluation
-def nested_cross_validate_model_keras(X, ys, labels, configuration_space, classes=1, fold:Union[KFold, StratifiedKFold]=KFold(),
+def nested_cross_validate_model_keras(X, ys, labels, configuration_space, n_trials=100, classes=1, fold:Union[KFold, StratifiedKFold]=KFold(),
                                       patience:int=100, epochs:int=1000, outdir=".", verbosity=0):
     """
     Perform nested cross-validation with hyperparameter search on the given configuration space and subsequent evaluation
@@ -356,25 +353,25 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, classe
             validation_data = X.iloc[val_index]
             validation_labels = y.iloc[val_index]
 
-            classifier = Keras_Classifier(training_data, ys, cv=3 , configuration_space=configuration_space,
-                                    model_builder=build_classification_model, model_args={"classes": 1})
+            classifier = Keras_Classifier( training_data, training_labels, cv=3, configuration_space=configuration_space,
+                                           model_builder=build_classification_model, model_args={"classes": 1} )
 
-            scenario = Scenario( classifier.configuration_space, n_trials=1000,
-                                deterministic=True,
-                                min_budget=5, max_budget=1000,
-                                n_workers=1, output_directory=outdir,
-                                walltime_limit=12*60*60, cputime_limit=np.inf, trial_memory_limit=int(6e10)    # Max RAM in Bytes (not MB) 3600 = 1h
+            scenario = Scenario( classifier.configuration_space, n_trials=n_trials,
+                                 deterministic=True,
+                                 min_budget=5, max_budget=1000,
+                                 n_workers=1, output_directory=outdir,
+                                 walltime_limit=12*60*60, cputime_limit=np.inf, trial_memory_limit=int(6e10)    # Max RAM in Bytes (not MB) 3600 = 1h
                                 )
 
-            initial_design = MultiFidelityFacade.get_initial_design(scenario, n_configs=100)
-            intensifier = Hyperband(scenario, incumbent_selection="highest_budget")
+            initial_design = MultiFidelityFacade.get_initial_design( scenario, n_configs=100 )
+            intensifier = Hyperband( scenario, incumbent_selection="highest_budget" )
             facade = MultiFidelityFacade( scenario, classifier.train, 
-                                        initial_design=initial_design, intensifier=intensifier,
-                                        overwrite=True, logging_level=20
-                                        )
+                                          initial_design=initial_design, intensifier=intensifier,
+                                          overwrite=True, logging_level=20 )
 
             incumbent = facade.optimize()
-
+            
+            print(incumbent)
             if isinstance(incumbent, list):
                 best_hp = incumbent[0]
             else: 
@@ -389,7 +386,7 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, classe
             metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
 			
             if verbosity != 0:
-                model.evaluate(validation_data,  validation_labels, verbose=verbosity) # type: ignore
+                model.evaluate(validation_data,  validation_labels, verbose=verbosity)
 
             predictions = np.append(predictions, prediction)
             keras.backend.clear_session()
@@ -399,6 +396,8 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, classe
 
     overall_metrics_df = extract_metrics(ys.to_numpy().flatten(), all_predictions, metrics_df=overall_metrics_df)
     return (metrics_df, organism_metrics_df, overall_metrics_df)
+
+
 
 # PLOTTING
 def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, name):

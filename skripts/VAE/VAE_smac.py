@@ -111,7 +111,7 @@ def main(args):
         mlflow.set_tag("test_identifier", "parent")
         incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=10, verbosity=verbosity)
 
-    best_hp = validate_incumbent(incumbent=incumbent, fascade=facade, verbosity=verbosity)
+    best_hp = validate_incumbent(incumbent=incumbent, fascade=facade, run_dir=run_dir, verbosity=verbosity)
 
     save_runtime(run_dir=run_dir, verbosity=verbosity)
 

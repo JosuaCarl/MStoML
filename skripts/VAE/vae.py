@@ -171,7 +171,13 @@ def read_data(data_dir:str, verbosity:int=0):
     Returns:
         X: matrix with total ion count (TIC) normalized data (transposed)
     """
-    binned_dfs = pd.read_csv(os.path.join(data_dir, "data_matrix.tsv"), sep="\t", index_col="mz")
+    pathname = [pathname for pathname in os.listdir(data_dir) if pathname.startswith("data_matrix.")][0]
+    if pathname.endswith("tsv"):
+        binned_dfs = pd.read_csv(os.path.join(data_dir, "data_matrix.tsv"), sep="\t", index_col="mz")
+    elif pathname.endswith("feather"):
+        binned_dfs = pd.read_feather(os.path.join(data_dir, "data_matrix.feather"), index_col="mz")
+    elif pathname.endswith("parquet"):
+        binned_dfs = pd.read_parquet(os.path.join(data_dir, "data_matrix.parquet"), index_col="mz")
     binned_dfs[:] =  total_ion_count_normalization(binned_dfs)
 
     X = binned_dfs.transpose()

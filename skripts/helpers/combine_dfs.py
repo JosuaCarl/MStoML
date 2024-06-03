@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#SBATCH --mem=400G
 
 # imports
 import os
@@ -61,32 +62,34 @@ def combine_dc(path_combs, outpath, target_format="parquet", framework=pl):
             file = "" if os.path.isfile(path) else "data_matrix.tsv"
             path =  os.path.normpath(os.path.join(path, file))
             split = str(os.path.basename(path)).split(".")
-            target_file = f'{".".join( split[:-1] )}_{i // 2}.{target_format}'
+            target_file = f'{".".join( split[:-1] )}_{i}.{target_format}'
             tmp_path = os.path.join(tmp_dir, target_file)
-            if tmp_path not in new_path_combs:
-                new_path_combs.append( tmp_path )
-            if os.path.isfile(tmp_path):
-                continue
-
-            binned_df = read_df(path, framework=framework)
-            binned_dfs.append( binned_df )
-    
-            if len(binned_dfs) >= 2:
-                binned_dfs = concat_dfs(binned_dfs, framework=framework)
-                write_df(binned_dfs, tmp_path, framework=framework)
-                binned_dfs = []
+            if not os.path.isfile(tmp_path):
+                binned_df = read_df(path, framework=framework)
+                binned_dfs.append( binned_df )
+        
+                if len(binned_dfs) >= 2:
+                    binned_dfs = concat_dfs(binned_dfs, framework=framework)
+                    write_df(binned_dfs, tmp_path, framework=framework)
+                    new_path_combs.append( tmp_path )
+                    binned_dfs = []
                 
-        if binned_dfs:
+        if binned_dfs and not os.path.isfile(tmp_path):
             binned_dfs = concat_dfs(binned_dfs, framework=framework)
             write_df(binned_df, tmp_path, framework=framework)
+            new_path_combs.append( tmp_path )
     
+    print(new_path_combs)
     combine_dc(new_path_combs, outpath, target_format=target_format, framework=framework)
+
 
 
 def main(args):
     in_dir = args.in_dirs
     out_dir = args.out_dir
     combine_dc([os.path.join(in_dir, file) for file in os.listdir(in_dir) if file.endswith(".tsv")], out_dir, target_format="feather", framework=pd)
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='VAE_smac_run',

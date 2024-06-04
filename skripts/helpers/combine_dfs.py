@@ -87,7 +87,8 @@ def combine_dc(path_combs, outpath, target_format="parquet", framework=pl):
 def main(args):
     in_dir = args.in_dirs
     out_dir = args.out_dir
-    combine_dc([os.path.join(in_dir, file) for file in os.listdir(in_dir) if file.endswith(".tsv")], out_dir, target_format="feather", framework=pd)
+    target_format = args.target_format
+    combine_dc([os.path.join(in_dir, file) for file in os.listdir(in_dir) if file.endswith(".tsv")], out_dir, target_format=target_format, framework=pd)
 
 
 
@@ -96,6 +97,7 @@ if __name__ == "__main__":
                                 description='Hyperparameter tuning for Variational Autoencoder with SMAC')
     parser.add_argument('-i', '--in_dirs', required=True)
     parser.add_argument('-o', '--out_dir', required=True)
+    parser.add_argument('-t', '--target_format', required=True)
     args = parser.parse_args()
 
     main(args)

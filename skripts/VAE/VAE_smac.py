@@ -58,7 +58,7 @@ def main(args):
 
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
-    X = read_data(data_dir, verbosity=verbosity)
+    X = read_data(os.path.join(data_dir, "data_matrix.tsv"), verbosity=verbosity)
 
     configuration_space = ConfigurationSpace(seed=42)
     hyperparameters = [

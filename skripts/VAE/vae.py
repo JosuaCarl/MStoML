@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_training
-#SBATCH --mem 200G
+#SBATCH --mem 400G
 #SBATCH --nodes 1
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
@@ -86,10 +86,20 @@ def main():
     previous_history = []
     if "new" in steps:
         config_space = ConfigurationSpace(
-                {'input_dropout': 0.2, 'intermediate_activation': "relu", 'intermediate_dimension': 180,
-                'intermediate_layers': 1, 'latent_dimension': 130, 'learning_rate': 6.5e-4,
-                'original_dim': 825000, 'solver': 'nadam', 'tied': 1, 'kld_weight': 2.385, "stdev_noise": 1e-12,
-                "reconstruction_loss_function": "mae+cosine"}
+                {
+                'input_dropout': 0.30881774853793853,
+                'intermediate_activation': 'leaky_relu',
+                'intermediate_dimension': 92,
+                'intermediate_layers': 7,
+                'kld_weight': 0.1319608007378437,
+                'latent_dimension': 66,
+                'learning_rate': 0.0075200853409827595,
+                'original_dim': 825000,
+                'reconstruction_loss_function': 'cosine',
+                'solver': 'nadam',
+                'stdev_noise': 2.8439343089406606e-07,
+                'tied': 0,
+                }
             )
         config = config_space.get_default_configuration()
     
@@ -106,6 +116,9 @@ def main():
     time_step("Model built", verbosity=verbosity, min_verbosity=2)
 
     data = read_data(data_dir, verbosity=verbosity)
+    if batch_size:
+        drop_last = len(data) % batch_size
+        data = data.iloc[:-drop_last]
     if backend.backend() == "torch":
         data = torch.tensor( data.to_numpy() ).to( model.device )
 
@@ -162,7 +175,7 @@ def main():
 
 
 
-def read_data(data_dir:str, verbosity:int=0):
+def read_data(data_path:str, verbosity:int=0):
     """
     Read in the data from a data_matrix and normalize it according to total ion counts
 
@@ -171,13 +184,12 @@ def read_data(data_dir:str, verbosity:int=0):
     Returns:
         X: matrix with total ion count (TIC) normalized data (transposed)
     """
-    pathname = [pathname for pathname in os.listdir(data_dir) if pathname.startswith("data_matrix.")][0]
-    if pathname.endswith("tsv"):
-        binned_dfs = pd.read_csv(os.path.join(data_dir, "data_matrix.tsv"), sep="\t", index_col="mz")
-    elif pathname.endswith("feather"):
-        binned_dfs = pd.read_feather(os.path.join(data_dir, "data_matrix.feather"), index_col="mz")
-    elif pathname.endswith("parquet"):
-        binned_dfs = pd.read_parquet(os.path.join(data_dir, "data_matrix.parquet"), index_col="mz")
+    if data_path.endswith("tsv"):
+        binned_dfs = pd.read_csv( data_path, sep="\t", index_col="mz")
+    elif data_path.endswith("feather"):
+        binned_dfs = pd.read_feather( data_path )
+    elif data_path.endswith("parquet"):
+        binned_dfs = pd.read_parquet( data_path )
     binned_dfs[:] =  total_ion_count_normalization(binned_dfs)
 
     X = binned_dfs.transpose()

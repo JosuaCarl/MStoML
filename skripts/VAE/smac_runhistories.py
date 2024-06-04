@@ -42,9 +42,9 @@ def main():
     smac_dirs = [Path(os.path.normpath(os.path.join(in_dir, project))) for in_dir in args.in_dirs]
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
-    runhistories = read_runhistories(folder_paths=smac_dirs, skip_dirs="log", verbosity=verbosity)
+    runhistories = read_runhistories(folder_paths=smac_dirs, skip_dirs="mlruns", verbosity=verbosity)
 
-    save_runhistory(runhistory=runhistories, out_dir=out_dir)
+    save_runhistory(runhistory=runhistories, project=project, out_dir=out_dir)
 
     if verbosity >= 1:
         print("Saved Runhistories.")
@@ -82,7 +82,7 @@ def read_runhistories(folder_paths:list, skip_dirs:list, verbosity:int=0) -> Run
     return runhistories
 
 
-def save_runhistory(runhistory, out_dir:str, verbosity:int=0) -> RunHistory:
+def save_runhistory(runhistory, project:str, out_dir:str, verbosity:int=0) -> RunHistory:
     """
     Saves the history of one run
 
@@ -98,7 +98,7 @@ def save_runhistory(runhistory, out_dir:str, verbosity:int=0) -> RunHistory:
         results.loc[len(results.index)] = [trial_info.config_id, dict(runhistory.get_config(trial_info.config_id)), trial_info.instance,
                                         trial_info.budget, trial_info.seed,
                                         trial_value.cost, trial_value.time, trial_value.status, trial_value.additional_info]
-    results.to_csv(os.path.join(out_dir, "results_hp_search.tsv"), sep="\t")
+    results.to_csv(os.path.join(out_dir, f"results_hp_search{project}.tsv"), sep="\t")
 
     return results
 

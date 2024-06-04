@@ -26,3 +26,11 @@
 	- Paper von Linklab für Figures
 	- Graphische Bearbeitung von Figures (SVGs)
 	- Latent space als Spektrum zeigen ?
+
+
+1. Abschluss des HP Tunings für alle Loss-Functions (je 500 Konfigurationen)
+2. Training des VAE mit den neuen Daten, unter Ausschluss der COM8 Daten
+3. Anwendung des VAE auf COM8 und Extraktion des latent space
+4. COM8 (equal concentration combinations) community prediction mit latent space und annotierten Metaboliten
+5. Training der besten Classification Algorithmen mit COM8 (equal concentration combinations)
+6. Anwendung der Classification-Modelle auf COM8 (grown together) um Übertragbarkeit zu testen

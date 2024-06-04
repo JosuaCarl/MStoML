@@ -116,6 +116,9 @@ def main():
     time_step("Model built", verbosity=verbosity, min_verbosity=2)
 
     data = read_data(data_dir, verbosity=verbosity)
+    if batch_size:
+        drop_last = len(data) % batch_size
+        data = data.iloc[:-drop_last]
     if backend.backend() == "torch":
         data = torch.tensor( data.to_numpy() ).to( model.device )
 

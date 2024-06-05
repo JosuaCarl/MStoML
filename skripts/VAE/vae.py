@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_training
-#SBATCH --mem 800G
+#SBATCH --mem 400G
 #SBATCH --nodes 1
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
@@ -68,6 +68,7 @@ def main():
     verbosity =  args.verbosity if args.verbosity else 0
     outdir = Path(os.path.normpath(os.path.join(run_dir, project)))
     precision = args.precision if args.precision else "float32"
+    validation_split = 0.2
 
     print(f"Using backend: {keras.backend.backend()}")
     if verbosity > 0 and gpu:
@@ -84,12 +85,13 @@ def main():
 
 
     data = read_data(data_dir, verbosity=verbosity)
+    print(f"Shape before batch pruning: {data.shape}")
     if batch_size:
-        drop_last = len(data) % batch_size
+        drop_last = len(data) % int(batch_size / validation_split)
         data = data.iloc[:-drop_last]
     if backend.backend() == "torch":
         data = torch.tensor( data.to_numpy() ).to( model.device )
-    print(data.shape)
+    print(f"Shape after batch pruning: {data.shape}")
 
     time_step("Data read", verbosity=verbosity, min_verbosity=2)
 
@@ -99,17 +101,17 @@ def main():
     if "new" in steps:
         config_space = ConfigurationSpace(
                 {
-                'input_dropout': 0.30881774853793853,
-                'intermediate_activation': 'leaky_relu',
-                'intermediate_dimension': 92,
+                'input_dropout': 0.4404990303930656,
+                'intermediate_activation': 'mish',
+                'intermediate_dimension': 378,
                 'intermediate_layers': 7,
-                'kld_weight': 0.1319608007378437,
-                'latent_dimension': 66,
-                'learning_rate': 0.0075200853409827595,
+                'kld_weight': 0.11432265386769921,
+                'latent_dimension': 180,
+                'learning_rate': 0.00017594452799251045,
                 'original_dim': 825000,
-                'reconstruction_loss_function': 'cosine',
+                'reconstruction_loss_function': 'spectral_entropy',
                 'solver': 'nadam',
-                'stdev_noise': 2.8439343089406606e-07,
+                'stdev_noise': 4.464573896496255e-09,
                 'tied': 0,
                 }
             )
@@ -138,7 +140,7 @@ def main():
         mlflow.set_experiment(f"FIA_VAE")
         mlflow.autolog(log_datasets=False, log_models=False, silent=verbosity < 2)
         with mlflow.start_run(run_name=f"fia_vae"):
-            history = model.fit(data, data, validation_split=0.2,
+            history = model.fit(data, data, validation_split=validation_split,
                                 batch_size=batch_size, epochs=epochs,
                                 callbacks=callbacks, verbose=verbosity)
             mlflow.log_params(model.config)

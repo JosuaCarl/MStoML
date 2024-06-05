@@ -42,7 +42,7 @@ def concat_dfs(dfs, framework=pd):
     if framework == pl:
         dfs = framework.concat( dfs, how="align" )
     elif framework == pd:
-        dfs = framework.concat( dfs )
+        dfs = framework.concat( dfs, axis="columns" )
     return dfs
 
 

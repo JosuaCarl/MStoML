@@ -56,6 +56,7 @@ def main():
         vae.py -d "../data" -r "../runs" -b "tensorflow" -c "gpu" -n "1" -bat 16 -e 10000 -s "new" "train" "test" "plot" -v 1
         ```
     """
+    print("Started")
     data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
     backend_name = args.backend
     computation = args.computation
@@ -79,7 +80,9 @@ def main():
             print("GPU available: ", torch.cuda.is_available())
     
     keras.backend.set_floatx(precision)
-    
+    data = read_data(data_dir, verbosity=verbosity)
+    print(data.shape)
+
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
     keras.utils.set_random_seed( 42 )

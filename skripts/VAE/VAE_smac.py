@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#SBATCH --mem=400G
+#SBATCH --mem=500G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1

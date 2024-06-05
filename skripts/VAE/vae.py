@@ -56,7 +56,6 @@ def main():
         vae.py -d "../data" -r "../runs" -b "tensorflow" -c "gpu" -n "1" -bat 16 -e 10000 -s "new" "train" "test" "plot" -v 1
         ```
     """
-    print("Started")
     data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
     backend_name = args.backend
     computation = args.computation
@@ -453,7 +452,6 @@ class FIA_VAE(Model):
 
 
 if __name__ == "__main__":
-    print("Start")
     parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
     parser.add_argument('-d', '--data_dir', required=True)
@@ -468,7 +466,6 @@ if __name__ == "__main__":
     parser.add_argument('-v', '--verbosity', type=int, required=False)
     args = parser.parse_args()
     
-    print("Args parsed")
     os.environ["KERAS_BACKEND"] = args.backend
 
     main()

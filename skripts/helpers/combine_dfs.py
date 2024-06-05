@@ -86,8 +86,8 @@ def combine_dc(path_combs, outpath, target_format="parquet", framework=pl, bins:
             write_df(binned_dfs, tmp_paths[i], framework=framework)
             new_path_combs.append( tmp_paths[i] )
     
-    print(new_path_combs)
-    combine_dc(new_path_combs, outpath, target_format=target_format, framework=framework)
+        print(new_path_combs)
+        combine_dc(new_path_combs, outpath, target_format=target_format, framework=framework)
 
 
 

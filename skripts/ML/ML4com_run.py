@@ -4,9 +4,8 @@
 import sys
 sys.path.append( '..' )
 
-from helpers import *
-from FIA import *
-from ML4com import *
+from FIA.FIA import *
+from ML.ML4com import *
 from VAE.vae import *
 
 import warnings
@@ -14,6 +13,13 @@ warnings.simplefilter(action='ignore', category=sklearn.exceptions.UndefinedMetr
 
 start_dir = "../.."
 source = "annotated"
+
+n_trials = 200
+inner_fold = 3
+outer_fold = 5
+verbosity = 0
+
+
 
 orig_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/data/Com8_grown_together"))
 data_dir  = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/FIA/Com8_grown_together"))
@@ -42,21 +48,16 @@ elif source == "annotated":
     run_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/ML/annot"))
     name = "annotated_com8_grown_together"
 
-    met_raw_pos = pd.read_excel( os.path.join(orig_dir,"FIA-Data Com8_20230717_P0024_msAV206-312.xlsx"), sheet_name="pos" )
-    met_raw_neg = pd.read_excel( os.path.join(orig_dir,"FIA-Data Com8_20230717_P0024_msAV206-312.xlsx"), sheet_name="neg" )
-    met_raw_comb = pd.concat( [total_ion_count_normalization( join_df_metNames(met_raw_pos) ),
-                            total_ion_count_normalization( join_df_metNames(met_raw_neg) )] )
+    met_raw_pos = pd.read_excel( os.path.join( orig_dir, "FIA-Data Com8_20230717_P0024_msAV206-312.xlsx" ), sheet_name="pos" )
+    met_raw_neg = pd.read_excel( os.path.join( orig_dir, "FIA-Data Com8_20230717_P0024_msAV206-312.xlsx" ), sheet_name="neg" )
+    met_raw_comb = pd.concat( [ total_ion_count_normalization( join_df_metNames(met_raw_pos) ),
+                                total_ion_count_normalization( join_df_metNames(met_raw_neg) ) ] )
 
     outdir = Path( os.path.normpath( os.path.join( run_dir, name) ) )
     if not os.path.isdir(outdir):
         os.mkdir(outdir)
 
     X = met_raw_comb.transpose()
-
-n_trials = 200
-inner_fold = 3
-outer_fold = 5
-verbosity = 0
 
 from sklearn.neighbors import KNeighborsClassifier 
 classifier = KNeighborsClassifier

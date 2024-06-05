@@ -83,6 +83,7 @@ def main():
 
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
+
     data = read_data(data_dir, verbosity=verbosity)
     if batch_size:
         drop_last = len(data) % batch_size

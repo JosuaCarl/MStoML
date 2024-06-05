@@ -429,7 +429,7 @@ def plot_decision_trees(model, feature_names, class_names, outdir, name):
     plt.close()
 
 
-def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir):
+def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=True):
     """
     Plot the extracted metrics
     """
@@ -448,4 +448,5 @@ def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorit
         t.set_text(l)
     fig = ax.get_figure()
     fig.savefig(os.path.join(outdir, f"{algorithm_name}_AUC.svg"), bbox_inches="tight")
-    plt.show()
+    if show:
+        plt.show()

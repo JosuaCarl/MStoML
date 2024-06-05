@@ -59,6 +59,7 @@ elif source == "annotated":
 
     X = met_raw_comb.transpose()
 
+"""
 from sklearn.neighbors import KNeighborsClassifier 
 classifier = KNeighborsClassifier
 algorithm_name = "Kneighbours classifier"
@@ -186,7 +187,7 @@ metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_mode
                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
 
 plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
-
+"""
 
 
 from xgboost import XGBClassifier

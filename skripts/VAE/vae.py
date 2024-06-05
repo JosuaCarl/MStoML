@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #SBATCH --job-name VAE_training
-#SBATCH --mem 400G
+#SBATCH --mem 800G
 #SBATCH --nodes 1
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
@@ -90,6 +90,7 @@ def main():
         data = data.iloc[:-drop_last]
     if backend.backend() == "torch":
         data = torch.tensor( data.to_numpy() ).to( model.device )
+    print(data.shape)
 
     time_step("Data read", verbosity=verbosity, min_verbosity=2)
 
@@ -452,6 +453,7 @@ class FIA_VAE(Model):
 
 
 if __name__ == "__main__":
+    print("Start")
     parser = argparse.ArgumentParser(prog='VAE_smac_run',
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
     parser.add_argument('-d', '--data_dir', required=True)
@@ -466,6 +468,7 @@ if __name__ == "__main__":
     parser.add_argument('-v', '--verbosity', type=int, required=False)
     args = parser.parse_args()
     
+    print("Args parsed")
     os.environ["KERAS_BACKEND"] = args.backend
 
     main()

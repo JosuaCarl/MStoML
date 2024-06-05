@@ -158,8 +158,8 @@ class SKL_Classifier:
             scores = []
             for train, test in splitter.split(self.X, self.ys):
                 model = self.classifier(**config)
-                model.fit(self.X.iloc[train], self.ys.iloc[train])
-                y_pred = model.predict(self.X.iloc[test])
+                model.fit(self.X.iloc[train].values, self.ys.iloc[train].values)
+                y_pred = model.predict(self.X.iloc[test].values)
                 scores.append( np.mean( y_pred == self.ys.iloc[test].values) )
             score = np.mean( scores )
             mlflow.log_params( config )

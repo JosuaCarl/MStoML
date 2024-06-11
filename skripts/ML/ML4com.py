@@ -210,6 +210,17 @@ def extract_metrics(true_labels, prediction, run_label=None, cv_i=None,
     return metrics_df
 
 
+def extract_best_hyperparameters_from_incumbent(incumbent, configuration_space):
+    if not incumbent:
+        best_hp = configuration_space.get_default_configuration()
+    elif isinstance(incumbent, list):
+        best_hp = incumbent[0]
+    else: 
+        best_hp = incumbent
+    return best_hp
+
+
+
 def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration_space, n_trials,
                                         name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
                                         inner_fold:int=3, verbosity=0):
@@ -239,10 +250,7 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
                                         name, algorithm_name, outdir, verbosity)
             
             # Model definition and fitting
-            if isinstance(incumbent, list):
-                best_hp = incumbent[0]
-            else: 
-                best_hp = incumbent
+            best_hp = extract_best_hyperparameters_from_incumbent(incumbent=incumbent, configuration_space=configuration_space)
 
             model = classifier(**best_hp)		# Ensures model resetting for each cross-validation
 
@@ -250,6 +258,7 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
 
             # Prediction and scoring
             prediction = model.predict(np.array(validation_data))
+            
             metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
 			
             if verbosity != 0:
@@ -272,7 +281,12 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
     return (metrics_df, organism_metrics_df, overall_metrics_df)
    
 
+
 # Keras
+class Binarize(layers.Layer):
+    def call(self, inputs):
+        return keras.ops.where(inputs <= 0.5, 0.0, 1.0)
+
 def build_classification_model(config:Configuration, classes:int=1):
     backend.clear_session()
     gc.collect()
@@ -287,10 +301,13 @@ def build_classification_model(config:Configuration, classes:int=1):
             activation = layers.LeakyReLU()
         model.add( layers.Dense( units=config[f"n_neurons_{i}"], activation=activation)  )
         if config[f"dropout_{i}"]:
-            model.add(keras.layers.Dropout(0.5, noise_shape=None, seed=None))
-        model.add(keras.layers.BatchNormalization())
+            model.add( keras.layers.Dropout(0.5, noise_shape=None, seed=None) )
+        model.add( keras.layers.BatchNormalization() )
 
-    model.add(layers.Dense(classes,  activation=activations.sigmoid))
+    model.add( layers.Dense(classes, activation=activations.sigmoid) )
+    model.add( Binarize() )
+
+
     if classes == 1:
         loss_function = keras.losses.BinaryCrossentropy()
     else:
@@ -360,7 +377,7 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, n_tria
                                  deterministic=True,
                                  min_budget=5, max_budget=1000,
                                  n_workers=1, output_directory=outdir,
-                                 walltime_limit=12*60*60, cputime_limit=np.inf, trial_memory_limit=int(6e10)    # Max RAM in Bytes (not MB) 3600 = 1h
+                                 walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None    # Max RAM in Bytes (not MB) 3600 = 1h
                                 )
 
             initial_design = MultiFidelityFacade.get_initial_design( scenario, n_configs=100 )
@@ -371,18 +388,15 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, n_tria
 
             incumbent = facade.optimize()
             
-            print(incumbent)
-            if isinstance(incumbent, list):
-                best_hp = incumbent[0]
-            else: 
-                best_hp = incumbent
-
+            best_hp = extract_best_hyperparameters_from_incumbent(incumbent=incumbent, configuration_space=configuration_space)
             model = build_classification_model(best_hp, classes)		# Ensures model resetting for each cross-validation
 
             callback = keras.callbacks.EarlyStopping(monitor='loss', patience=patience)
             model.fit(training_data, training_labels, epochs=epochs, verbose=0, callbacks=[callback]) # type: ignore
 
             prediction = model.predict(validation_data)
+            print(prediction)
+
             metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
 			
             if verbosity != 0:

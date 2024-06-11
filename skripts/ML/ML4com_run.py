@@ -187,7 +187,7 @@ metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_mode
                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
 
 plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
-"""
+
 
 
 from xgboost import XGBClassifier
@@ -210,8 +210,9 @@ metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_mode
 
 plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
 
+"""
 
-
+algorithm_name = "Neural Network (MLP)"
 configuration_space = ConfigurationSpace()
 max_layers = 8
 dropout_in = Float("dropout_in", (0.0, 0.9), default=0.5)
@@ -228,8 +229,6 @@ learning_rate = Float("learning_rate", (1e-4, 1e-1), log=True, default=1e-2)
 
 hyperparameters = n_neurons + activations + dropouts + [dropout_in, n_layers, solver, learning_rate]
 configuration_space.add_hyperparameters( hyperparameters )
-
-outdir = Path(os.path.normpath("/mnt/d/runs/ML/NN/smac"))
 
 metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_keras( X, ys, targets, configuration_space=configuration_space, n_trials=10, classes=1,
                                                                                          fold=StratifiedKFold(n_splits=5), patience=1000, epochs=10000, outdir=outdir,

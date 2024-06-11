@@ -83,15 +83,15 @@ def main():
 
     time_step(message="Setup loaded", verbosity=verbosity, min_verbosity=1)
 
-
     data = read_data(data_dir, verbosity=verbosity)
     print(f"Shape before batch pruning: {data.shape}")
     if batch_size:
-        drop_last = len(data) % int(batch_size / validation_split)
-        data = data.iloc[:-drop_last]
+        drop_last = len(data) % batch_size
+        drop_split = (len(data) - drop_last) % 1/validation_split
+        data = data.iloc[:-(drop_last + drop_split)]
     if backend.backend() == "torch":
         data = torch.tensor( data.to_numpy() ).to( model.device )
-    print(f"Shape after batch pruning: {data.shape}")
+    print(f"Shape after pruning: {data.shape}")
 
     time_step("Data read", verbosity=verbosity, min_verbosity=2)
 

@@ -359,8 +359,9 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, n_tria
     for i, y in enumerate(tqdm(ys.columns)):
         y = ys[y]
         predictions = np.ndarray((0))
-        
+
         for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
+            gc.collect()
             training_data = X.iloc[train_index]
             training_labels = y.iloc[train_index]
             validation_data = X.iloc[val_index]
@@ -371,7 +372,7 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, n_tria
 
             scenario = Scenario( classifier.configuration_space, n_trials=n_trials,
                                  deterministic=True,
-                                 min_budget=5, max_budget=1000,
+                                 min_budget=5, max_budget=100,
                                  n_workers=1, output_directory=outdir,
                                  walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None    # Max RAM in Bytes (not MB) 3600 = 1h
                                 )
@@ -391,7 +392,6 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, n_tria
             model.fit(training_data, training_labels, epochs=epochs, verbose=0, callbacks=[callback]) # type: ignore
 
             prediction = np.where( model.predict(validation_data) > 0.5, 1.0, 0.0)
-            print(prediction)
 
             metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
 			

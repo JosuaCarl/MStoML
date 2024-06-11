@@ -230,8 +230,8 @@ learning_rate = Float("learning_rate", (1e-4, 1e-1), log=True, default=1e-2)
 hyperparameters = n_neurons + activations + dropouts + [dropout_in, n_layers, solver, learning_rate]
 configuration_space.add_hyperparameters( hyperparameters )
 
-metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_keras( X, ys, targets, configuration_space=configuration_space, n_trials=10, classes=1,
-                                                                                         fold=StratifiedKFold(n_splits=5), patience=1000, epochs=10000, outdir=outdir,
+metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_keras( X, ys, targets, configuration_space=configuration_space, n_trials=n_trials, classes=1,
+                                                                                         fold=StratifiedKFold(n_splits=5), patience=20, epochs=100, outdir=outdir,
                                                                                          verbosity=verbosity )
 
 plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)

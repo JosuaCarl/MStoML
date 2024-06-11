@@ -283,10 +283,6 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
 
 
 # Keras
-class Binarize(layers.Layer):
-    def call(self, inputs):
-        return keras.ops.where(inputs <= 0.5, 0.0, 1.0)
-
 def build_classification_model(config:Configuration, classes:int=1):
     backend.clear_session()
     gc.collect()
@@ -305,8 +301,6 @@ def build_classification_model(config:Configuration, classes:int=1):
         model.add( keras.layers.BatchNormalization() )
 
     model.add( layers.Dense(classes, activation=activations.sigmoid) )
-    model.add( Binarize() )
-
 
     if classes == 1:
         loss_function = keras.losses.BinaryCrossentropy()
@@ -364,6 +358,8 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, n_tria
     all_predictions = np.ndarray((0))
     for i, y in enumerate(tqdm(ys.columns)):
         y = ys[y]
+        predictions = np.ndarray((0))
+        
         for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
             training_data = X.iloc[train_index]
             training_labels = y.iloc[train_index]
@@ -394,7 +390,7 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, n_tria
             callback = keras.callbacks.EarlyStopping(monitor='loss', patience=patience)
             model.fit(training_data, training_labels, epochs=epochs, verbose=0, callbacks=[callback]) # type: ignore
 
-            prediction = model.predict(validation_data)
+            prediction = np.where( model.predict(validation_data) > 0.5, 1.0, 0.0)
             print(prediction)
 
             metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)

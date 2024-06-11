@@ -85,10 +85,10 @@ def main():
 
     data = read_data(data_dir, verbosity=verbosity)
     print(f"Shape before batch pruning: {data.shape}")
-    if batch_size:
+    if batch_size and batch_size < len(data):
         drop_last = len(data) % batch_size
-        drop_split = (len(data) - drop_last) % 1/validation_split
-        data = data.iloc[:-(drop_last + drop_split)]
+        drop_split = (len(data) - drop_last) % (1 / validation_split)
+        data = data.iloc[:-int(drop_last + drop_split)]
     if backend.backend() == "torch":
         data = torch.tensor( data.to_numpy() ).to( model.device )
     print(f"Shape after pruning: {data.shape}")
@@ -101,17 +101,17 @@ def main():
     if "new" in steps:
         config_space = ConfigurationSpace(
                 {
-                'input_dropout': 0.4404990303930656,
-                'intermediate_activation': 'mish',
-                'intermediate_dimension': 378,
-                'intermediate_layers': 7,
-                'kld_weight': 0.11432265386769921,
-                'latent_dimension': 180,
-                'learning_rate': 0.00017594452799251045,
+                'input_dropout': 0.4882297325066979,
+                'intermediate_activation': 'leaky_relu',
+                'intermediate_dimension': 1774,
+                'intermediate_layers': 6,
+                'kld_weight': 0.32504784226357325,
+                'latent_dimension': 461,
+                'learning_rate': 0.0001575735922143918,
                 'original_dim': 825000,
-                'reconstruction_loss_function': 'spectral_entropy',
+                'reconstruction_loss_function': 'mae',
                 'solver': 'nadam',
-                'stdev_noise': 4.464573896496255e-09,
+                'stdev_noise': 2.543977003514766e-07,
                 'tied': 0,
                 }
             )

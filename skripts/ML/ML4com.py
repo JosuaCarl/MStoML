@@ -139,19 +139,31 @@ def train_cv_model(classifier, param_grid, X, ys, target_labels, outdir:str, suf
 '''
 
 ## SKLearn
+def individual_layers_to_tuple(config) -> dict:
+    config = dict(config)
+    hidden_layer_sizes = tuple([config.pop(k) for k in list(config.keys()) if k.startswith("n_neurons")])
+    if hidden_layer_sizes:
+        config["hidden_layer_sizes"] = hidden_layer_sizes
+    return config
+
+
 class SKL_Classifier:
     """
     Representation of Scikit-learn classifier for SMAC3
     """
-    def __init__(self, X, ys, cv:int, configuration_space:ConfigurationSpace, classifier):
+    def __init__(self, X, ys, cv:int, configuration_space:ConfigurationSpace, classifier, n_trials):
         self.X = X
         self.ys = ys
         self.cv = cv
         self.configuration_space = configuration_space
         self.classifier = classifier
         self.count = 0
+        self.progress_bar = tqdm(total=n_trials)
 
     def train(self, config: Configuration, seed:int=0) -> np.float64:
+        config = individual_layers_to_tuple(config)
+        self.progress_bar.set_postfix_str(f'Connection size: {np.prod(config["hidden_layer_sizes"])}')
+
         with mlflow.start_run(run_name=f"run_{self.count}", nested=True):
             mlflow.set_tag("test_identifier", f"child_{self.count}")
             splitter = StratifiedKFold(n_splits=self.cv, shuffle=True, random_state=seed)
@@ -165,6 +177,8 @@ class SKL_Classifier:
             mlflow.log_params( config )
             mlflow.log_metrics( {"accuracy": score} )
             self.count += 1
+
+        self.progress_bar.update(1)
         return 1.0 - score
 
 
@@ -172,7 +186,7 @@ def tune_classifier(X, y, classifier, cv, configuration_space, n_trials, name, a
     """
     Perform hyperparameter tuning on an Sklearn classifier.
     """
-    classifier = SKL_Classifier(X, y, cv=cv, configuration_space=configuration_space, classifier=classifier)
+    classifier = SKL_Classifier(X, y, cv=cv, configuration_space=configuration_space, classifier=classifier, n_trials=n_trials)
 
     scenario = Scenario( classifier.configuration_space, deterministic=True, 
                          n_workers=1, n_trials=n_trials,
@@ -252,6 +266,7 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
             # Model definition and fitting
             best_hp = extract_best_hyperparameters_from_incumbent(incumbent=incumbent, configuration_space=configuration_space)
 
+            best_hp = individual_layers_to_tuple(best_hp)
             model = classifier(**best_hp)		# Ensures model resetting for each cross-validation
 
             model.fit(np.array(training_data), np.array(training_labels))
@@ -297,7 +312,7 @@ def build_classification_model(config:Configuration, classes:int=1):
             activation = layers.LeakyReLU()
         model.add( layers.Dense( units=config[f"n_neurons_{i}"], activation=activation)  )
         if config[f"dropout_{i}"]:
-            model.add( keras.layers.Dropout(0.5, noise_shape=None, seed=None) )
+            model.add( keras.layers.Dropout(0.25, noise_shape=None, seed=None) )
         model.add( keras.layers.BatchNormalization() )
 
     model.add( layers.Dense(classes, activation=activations.sigmoid) )
@@ -315,31 +330,28 @@ def build_classification_model(config:Configuration, classes:int=1):
     return model
 
 class Keras_Classifier:
-    def __init__(self, X, ys, cv, configuration_space:ConfigurationSpace, model_builder, model_args):
+    def __init__(self, X, ys, cv, configuration_space:ConfigurationSpace, model_builder, model_args, n_trials):
         self.configuration_space = configuration_space
         self.model_builder = model_builder
         self.model_args = model_args
         self.fold = KFold(n_splits=cv)
         self.X = X
         self.ys = ys
+        self.progress_bar = tqdm(total=n_trials)
 
     def train(self, config: Configuration, seed: int = 0, budget: int = 25) -> np.float64:
-        model = self.model_builder(config=config, **self.model_args)
+        hls = individual_layers_to_tuple(config)["hidden_layer_sizes"]
+        self.progress_bar.set_postfix_str(f'Connection size: {np.sum([hls[i] * hls[i+1] for i in range(len(hls) - 1)])}')
+
+        keras.utils.set_random_seed(seed)
         losses = []
         for train_index, val_index in self.fold.split(self.X, self.ys):
-            training_data = self.X.iloc[train_index]
-            training_labels = self.ys.iloc[train_index]
-            validation_data = self.X.iloc[val_index]
-            validation_labels = self.ys.iloc[val_index]
-
-            keras.utils.set_random_seed(seed)
-    
-            callback = keras.callbacks.EarlyStopping(monitor='loss', patience=100)
-            model.fit(training_data, training_labels, epochs=int(budget), verbose=0, callbacks=[callback])
-
-            val_loss, val_acc = model.evaluate(validation_data,  validation_labels, verbose=0)
+            model = self.model_builder(config=config, **self.model_args)
+            model.fit(self.X.iloc[train_index], self.ys.iloc[train_index], epochs=int(budget), verbose=0)
+            val_loss, val_acc = model.evaluate(self.X.iloc[val_index],  self.ys.iloc[val_index], verbose=0)
             losses.append(val_loss)
-            keras.backend.clear_session()
+        model.summary()
+        self.progress_bar.update(1)       
 
         return np.mean(losses)
 
@@ -351,38 +363,38 @@ def nested_cross_validate_model_keras(X, ys, labels, configuration_space, n_tria
     Perform nested cross-validation with hyperparameter search on the given configuration space and subsequent evaluation
     """
     metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
-
     organism_metrics_df = pd.DataFrame(columns=["Organism", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
     overall_metrics_df = pd.DataFrame(columns=["Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
 
     all_predictions = np.ndarray((0))
+
     for i, y in enumerate(tqdm(ys.columns)):
         y = ys[y]
         predictions = np.ndarray((0))
 
-        for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
-            gc.collect()
+        for cv_i, (train_index, val_index) in enumerate(tqdm(fold.split(X, y))):
             training_data = X.iloc[train_index]
             training_labels = y.iloc[train_index]
             validation_data = X.iloc[val_index]
             validation_labels = y.iloc[val_index]
 
             classifier = Keras_Classifier( training_data, training_labels, cv=3, configuration_space=configuration_space,
-                                           model_builder=build_classification_model, model_args={"classes": 1} )
+                                        model_builder=build_classification_model, model_args={"classes": 1}, n_trials=n_trials )
 
             scenario = Scenario( classifier.configuration_space, n_trials=n_trials,
-                                 deterministic=True,
-                                 min_budget=5, max_budget=100,
-                                 n_workers=1, output_directory=outdir,
-                                 walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None    # Max RAM in Bytes (not MB) 3600 = 1h
+                                deterministic=True,
+                                min_budget=5, max_budget=100,
+                                n_workers=1, output_directory=outdir,
+                                walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None    # Max RAM in Bytes (not MB) 3600 = 1h
                                 )
 
             initial_design = MultiFidelityFacade.get_initial_design( scenario, n_configs=100 )
             intensifier = Hyperband( scenario, incumbent_selection="highest_budget" )
             facade = MultiFidelityFacade( scenario, classifier.train, 
-                                          initial_design=initial_design, intensifier=intensifier,
-                                          overwrite=True, logging_level=20 )
-
+                                        initial_design=initial_design, intensifier=intensifier,
+                                        overwrite=True, logging_level=20 )
+            
+            
             incumbent = facade.optimize()
             
             best_hp = extract_best_hyperparameters_from_incumbent(incumbent=incumbent, configuration_space=configuration_space)

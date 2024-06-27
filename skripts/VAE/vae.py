@@ -100,18 +100,18 @@ def main():
     previous_history = []
     if "new" in steps:
         config_space = ConfigurationSpace(
-                {
-                'input_dropout': 0.4882297325066979,
-                'intermediate_activation': 'leaky_relu',
-                'intermediate_dimension': 1774,
-                'intermediate_layers': 6,
-                'kld_weight': 0.32504784226357325,
-                'latent_dimension': 461,
-                'learning_rate': 0.0001575735922143918,
+               {
+                'input_dropout': 0.4404990303930656,
+                'intermediate_activation': 'mish',
+                'intermediate_dimension': 378,
+                'intermediate_layers': 7,
+                'kld_weight': 0.11432265386769921,
+                'latent_dimension': 180,
+                'learning_rate': 0.00017594452799251045,
                 'original_dim': 825000,
-                'reconstruction_loss_function': 'mae',
+                'reconstruction_loss_function': 'spectral_entropy',
                 'solver': 'nadam',
-                'stdev_noise': 2.543977003514766e-07,
+                'stdev_noise': 4.464573896496255e-09,
                 'tied': 0,
                 }
             )

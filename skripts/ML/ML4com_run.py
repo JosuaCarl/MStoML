@@ -59,7 +59,7 @@ elif source == "annotated":
 
     X = met_raw_comb.transpose()
 
-"""
+
 from sklearn.neighbors import KNeighborsClassifier 
 classifier = KNeighborsClassifier
 algorithm_name = "Kneighbours classifier"
@@ -210,18 +210,53 @@ metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_mode
 
 plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
 
-"""
 
-algorithm_name = "Neural Network (MLP)"
+from sklearn.neural_network import MLPClassifier
+from sklearn.exceptions import ConvergenceWarning
+classifier = MLPClassifier
+algorithm_name = "Neural Network (MLP) SK-learn"
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
+
 configuration_space = ConfigurationSpace()
-max_layers = 8
-dropout_in = Float("dropout_in", (0.0, 0.9), default=0.5)
+n_neurons = []
+for i in range(5):
+    n_neurons.append(Integer(f"n_neurons_{i}", (8, 1024), log=True, default=128))
+hyperparameters = [
+    Categorical(    "activation",           ["tanh", "relu", "logistic"], default="relu"),
+    Constant(       "solver",               "adam"),
+    Float(          "alpha",                (1e-5, 1e-1), log=True, default=1e-2),
+    Categorical(    "learning_rate",        ["constant", "adaptive"], default="constant"),
+    Constant(       "learning_rate_init",   0.001),
+    Constant(       "random_state",         42),
+    Float(          "momentum",             (0.9, 0.99), default=0.9),
+    Categorical(    "nesterovs_momentum",   [True], default=True),
+    Constant(       "validation_fraction",  0.2),
+    Float(          "beta_1",               (0.9, 0.99), default=0.9),
+    Float(          "beta_2",               (0.99, 0.9999), default=0.999),
+    Constant(       "epsilon",              1e-12),
+] + n_neurons
+
+configuration_space.add_hyperparameters( hyperparameters )
+
+metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
+                                                                                           configuration_space=configuration_space, n_trials=n_trials,
+                                                                                           name=name, algorithm_name=algorithm_name, outdir=outdir,
+                                                                                           fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
+
+plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+
+
+"""
+algorithm_name = "Neural Network (MLP) Keras"
+configuration_space = ConfigurationSpace()
+max_layers = 5
+dropout_in = Float("dropout_in", (0.0, 0.5), default=0.25)
 n_layers = Integer("n_layers", (1, max_layers), default=1)
 n_neurons = []
 activations = []
 dropouts = []
 for i in range(max_layers):
-    n_neurons.append(Integer(f"n_neurons_{i}", (10, 10000), log=True, default=100))
+    n_neurons.append(Integer(f"n_neurons_{i}", (8, 256), log=True, default=128))
     activations.append( Categorical(f"activation_{i}", ["tanh", "relu", "leakyrelu", "sigmoid"], default="relu") )
     dropouts.append( Categorical(f"dropout_{i}", [True, False], default=True) )
 solver = Constant("solver", "nadam")
@@ -235,3 +270,4 @@ metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_mode
                                                                                          verbosity=verbosity )
 
 plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+"""

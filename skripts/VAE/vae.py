@@ -196,6 +196,8 @@ def read_data(data_path:str, verbosity:int=0):
         binned_dfs = pd.read_feather( data_path )
     elif data_path.endswith("parquet"):
         binned_dfs = pd.read_parquet( data_path )
+    else:
+        binned_dfs = pd.read_csv( os.path.join(data_path, "data_matrix.tsv"), sep="\t", index_col="mz")
     binned_dfs[:] =  total_ion_count_normalization(binned_dfs)
 
     X = binned_dfs.transpose()

@@ -10,6 +10,7 @@ from typing import List
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import pickle
 
 import sklearn
 from sklearn.metrics import accuracy_score, confusion_matrix, roc_auc_score, roc_curve
@@ -294,7 +295,30 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
     overall_metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_overall_metrics.tsv"), sep="\t")
 
     return (metrics_df, organism_metrics_df, overall_metrics_df)
-   
+
+
+def cross_validate_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_trials,
+                                        name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
+                                        verbosity=0 ):
+    """
+    Cross-validate a model against the given hyperparameters for all organisms
+    """
+    # Iterate over all organisms for binary distinction
+    for i, org in enumerate(tqdm(ys.columns)):
+        y = ys[org]
+
+        incumbent = tune_classifier(X, y, classifier, fold, configuration_space, n_trials,
+                                    name, algorithm_name, outdir, verbosity)
+        
+        # Model definition and fitting
+        best_hp = extract_best_hyperparameters_from_incumbent(incumbent=incumbent, configuration_space=configuration_space)
+
+        best_hp = individual_layers_to_tuple(best_hp)
+        model = classifier(**best_hp)		# Ensures model resetting for each cross-validation
+
+        model.fit(np.array(X), np.array(y))
+        with open(os.path.join(outdir, f'model_{labels[i]}.pkl'),'wb') as f:
+            pickle.dump(model ,f)
 
 
 # Keras

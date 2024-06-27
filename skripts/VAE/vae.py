@@ -349,10 +349,13 @@ class FIA_VAE(Model):
         Returns:
             Activation function as keras.activations or keras.layers
         """
-        reconstruction_loss_functions = {"mae": losses.mean_absolute_error, "mse": losses.mean_squared_error,
+        reconstruction_loss_functions = {"mae": losses.mean_absolute_error,
+                                         "mse": losses.mean_squared_error,
                                          "cosine": lambda y_true, y_pred: 1 + losses.cosine_similarity(y_true, y_pred),
                                          "mae+cosine": lambda y_true, y_pred:
-                                         1 + losses.cosine_similarity(y_true, y_pred) + losses.mean_absolute_error(y_true, y_pred),
+                                            1 + losses.cosine_similarity(y_true, y_pred) + losses.mean_absolute_error(y_true, y_pred),
+                                         "ae+cosine":lambda y_true, y_pred:
+                                            1 + losses.cosine_similarity(y_true, y_pred) + ops.sum(ops.abs(y_true - y_pred)),
                                          "spectral_entropy": mean_spectral_entropy_divergence
                                          }
         return reconstruction_loss_functions[reconstruction_loss_function]

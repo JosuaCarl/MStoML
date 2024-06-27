@@ -271,3 +271,11 @@ metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_mode
 
 plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
 """
+
+# TODO: Train model with best algorithm
+"""
+cross_validate_train_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
+                                    configuration_space=configuration_space, n_trials=n_trials,
+                                    name=name, algorithm_name=algorithm_name, outdir=outdir,
+                                    fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
+"""

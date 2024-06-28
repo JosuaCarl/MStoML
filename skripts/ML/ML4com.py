@@ -163,7 +163,8 @@ class SKL_Classifier:
 
     def train(self, config: Configuration, seed:int=0) -> np.float64:
         config = individual_layers_to_tuple(config)
-        self.progress_bar.set_postfix_str(f'Connection size: {np.prod(config["hidden_layer_sizes"])}')
+        if "hidden_layer_sizes" in config:
+            self.progress_bar.set_postfix_str(f'Connection size: {np.prod(config["hidden_layer_sizes"])}')
 
         with mlflow.start_run(run_name=f"run_{self.count}", nested=True):
             mlflow.set_tag("test_identifier", f"child_{self.count}")

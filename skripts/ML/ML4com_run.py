@@ -15,8 +15,8 @@ start_dir = "../.."
 source = "annotated"
 
 n_trials = 200
-inner_fold = 3
-outer_fold = 5
+inner_fold = 5
+outer_fold = 6
 verbosity = 0
 
 
@@ -46,7 +46,7 @@ if source == "latent":
     X = pd.read_csv(f"{start_dir}/runs/VAE/results/encoded_mu_{name}.tsv", index_col=0, sep="\t")
 elif source == "annotated":
     run_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/ML/annot"))
-    name = "annotated_com8_grown_together"
+    name = "annotated_com8_grown_together_3"
 
     met_raw_pos = pd.read_excel( os.path.join( orig_dir, "FIA-Data Com8_20230717_P0024_msAV206-312.xlsx" ), sheet_name="pos" )
     met_raw_neg = pd.read_excel( os.path.join( orig_dir, "FIA-Data Com8_20230717_P0024_msAV206-312.xlsx" ), sheet_name="neg" )

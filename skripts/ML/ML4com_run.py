@@ -46,7 +46,7 @@ if source == "latent":
     X = pd.read_csv(f"{start_dir}/runs/VAE/results/encoded_mu_{name}.tsv", index_col=0, sep="\t")
 elif source == "annotated":
     run_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/ML/annot"))
-    name = "annotated_com8_grown_together"
+    name = "annotated_com8_grown_together_3"
 
     met_raw_pos = pd.read_excel( os.path.join( orig_dir, "FIA-Data Com8_20230717_P0024_msAV206-312.xlsx" ), sheet_name="pos" )
     met_raw_neg = pd.read_excel( os.path.join( orig_dir, "FIA-Data Com8_20230717_P0024_msAV206-312.xlsx" ), sheet_name="neg" )
@@ -60,9 +60,10 @@ elif source == "annotated":
     X = met_raw_comb.transpose()
 
 
+print("KNN:")
 from sklearn.neighbors import KNeighborsClassifier 
 classifier = KNeighborsClassifier
-algorithm_name = "Kneighbours classifier"
+algorithm_name = "K-neighbours classifier"
 
 configuration_space = ConfigurationSpace()
 hyperparameters = [ 
@@ -82,7 +83,7 @@ metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_mode
 plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
 
 
-
+print("SVC:")
 from sklearn.svm import SVC 
 classifier = SVC
 algorithm_name = "Support-vector classifier"
@@ -114,6 +115,7 @@ plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_n
 
 
 
+print("GAUSSIAN PROCESS:")
 from sklearn.gaussian_process import GaussianProcessClassifier
 classifier = GaussianProcessClassifier
 algorithm_name = "Gaussian process classifier"
@@ -135,6 +137,7 @@ plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_n
 
 
 
+print("GAUSSIAN NB:")
 from sklearn.naive_bayes import GaussianNB
 classifier = GaussianNB
 algorithm_name = "Gaussian Naive-Bayes"
@@ -154,6 +157,7 @@ plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_n
 
 
 
+print("DT:")
 from sklearn.tree import DecisionTreeClassifier
 classifier = DecisionTreeClassifier
 algorithm_name = "Decision tree"
@@ -171,6 +175,7 @@ plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_n
 
 
 
+print("RF:")
 from sklearn.ensemble import RandomForestClassifier
 classifier = RandomForestClassifier
 algorithm_name = "Random forest"
@@ -190,6 +195,7 @@ plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_n
 
 
 
+print("XGB:")
 from xgboost import XGBClassifier
 classifier = XGBClassifier
 algorithm_name = "Extreme gradient boosting RF"
@@ -212,6 +218,7 @@ plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_n
 
 
 
+print("MLP:")
 from sklearn.neural_network import MLPClassifier
 from sklearn.exceptions import ConvergenceWarning
 classifier = MLPClassifier

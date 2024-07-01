@@ -248,11 +248,13 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
     overall_metrics_df = pd.DataFrame(columns=["Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
 
     all_predictions = np.ndarray((0))
+    ys_deshuffeld = np.ndarray((0))
 
     # Iterate over all organisms for binary distinction
     for i, y in enumerate(tqdm(ys.columns)):
         y = ys[y]
         predictions = np.ndarray((0))
+        y_deshuffled = np.ndarray((0))
 
         # Outer Loop
         for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
@@ -267,7 +269,6 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
             
             # Model definition and fitting
             best_hp = extract_best_hyperparameters_from_incumbent(incumbent=incumbent, configuration_space=configuration_space)
-
             best_hp = individual_layers_to_tuple(best_hp)
             model = classifier(**best_hp)		# Ensures model resetting for each cross-validation
 
@@ -285,10 +286,13 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
                     print(f"Mean accuracy: {model.score(validation_data,  validation_labels)}")
 
             predictions = np.append(predictions, prediction)
-        organism_metrics_df = extract_metrics(y, predictions, labels[i], metrics_df=organism_metrics_df)
-        all_predictions = np.append(all_predictions, predictions)
+            y_deshuffled = np.append(y_deshuffled, validation_labels)
 
-    overall_metrics_df = extract_metrics(ys.to_numpy().flatten(), all_predictions, metrics_df=overall_metrics_df)
+        organism_metrics_df = extract_metrics(y_deshuffled, predictions, labels[i], metrics_df=organism_metrics_df)
+        all_predictions = np.append(all_predictions, predictions)
+        ys_deshuffeld = np.append(ys_deshuffeld, y_deshuffled)
+
+    overall_metrics_df = extract_metrics(ys_deshuffeld, all_predictions, metrics_df=overall_metrics_df)
 
     # Saving of results
     metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_metrics.tsv"), sep="\t")

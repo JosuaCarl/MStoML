@@ -170,7 +170,7 @@ class SKL_Classifier:
             mlflow.set_tag("test_identifier", f"child_{self.count}")
             splitter = StratifiedKFold(n_splits=self.cv, shuffle=True, random_state=seed)
             scores = []
-            for train, test in splitter.split(self.X, self.ys):
+            for train, test in tqdm(splitter.split(self.X, self.ys)):
                 model = self.classifier(**config)
                 model.fit(self.X.iloc[train].values, self.ys.iloc[train].values)
                 y_pred = model.predict(self.X.iloc[test].values)

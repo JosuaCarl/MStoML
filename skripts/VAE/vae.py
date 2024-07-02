@@ -41,7 +41,7 @@ last_timestamp = time.time()
 step = 0
 runtimes = {}
 
-def main():
+def main(args):
     """
     One-time traing of Variational Autoencoder
 
@@ -475,4 +475,4 @@ if __name__ == "__main__":
     
     os.environ["KERAS_BACKEND"] = args.backend
 
-    main()
+    main(args)

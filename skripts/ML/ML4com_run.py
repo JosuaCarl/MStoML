@@ -20,14 +20,12 @@ outer_fold = 5
 verbosity = 0
 
 
-
-orig_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/data/Com8_grown_together"))
-data_dir  = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/FIA/Com8_grown_together"))
+sample = "Com8_equal_conc_comb"
+orig_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/data/{sample}"))
+data_dir  = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/FIA/{sample}"))
 
 strains = pd.read_csv( os.path.join(orig_dir, "strains.tsv"), sep="\t")
 comm = pd.read_csv( os.path.join(orig_dir, "comb_one_hot.tsv"), sep="\t")
-metData = pd.read_csv( os.path.join(orig_dir, "metData.tsv"), sep="\t")
-metData.index = pd.read_csv( os.path.join(orig_dir, "metName.tsv"), sep="\t")
 
 ys = comm
 targets = strains["Organism"].values
@@ -46,10 +44,12 @@ if source == "latent":
     X = pd.read_csv(f"{start_dir}/runs/VAE/results/encoded_mu_{name}.tsv", index_col=0, sep="\t")
 elif source == "annotated":
     run_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/ML/annot"))
-    name = "annotated_com8_grown_together"
+    
+    name = f"annotated_{sample}"
+    file_name = "20240702_FIA-Data_com8_equal_comb_hmdb_raw.xlsx"
 
-    met_raw_pos = pd.read_excel( os.path.join( orig_dir, "FIA-Data Com8_20230717_P0024_msAV206-312.xlsx" ), sheet_name="pos" )
-    met_raw_neg = pd.read_excel( os.path.join( orig_dir, "FIA-Data Com8_20230717_P0024_msAV206-312.xlsx" ), sheet_name="neg" )
+    met_raw_pos = pd.read_excel( os.path.join( orig_dir, file_name ), sheet_name="pos" )
+    met_raw_neg = pd.read_excel( os.path.join( orig_dir, file_name ), sheet_name="neg" )
     met_raw_comb = pd.concat( [ total_ion_count_normalization( join_df_metNames(met_raw_pos) ),
                                 total_ion_count_normalization( join_df_metNames(met_raw_neg) ) ] )
 

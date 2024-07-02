@@ -89,6 +89,8 @@ def encode_reconstruct(model, data_dir, results_dir, name, source, verbosity):
     plt.annotate(f"MAE: {format(mae, '.12f')}", xy=(0.795, 0.79), xycoords='axes fraction', fontsize=11, fontfamily="Monospace")
     plt.annotate(f" AE: {format(ae, '.12f')}", xy=(0.795, 0.74), xycoords='axes fraction', fontsize=11, fontfamily="Monospace")
     plt.legend()
+    plt.savefig( os.path.join(outdir, f"reconstruction_original_{name}.png") )
+    plt.close()
 
 
 if __name__ == "__main__":

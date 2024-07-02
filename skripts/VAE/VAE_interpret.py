@@ -67,7 +67,7 @@ def encode_reconstruct(model, data_dir, results_dir, name, source, verbosity):
     plt.xlabel("Latent dimension")
     plt.ylabel("Value")
     plt.savefig( os.path.join(outdir, f"encoded_mu_5_{name}.png") )
-
+    plt.close()
 
     # Reconstruction of data for visualization
     reconstructed_data = total_ion_count_normalization( pd.DataFrame( model(X).numpy() ), axis=1)

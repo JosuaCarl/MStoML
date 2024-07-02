@@ -11,15 +11,13 @@ from VAE.vae import *
 import warnings
 warnings.simplefilter(action='ignore', category=sklearn.exceptions.UndefinedMetricWarning)
 
-start_dir = "../.."
-source = "annotated"
-
 n_trials = 200
-inner_fold = 3
-outer_fold = 5
+inner_fold = 5
+outer_fold = 6
 verbosity = 0
 
-
+start_dir = "../.."
+source = "latent"
 sample = "Com8_equal_conc_comb"
 orig_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/data/{sample}"))
 data_dir  = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/FIA/{sample}"))
@@ -35,7 +33,7 @@ if source == "latent":
 
     backend_name = "tensorflow"
     computation = "cpu"
-    name = "cos"
+    name = "cosine_2"
     project = f"vae_{backend_name}_{computation}_{name}"
     outdir = Path( os.path.normpath( os.path.join(run_dir, project)) )
     if not os.path.isdir(outdir):

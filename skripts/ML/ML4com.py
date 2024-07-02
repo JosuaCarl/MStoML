@@ -40,24 +40,27 @@ from smac.intensifier.hyperband import Hyperband
 
 
 # Combination of pos/neg 
-def join_df_metNames(df, include_mass=False):
+def join_df_metNames(df, sorter="peakID", include_mass=False):
     """
     Combines positively and negatively charged dataframes along their metabolite Names
     """
+    mass_name = "ref_mass" if "ref_mass" in df.columns else "mass"
     if include_mass:
-        cols = ["metNames", "ref_mass"] + [f"MS{i+1}" for i in range(len(df.columns) - 6)]
+        cols = ["metNames", mass_name] + [f"MS{i+1}" for i in range(len(df.columns) - 6)]
     else:
         cols = ["metNames"] + [f"MS{i+1}" for i in range(len(df.columns) - 6)]
     comb = pd.DataFrame(columns=cols)
-    for pid in df["peakID"].unique():
+
+    sorter = mass_name if "mass" in sorter else sorter
+    for s in df[sorter].unique():
         comb_met_name = ""
-        for i, row in df.loc[df["peakID"] == pid].iterrows():
+        for i, row in df.loc[df[sorter] == s].iterrows():
             comb_met_name += row["MetName"] + "\n"
-            ref_mass = row["ref_mass"]
+            ref_mass = row[mass_name]
         if include_mass:
-            comb.loc[len(comb.index)] = [comb_met_name[:-2], ref_mass] + list(df.loc[df["peakID"] == pid].iloc[0, 6:])
+            comb.loc[len(comb.index)] = [comb_met_name[:-2], ref_mass] + list(df.loc[df[sorter] == s].iloc[0, 6:])
         else:
-            comb.loc[len(comb.index)] = [comb_met_name[:-2]] + list(df.loc[df["peakID"] == pid].iloc[0, 6:])
+            comb.loc[len(comb.index)] = [comb_met_name[:-2]] + list(df.loc[df[sorter] == s].iloc[0, 6:])
     comb = comb.set_index('metNames')
     return comb
 

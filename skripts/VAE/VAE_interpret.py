@@ -61,6 +61,7 @@ def encode_reconstruct(model, data_dir, results_dir, name, source, verbosity):
 
     # Latent space construction
     vae_enc = pd.DataFrame( model.encode_mu(X) )
+    print(f"Shape of latent dimension: {vae_enc.shape}")
     vae_enc.to_csv( os.path.join(outdir, f"encoded_mu_{name}.tsv"), sep="\t" )
 
     ax = sns.lineplot(data=vae_enc[:5].T)

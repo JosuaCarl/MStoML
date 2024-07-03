@@ -494,6 +494,7 @@ def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorit
     fig = ax.get_figure()
     fig.savefig(os.path.join(outdir, f"{algorithm_name}_heatmap_accuracies.png"), bbox_inches="tight")
     plt.show()
+    plt.close()
 
     ax = sns.lineplot( overall_metrics_df.explode(["TPR", "FPR"]), x="TPR", y="FPR", hue="AUC")
     ax = sns.lineplot( organism_metrics_df.explode(["TPR", "FPR"]), x="TPR", y="FPR", hue="Organism", alpha=0.5, ax=ax)

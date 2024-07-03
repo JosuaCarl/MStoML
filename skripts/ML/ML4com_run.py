@@ -39,7 +39,7 @@ def main(args):
         run_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/ML/latent"))
 
         project = f"vae_{backend_name}_{computation}_{name}"
-        outdir = Path( os.path.normpath( os.path.join(run_dir, project)) )
+        outdir = Path( os.path.normpath( os.path.join(run_dir, f"{sample}_{name}")) )
         if not os.path.isdir(outdir):
             os.mkdir(outdir)
 
@@ -53,10 +53,12 @@ def main(args):
         met_raw_neg = pd.read_excel( os.path.join( orig_dir, file_name ), sheet_name="neg" )
         met_raw_comb = pd.concat( [ total_ion_count_normalization( join_df_metNames(met_raw_pos, grouper="mass") ),
                                     total_ion_count_normalization( join_df_metNames(met_raw_neg, grouper="mass") ) ] )
+        
+        print(met_raw_comb)
+        print(met_raw_comb.columns)
+        print(met_raw_comb.index)
 
-
-        name = f"annotated_{sample}"
-        outdir = Path( os.path.normpath( os.path.join( run_dir, name) ) )
+        outdir = Path( os.path.normpath( os.path.join( run_dir, sample) ) )
         if not os.path.isdir(outdir):
             os.mkdir(outdir)
 

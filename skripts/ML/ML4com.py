@@ -492,7 +492,7 @@ def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorit
     ax = sns.heatmap(metrics_df.pivot(index="Organism", columns="Cross-Validation run", values="Accuracy"),
                     vmin=0, vmax=1.0, annot=True, cmap=sns.diverging_palette(328.87,  221.63, center="light", as_cmap=True))
     fig = ax.get_figure()
-    fig.savefig(os.path.join(outdir, f"{algorithm_name}_heatmap_accuracies.svg"), bbox_inches="tight")
+    fig.savefig(os.path.join(outdir, f"{algorithm_name}_heatmap_accuracies.png"), bbox_inches="tight")
     plt.show()
 
     ax = sns.lineplot( overall_metrics_df.explode(["TPR", "FPR"]), x="TPR", y="FPR", hue="AUC")
@@ -503,6 +503,6 @@ def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorit
     for t, l in zip(leg.texts, [f'{row["Organism"]} (AUC={str(row["AUC"])})' for i, row in organism_metrics_df.iterrows()]+ [f"Overall (AUC={overall_metrics_df.loc[0, 'AUC']})"]):
         t.set_text(l)
     fig = ax.get_figure()
-    fig.savefig(os.path.join(outdir, f"{algorithm_name}_AUC.svg"), bbox_inches="tight")
+    fig.savefig(os.path.join(outdir, f"{algorithm_name}_AUC.png"), bbox_inches="tight")
     if show:
         plt.show()

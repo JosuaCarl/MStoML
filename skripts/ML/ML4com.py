@@ -40,29 +40,31 @@ from smac.intensifier.hyperband import Hyperband
 
 
 # Combination of pos/neg 
-def join_df_metNames(df, sorter="peakID", include_mass=False):
+def join_df_metNames(df, grouper="peakID", include_mass=False):
     """
-    Combines positively and negatively charged dataframes along their metabolite Names
+    Sets common index for combination of positively and negatively charged dataframes along their metabolite Names
     """
     mass_name = "ref_mass" if "ref_mass" in df.columns else "mass"
+    data_cols = [col for col in df.columns[df.dtypes == "float"] if col not in [mass_name, "kegg", "dmz"]]
+    cols = ["metNames"] + [f"MS{i+1}" for i in range(len(data_cols))]
     if include_mass:
-        cols = ["metNames", mass_name] + [f"MS{i+1}" for i in range(len(df.columns) - 6)]
-    else:
-        cols = ["metNames"] + [f"MS{i+1}" for i in range(len(df.columns) - 6)]
+        cols = cols + mass_name
     comb = pd.DataFrame(columns=cols)
 
-    sorter = mass_name if "mass" in sorter else sorter
-    for s in df[sorter].unique():
+    grouper = mass_name if "mass" in grouper else grouper
+    for g in df[grouper].unique():
         comb_met_name = ""
-        for i, row in df.loc[df[sorter] == s].iterrows():
+        grouped_rows = df.loc[df[grouper] == g]
+        for i, row in grouped_rows.iterrows():
             comb_met_name += row["MetName"] + "\n"
             ref_mass = row[mass_name]
         if include_mass:
-            comb.loc[len(comb.index)] = [comb_met_name[:-2], ref_mass] + list(df.loc[df[sorter] == s].iloc[0, 6:])
+            comb.loc[len(comb.index)] = [comb_met_name[:-2], ref_mass] + list(grouped_rows.iloc[0][data_cols])
         else:
-            comb.loc[len(comb.index)] = [comb_met_name[:-2]] + list(df.loc[df[sorter] == s].iloc[0, 6:])
+            comb.loc[len(comb.index)] = [comb_met_name[:-2]] + list(grouped_rows.iloc[0][data_cols])
     comb = comb.set_index('metNames')
     return comb
+
 
 # Helpers
 def dict_permutations(dictionary:dict) -> List[dict]:
@@ -173,7 +175,7 @@ class SKL_Classifier:
             mlflow.set_tag("test_identifier", f"child_{self.count}")
             splitter = StratifiedKFold(n_splits=self.cv, shuffle=True, random_state=seed)
             scores = []
-            for train, test in tqdm(splitter.split(self.X, self.ys)):
+            for train, test in splitter.split(self.X, self.ys):
                 model = self.classifier(**config)
                 model.fit(self.X.iloc[train].values, self.ys.iloc[train].values)
                 y_pred = model.predict(self.X.iloc[test].values)

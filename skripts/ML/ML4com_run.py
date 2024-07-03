@@ -34,11 +34,7 @@ def main(args):
 
     print("Start:")
     strains = pd.read_csv( os.path.join(orig_dir, "strains.tsv"), sep="\t")
-    comm = pd.read_csv( os.path.join(orig_dir, "comb_one_hot.tsv"), sep="\t")
-
-    ys = comm
-    targets = strains["Organism"].values
-
+      
     if source == "latent":
         run_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/runs/ML/latent"))
 
@@ -47,6 +43,7 @@ def main(args):
         if not os.path.isdir(outdir):
             os.mkdir(outdir)
 
+        ys = pd.read_csv( os.path.join(orig_dir, "comb_one_hot_alternating.tsv"), sep="\t")
         X = pd.read_csv(f"{start_dir}/runs/VAE/results/{sample}/encoded_mu_{name}.tsv", index_col=0, sep="\t")
 
     elif source == "annotated":
@@ -54,18 +51,21 @@ def main(args):
         
         met_raw_pos = pd.read_excel( os.path.join( orig_dir, file_name ), sheet_name="pos" )
         met_raw_neg = pd.read_excel( os.path.join( orig_dir, file_name ), sheet_name="neg" )
-        met_raw_comb = pd.concat( [ total_ion_count_normalization( join_df_metNames(met_raw_pos, sorter="mass") ),
-                                    total_ion_count_normalization( join_df_metNames(met_raw_neg, sorter="mass") ) ] )
+        met_raw_comb = pd.concat( [ total_ion_count_normalization( join_df_metNames(met_raw_pos, grouper="mass") ),
+                                    total_ion_count_normalization( join_df_metNames(met_raw_neg, grouper="mass") ) ], axis="columns", join="inner")
+
 
         name = f"annotated_{sample}"
         outdir = Path( os.path.normpath( os.path.join( run_dir, name) ) )
         if not os.path.isdir(outdir):
             os.mkdir(outdir)
 
+        ys = pd.read_csv( os.path.join(orig_dir, "comb_one_hot.tsv"), sep="\t")
         X = met_raw_comb.transpose()
 
-    print(X.shape)
-    print(X.head(10))
+    targets = strains["Organism"].values
+
+    print(f"Shape of input data: {X.shape}")
 
     print("KNN:")
     from sklearn.neighbors import KNeighborsClassifier 

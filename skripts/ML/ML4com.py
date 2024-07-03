@@ -45,12 +45,12 @@ def join_df_metNames(df, grouper="peakID", include_mass=False):
     Sets common index for combination of positively and negatively charged dataframes along their metabolite Names
     """
     mass_name = "ref_mass" if "ref_mass" in df.columns else "mass"
-    data_cols = [col for col in df.columns[df.dtypes == "float"] if col not in [mass_name, "kegg", "dmz"]]
+    data_cols = [col for col in df.columns[df.dtypes == "float"] if col not in [mass_name, "kegg", "kegg_id", "dmz"]]
     cols = ["metNames"] + [f"MS{i+1}" for i in range(len(data_cols))]
     if include_mass:
         cols = cols + mass_name
     comb = pd.DataFrame(columns=cols)
-
+    
     grouper = mass_name if "mass" in grouper else grouper
     for g in df[grouper].unique():
         comb_met_name = ""

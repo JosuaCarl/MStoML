@@ -53,10 +53,6 @@ def main(args):
         met_raw_neg = pd.read_excel( os.path.join( orig_dir, file_name ), sheet_name="neg" )
         met_raw_comb = pd.concat( [ total_ion_count_normalization( join_df_metNames(met_raw_pos, grouper="mass") ),
                                     total_ion_count_normalization( join_df_metNames(met_raw_neg, grouper="mass") ) ] )
-        
-        print(met_raw_comb)
-        print(met_raw_comb.columns)
-        print(met_raw_comb.index)
 
         outdir = Path( os.path.normpath( os.path.join( run_dir, sample) ) )
         if not os.path.isdir(outdir):

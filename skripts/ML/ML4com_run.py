@@ -52,7 +52,7 @@ def main(args):
         met_raw_pos = pd.read_excel( os.path.join( orig_dir, file_name ), sheet_name="pos" )
         met_raw_neg = pd.read_excel( os.path.join( orig_dir, file_name ), sheet_name="neg" )
         met_raw_comb = pd.concat( [ total_ion_count_normalization( join_df_metNames(met_raw_pos, grouper="mass") ),
-                                    total_ion_count_normalization( join_df_metNames(met_raw_neg, grouper="mass") ) ], axis="columns", join="inner")
+                                    total_ion_count_normalization( join_df_metNames(met_raw_neg, grouper="mass") ) ] )
 
 
         name = f"annotated_{sample}"

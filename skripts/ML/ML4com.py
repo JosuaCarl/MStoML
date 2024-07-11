@@ -211,13 +211,13 @@ def tune_classifier(X, y, classifier, cv, configuration_space, n_trials, name, a
     return incumbent
 
 
-def extract_metrics(true_labels, prediction, run_label=None, cv_i=None,
+def extract_metrics(true_labels, prediction, scoring, run_label=None, cv_i=None,
                     metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):
     """
     Extract meaningful metrics to score a model according to its label prediction in comparison to true labels.
     """
-    fpr, tpr, threshold = roc_curve(true_labels,  prediction)
-    auc = roc_auc_score(true_labels,  prediction)
+    fpr, tpr, threshold = roc_curve(true_labels,  scoring)
+    auc = roc_auc_score(true_labels,  scoring)
     conf_mat = confusion_matrix(true_labels,  prediction)
     accuracy = accuracy_score(true_labels,  prediction)
     
@@ -253,12 +253,14 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
     overall_metrics_df = pd.DataFrame(columns=["Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
 
     all_predictions = np.ndarray((0))
+    all_scorings = np.ndarray((0))
     ys_deshuffeld = np.ndarray((0))
 
     # Iterate over all organisms for binary distinction
     for i, y in enumerate(tqdm(ys.columns)):
         y = ys[y]
         predictions = np.ndarray((0))
+        scorings = np.ndarray((0))
         y_deshuffled = np.ndarray((0))
 
         # Outer Loop
@@ -280,9 +282,13 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
             model.fit(np.array(training_data), np.array(training_labels))
 
             # Prediction and scoring
-            prediction = model.predict(np.array(validation_data))
+            prediction = model.predict( np.array(validation_data) )
+            if hasattr(model, "predict_proba"):
+                scoring = model.predict_proba( np.array(validation_data) )[::,1]
+            else:
+                scoring = prediction
             
-            metrics_df = extract_metrics(validation_labels, prediction, labels[i], cv_i+1, metrics_df)
+            metrics_df = extract_metrics(validation_labels, prediction, scoring, labels[i], cv_i+1, metrics_df)
 			
             if verbosity != 0:
                 if hasattr(model, "evaluate"):
@@ -291,13 +297,15 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
                     print(f"Mean accuracy: {model.score(validation_data,  validation_labels)}")
 
             predictions = np.append(predictions, prediction)
+            scorings = np.append(scorings, scoring)
             y_deshuffled = np.append(y_deshuffled, validation_labels)
 
-        organism_metrics_df = extract_metrics(y_deshuffled, predictions, labels[i], metrics_df=organism_metrics_df)
+        organism_metrics_df = extract_metrics(y_deshuffled, predictions, scorings, labels[i], metrics_df=organism_metrics_df)
         all_predictions = np.append(all_predictions, predictions)
+        all_scorings = np.append(all_scorings, scorings)
         ys_deshuffeld = np.append(ys_deshuffeld, y_deshuffled)
 
-    overall_metrics_df = extract_metrics(ys_deshuffeld, all_predictions, metrics_df=overall_metrics_df)
+    overall_metrics_df = extract_metrics(ys_deshuffeld, all_predictions, all_scorings, metrics_df=overall_metrics_df)
 
     # Saving of results
     metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_metrics.tsv"), sep="\t")
@@ -485,19 +493,20 @@ def plot_decision_trees(model, feature_names, class_names, outdir, name):
     plt.close()
 
 
-def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=True):
+def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False):
     """
-    Plot the extracted metrics
+    Plot the extracted metrics as a heatmap and ROC AUC curve
     """
     ax = sns.heatmap(metrics_df.pivot(index="Organism", columns="Cross-Validation run", values="Accuracy"),
                     vmin=0, vmax=1.0, annot=True, cmap=sns.diverging_palette(328.87,  221.63, center="light", as_cmap=True))
     fig = ax.get_figure()
     fig.savefig(os.path.join(outdir, f"{algorithm_name}_heatmap_accuracies.png"), bbox_inches="tight")
-    plt.show()
+    if show:
+        plt.show()
     plt.close()
 
-    ax = sns.lineplot( overall_metrics_df.explode(["TPR", "FPR"]), x="TPR", y="FPR", hue="AUC")
-    ax = sns.lineplot( organism_metrics_df.explode(["TPR", "FPR"]), x="TPR", y="FPR", hue="Organism", alpha=0.5, ax=ax)
+    ax = sns.lineplot( overall_metrics_df.explode(["TPR", "FPR"]), x="FPR", y="TPR", hue="AUC")
+    ax = sns.lineplot( organism_metrics_df.explode(["TPR", "FPR"]), x="FPR", y="TPR", hue="Organism", alpha=0.5, ax=ax)
     ax.set_title("AUC")
     leg = ax.axes.get_legend()
     leg.set_title("Organism (AUC)")
@@ -507,3 +516,4 @@ def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorit
     fig.savefig(os.path.join(outdir, f"{algorithm_name}_AUC.png"), bbox_inches="tight")
     if show:
         plt.show()
+    plt.close()

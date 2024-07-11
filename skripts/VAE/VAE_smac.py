@@ -111,7 +111,10 @@ def main(args):
         mlflow.set_tag("test_identifier", "parent")
         incumbent = run_optimization(facade=facade, smac_model=fia_vae_hptune, verbose_steps=10, verbosity=verbosity)
 
-    best_hp = validate_incumbent(incumbent=incumbent, fascade=facade, run_dir=run_dir, verbosity=verbosity)
+    best_config = validate_incumbent(incumbent=incumbent, fascade=facade, run_dir=run_dir, verbosity=verbosity)
+
+    with open(os.path.join(outdir, f"best_config.json"), "w") as outfile:
+        json.dump(dict(best_config), outfile)
 
     save_runtime(run_dir=run_dir, verbosity=verbosity)
 

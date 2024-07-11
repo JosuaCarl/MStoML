@@ -46,7 +46,7 @@ def main():
 
     best_config, runhistories = read_runhistories(folder_path=smac_dir, skip_dirs="mlruns", verbosity=verbosity)
 
-    with open(os.path.join(in_dir, f"best_config_{name}.json"), "w") as outfile:
+    with open(os.path.join(in_dir, project, f"best_config.json"), "w") as outfile:
         json.dump(dict(best_config), outfile)
     
     save_runhistory(runhistory=runhistories, project=project, out_dir=out_dir)

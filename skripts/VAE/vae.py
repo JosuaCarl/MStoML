@@ -101,7 +101,7 @@ def main(args):
     previous_history = []
     if "new" in steps:
         if tune_dir:
-            with open(os.path.join(tune_dir, f"best_config_{name}.json"), "r") as infile:
+            with open(os.path.join(tune_dir, project, f"best_config.json"), "r") as infile:
                 config_dict = json.load(infile)
                 config_space = ConfigurationSpace( config_dict )
         else:

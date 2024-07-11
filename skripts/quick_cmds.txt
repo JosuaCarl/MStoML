@@ -160,6 +160,24 @@ config_space = ConfigurationSpace(
 )
 
 ## AE + COS
+config_space = ConfigurationSpace(
+    {
+    'input_dropout': 0.08235615567775992,
+    'intermediate_activation': 'silu',
+    'intermediate_dimension': 1779,
+    'intermediate_layers': 8,
+    'kld_weight': 1.1957167373762512,
+    'latent_dimension': 12,
+    'learning_rate': 2.8519767469131045e-05,
+    'original_dim': 825000,
+    'reconstruction_loss_function': 'ae+cosine',
+    'solver': 'nadam',
+    'stdev_noise': 1.4547834681520132e-11,
+    'tied': 0,
+    }
+)
 
 ## MSE
+config_space = ConfigurationSpace(
 
+)

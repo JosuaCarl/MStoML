@@ -15,6 +15,7 @@ import time
 import datetime
 import numpy as np
 import pandas as pd
+import json
 
 from typing import Union
 from ConfigSpace import Configuration, ConfigurationSpace
@@ -56,7 +57,7 @@ def main(args):
         vae.py -d "../data" -r "../runs" -b "tensorflow" -c "gpu" -n "1" -bat 16 -e 10000 -s "new" "train" "test" "plot" -v 1
         ```
     """
-    data_dir, run_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir]]
+    data_dir, run_dir, tune_dir= [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.run_dir, args.tune_dir]]
     backend_name = args.backend
     computation = args.computation
     gpu = computation == "gpu"
@@ -99,22 +100,27 @@ def main(args):
     keras.utils.set_random_seed( 42 )
     previous_history = []
     if "new" in steps:
-        config_space = ConfigurationSpace(
-               {
-                'input_dropout': 0.4404990303930656,
-                'intermediate_activation': 'mish',
-                'intermediate_dimension': 378,
-                'intermediate_layers': 7,
-                'kld_weight': 0.11432265386769921,
-                'latent_dimension': 180,
-                'learning_rate': 0.00017594452799251045,
-                'original_dim': 825000,
-                'reconstruction_loss_function': 'spectral_entropy',
-                'solver': 'nadam',
-                'stdev_noise': 4.464573896496255e-09,
-                'tied': 0,
-                }
-            )
+        if tune_dir:
+            with open(os.path.join(tune_dir, f"best_config_{name}.json"), "r") as infile:
+                config_dict = json.load(infile)
+                config_space = ConfigurationSpace( config_dict )
+        else:
+            config_space = ConfigurationSpace(
+                {
+                    'input_dropout': 0.08235615567775992,
+                    'intermediate_activation': 'silu',
+                    'intermediate_dimension': 1779,
+                    'intermediate_layers': 8,
+                    'kld_weight': 1.1957167373762512,
+                    'latent_dimension': 12,
+                    'learning_rate': 2.8519767469131045e-05,
+                    'original_dim': 825000,
+                    'reconstruction_loss_function': 'ae+cosine',
+                    'solver': 'nadam',
+                    'stdev_noise': 1.4547834681520132e-11,
+                    'tied': 0,
+                    }
+                )
         config = config_space.get_default_configuration()
     
         model = FIA_VAE(config)
@@ -463,6 +469,7 @@ if __name__ == "__main__":
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
     parser.add_argument('-d', '--data_dir', required=True)
     parser.add_argument('-r', '--run_dir', required=True)
+    parser.add_argument('-t', '--tune_dir', required=True)
     parser.add_argument('-b', '--backend', required=True)
     parser.add_argument('-c', '--computation', required=True)
     parser.add_argument('-p', '--precision', required=False)

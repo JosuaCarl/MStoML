@@ -335,7 +335,7 @@ def cross_validate_train_model_sklearn( X, ys, labels, classifier, configuration
         model = classifier(**best_hp)		# Ensures model resetting for each cross-validation
 
         model.fit(np.array(X), np.array(y))
-        with open(os.path.join(outdir, f'model_{labels[i]}.pkl'),'wb') as f:
+        with open(os.path.join(outdir, f'model_{algorithm_name}_{labels[i]}.pkl'), 'wb') as f:
             pickle.dump(model ,f)
 
 

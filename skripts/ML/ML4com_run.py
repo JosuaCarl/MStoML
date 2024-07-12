@@ -13,7 +13,8 @@ warnings.simplefilter(action='ignore', category=sklearn.exceptions.UndefinedMetr
 
 
 def main(args):
-    algorithm = args.algorithm if args.algorithm else None
+    algorithms = args.algorithms if args.algorithms else None
+    task = args.task if args.task else None
 
     n_trials = args.trials
     inner_fold = args.inner_fold
@@ -230,35 +231,39 @@ def main(args):
     algorithms_configspaces["Logistic Regression"] = {"classifier": LogisticRegression, "configuration_space": configuration_space}
     
 
-    if algorithm:
-        if algorithm in algorithms_configspaces:
-            cross_validate_train_model_sklearn( X=X, ys=ys, labels=targets, classifier=algorithms_configspace[algorithm]["classifier"],
-                                                configuration_space=algorithms_configspace[algorithm]["configuration_space"],
-                                                n_trials=n_trials, name=name, algorithm_name=algorithm, outdir=outdir,
-                                                fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
-        else:
-            raise( ValueError(f"-a/--algorithm is unknown. Choose one of {list(algorithms_configspaces.keys())}"))
+    if algorithms:
+        algorithms_configspaces_acc = {}
+        for algorithm in algorithms:
+            if algorithm in algorithms_configspaces:
+                algorithms_configspaces_acc[algorithm] = algorithms_configspaces[algorithm]
+            else:
+                raise( ValueError(f"-a/--algorithm is unknown. Choose one of {list(algorithms_configspaces.keys())}"))
+       algorithms_configspaces = algorithms_configspaces_acc
+
+   
+    if task == "train":
+        print("Training:")
+        for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
+            cross_validate_train_model_sklearn( X=X, ys=ys, labels=targets, classifier=algorithms_configspace[algorithm_name]["classifier"],
+                                                        configuration_space=algorithms_configspace[algorithm_name]["configuration_space"],
+                                                        n_trials=n_trials, name=name, algorithm_name=algorithm_name, outdir=outdir,
+                                                        fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
     else:
-        nested_cv_plot_all( algorithms_configspaces=algorithms_configspaces, X=X, ys=ys, labels=targets, classifier=classifier,
-                            n_trials=n_trials, name=name, outdir=outdir, fold=fold, inner_fold=inner_fold, verbosity=verbosity )
+        print("Tuning:")
+        for algorithm_name, alg_info in tqdm(algorithms_configspaces.items()):
+            print(f"{algorithm_name}:")
+            metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys,
+                                                                                                       labels=labels,
+                                                                                                       classifier=alg_info["classifier"],
+                                                                                                       configuration_space=alg_info["configuration_space"],
+                                                                                                       n_trials=n_trials,
+                                                                                                       name=name, algorithm_name=algorithm_name,
+                                                                                                       outdir=outdir,
+                                                                                                       fold=StratifiedKFold(n_splits=outer_fold),
+                                                                                                       inner_fold=inner_fold,
+                                                                                                       verbosity=verbosity)
 
-
-
-
-def nested_cv_plot_all( algorithms_configspaces:dict, X, ys, labels,
-                        n_trials:int, name:str, outdir, fold, inner_fold, verbosity:int ):
-    """
-    Perform nested cross-validation, extract and plot results for possible algorithms
-    """
-    for algorithm_name, alg_info in tqdm(algorithms_configspaces.items()):
-        print(f"{algorithm_name}:")
-        metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=labels, classifier=alg_info["classifier"],
-                                                                                        configuration_space=alg_info["configuration_space"], n_trials=n_trials,
-                                                                                        name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                                                        fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
-
-        plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
-
+            plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
 
 
 
@@ -280,7 +285,8 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--computation', required=True)
     parser.add_argument('-n', '--name', required=False)
 
-    parser.add_argument('-a', '--algorithm', required=True)
+    parser.add_argument('-a', '--algorithms', nargs="+", required=False)
+    parser.add_argument('-ta', '--task', required=False)
 
     parser.add_argument('-v', '--verbosity', type=int, required=False)
     args = parser.parse_args()

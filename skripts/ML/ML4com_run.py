@@ -13,6 +13,8 @@ warnings.simplefilter(action='ignore', category=sklearn.exceptions.UndefinedMetr
 
 
 def main(args):
+    algorithm = args.algorithm if args.algorithm else None
+
     n_trials = args.trials
     inner_fold = args.inner_fold
     outer_fold = args.outer_fold
@@ -65,11 +67,10 @@ def main(args):
 
     print(f"Shape of input data: {X.shape}")
 
-    print("KNN:")
+    algorithms_configspaces = {}
+    
+    # KNN
     from sklearn.neighbors import KNeighborsClassifier 
-    classifier = KNeighborsClassifier
-    algorithm_name = "K-neighbours classifier"
-
     configuration_space = ConfigurationSpace()
     hyperparameters = [ 
                         Constant("n_neighbors",   2),
@@ -80,19 +81,11 @@ def main(args):
                     ]
     configuration_space.add_hyperparameters( hyperparameters ) 
 
-    metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
-                                                                                            configuration_space=configuration_space, n_trials=n_trials,
-                                                                                            name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
-
-    plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+    algorithms_configspaces["K-neighbours classifier"] = {"classifier": KNeighborsClassifier, "configuration_space": configuration_space}
 
 
-    print("SVC:")
+    # SVC
     from sklearn.svm import SVC 
-    classifier = SVC
-    algorithm_name = "Support-vector classifier"
-
     configuration_space = ConfigurationSpace()
     hyperparameters = [ 
                         Float("C",              (0.5, 2.0), default=1.0),
@@ -111,21 +104,11 @@ def main(args):
     configuration_space.add_hyperparameters( hyperparameters ) 
     configuration_space.add_conditions(conditions)
 
-    metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
-                                                                                            configuration_space=configuration_space, n_trials=n_trials,
-                                                                                            name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
-
-    plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+    algorithms_configspaces["Support-vector classifier"] = {"classifier": SVC, "configuration_space": configuration_space}
 
 
-
-    print("GAUSSIAN PROCESS:")
+    # Gaussian Process
     from sklearn.gaussian_process import GaussianProcessClassifier
-    classifier = GaussianProcessClassifier
-    algorithm_name = "Gaussian process classifier"
-
-
     configuration_space = ConfigurationSpace()
     hyperparameters = [ 
                         Constant("random_state", 42),
@@ -133,78 +116,44 @@ def main(args):
                     ]
     configuration_space.add_hyperparameters( hyperparameters )
 
-    metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
-                                                                                            configuration_space=configuration_space, n_trials=n_trials,
-                                                                                            name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
-
-    plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+    algorithms_configspaces["Gaussian process classifier"] = {"classifier": GaussianProcessClassifier, "configuration_space": configuration_space}
 
 
 
-    print("GAUSSIAN NB:")
+    # Naive Bayes
     from sklearn.naive_bayes import GaussianNB
-    classifier = GaussianNB
-    algorithm_name = "Gaussian Naive-Bayes"
-
     configuration_space = ConfigurationSpace()
     hyperparameters = [ 
                         Constant("var_smoothing",   1e-9),
                     ]
     configuration_space.add_hyperparameters( hyperparameters )
 
-    metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
-                                                                                            configuration_space=configuration_space, n_trials=1,
-                                                                                            name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
-
-    plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+    algorithms_configspaces["Gaussian Naive-Bayes"] = {"classifier": GaussianNB, "configuration_space": configuration_space}
 
 
 
-    print("DT:")
+    # Decision Tree
     from sklearn.tree import DecisionTreeClassifier
-    classifier = DecisionTreeClassifier
-    algorithm_name = "Decision tree"
-
     configuration_space = ConfigurationSpace()
     ccp_alpha   = Float("ccp_alpha", (1e-3, 1e0), log=True, default=0.01)
     configuration_space.add_hyperparameters([ccp_alpha])
 
-    metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
-                                                                                            configuration_space=configuration_space, n_trials=n_trials,
-                                                                                            name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
-
-    plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+    algorithms_configspaces["Decision tree"] = {"classifier": DecisionTreeClassifier, "configuration_space": configuration_space}
 
 
-
-    print("RF:")
+    # Random Forest
     from sklearn.ensemble import RandomForestClassifier
-    classifier = RandomForestClassifier
-    algorithm_name = "Random forest"
-
     configuration_space = ConfigurationSpace()
     ccp_alpha       = Float("ccp_alpha", (1e-3, 1e-1), log=True, default=0.01)
     n_estimators    = Integer("n_estimators", (10,1000), log=True, default=100)
     max_depth       = Integer("max_depth", (5, 100), default=20)
     configuration_space.add_hyperparameters([ccp_alpha, n_estimators, max_depth])
 
-    metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
-                                                                                            configuration_space=configuration_space, n_trials=n_trials,
-                                                                                            name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
-
-    plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+    algorithms_configspaces["Random forest"] = {"classifier": RandomForestClassifier, "configuration_space": configuration_space}
 
 
-
-    print("XGB:")
+    # Extreme Gradient Boosting
     from xgboost import XGBClassifier
-    classifier = XGBClassifier
-    algorithm_name = "Extreme gradient boosting RF"
-
     configuration_space = ConfigurationSpace()
     objective           = Constant( "objective",            "binary:logistic")
     num_parallel_tree   = Constant( "num_parallel_tree",    4)
@@ -214,22 +163,13 @@ def main(args):
     learning_rate       = Float(    "learning_rate",        (1e-2, 5e-1), default=1e-1)
     configuration_space.add_hyperparameters([objective, num_parallel_tree, n_estimators, max_depth, subsample, learning_rate])
 
-    metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
-                                                                                            configuration_space=configuration_space, n_trials=n_trials,
-                                                                                            name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
-
-    plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+    algorithms_configspaces["Extreme gradient boosting RF"] = {"classifier": XGBClassifier, "configuration_space": configuration_space}
 
 
-
-    print("MLP:")
+    # Multi-Layer-Perceptron
     from sklearn.neural_network import MLPClassifier
     from sklearn.exceptions import ConvergenceWarning
-    classifier = MLPClassifier
-    algorithm_name = "Neural Network (MLP) SK-learn"
     warnings.filterwarnings("ignore", category=ConvergenceWarning)
-
     configuration_space = ConfigurationSpace()
     n_neurons = []
     for i in range(5):
@@ -251,47 +191,74 @@ def main(args):
 
     configuration_space.add_hyperparameters( hyperparameters )
 
-    metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
-                                                                                            configuration_space=configuration_space, n_trials=n_trials,
-                                                                                            name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                                                            fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
-
-    plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+    algorithms_configspaces["Neural Network (MLP) SK-learn"] = {"classifier": MLPClassifier, "configuration_space": configuration_space}
 
 
-    """
-    algorithm_name = "Neural Network (MLP) Keras"
+
+    # LDA
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
     configuration_space = ConfigurationSpace()
-    max_layers = 5
-    dropout_in = Float("dropout_in", (0.0, 0.5), default=0.25)
-    n_layers = Integer("n_layers", (1, max_layers), default=1)
-    n_neurons = []
-    activations = []
-    dropouts = []
-    for i in range(max_layers):
-        n_neurons.append(Integer(f"n_neurons_{i}", (8, 256), log=True, default=128))
-        activations.append( Categorical(f"activation_{i}", ["tanh", "relu", "leakyrelu", "sigmoid"], default="relu") )
-        dropouts.append( Categorical(f"dropout_{i}", [True, False], default=True) )
-    solver = Constant("solver", "nadam")
-    learning_rate = Float("learning_rate", (1e-4, 1e-1), log=True, default=1e-2)
 
-    hyperparameters = n_neurons + activations + dropouts + [dropout_in, n_layers, solver, learning_rate]
-    configuration_space.add_hyperparameters( hyperparameters )
+    hyperparameters = [ 
+                        Categorical( "solver",      ["svd", "lsqr", "eigen"], default="svd"),
+                        Categorical("shrinkage",       ["auto", None], default=None),
+                        Float("tol",                   (1e-6,1e-2), log=True, default=1e-4)
+                    ]
+    configuration_space.add_hyperparameters(hyperparameters)
 
-    metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_keras( X, ys, targets, configuration_space=configuration_space, n_trials=n_trials, classes=1,
-                                                                                            fold=StratifiedKFold(n_splits=5), patience=20, epochs=100, outdir=outdir,
-                                                                                            verbosity=verbosity )
+    algorithms_configspaces["Linear Discriminant Analysis"] = {"classifier": LinearDiscriminantAnalysis, "configuration_space": configuration_space}
 
-    plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+
+
+    # Logistic Regression
+    from sklearn.linear_model import LogisticRegression
+    configuration_space = ConfigurationSpace()
+
+    hyperparameters = [ 
+                        Constant("random_state",        42)
+                        Constant("dual",                False)
+                        Constant("max_iter",            100)
+                        Categorical("penalty"           ["l1", "l2", "elasticnet", None], default="l2"),
+                        Categorical( "solver",          ["lbfgs", "liblinear", "newton-cg", "newton-cholesky", "sag", "saga"], default="lbfgs"),
+                        Float("tol",                    (1e-6,1e-2), log=True, default=1e-4)
+                        Float("C",                      (1e-3,1e3), log=True, default=1.0)
+                        Float("intercept_scaling",      (1e-3,1e3), log=True, default=1.0)
+                        Float("l1_ratio",               (0.0, 1.0), default=0.5)
+                    ]
+    configuration_space.add_hyperparameters(hyperparameters)
+
+    algorithms_configspaces["Logistic Regression"] = {"classifier": LogisticRegression, "configuration_space": configuration_space}
+    
+
+    if algorithm:
+        if algorithm in algorithms_configspaces:
+            cross_validate_train_model_sklearn( X=X, ys=ys, labels=targets, classifier=algorithms_configspace[algorithm]["classifier"],
+                                                configuration_space=algorithms_configspace[algorithm]["configuration_space"],
+                                                n_trials=n_trials, name=name, algorithm_name=algorithm, outdir=outdir,
+                                                fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
+        else:
+            raise( ValueError(f"-a/--algorithm is unknown. Choose one of {list(algorithms_configspaces.keys())}"))
+    else:
+        nested_cv_plot_all( algorithms_configspaces=algorithms_configspaces, X=X, ys=ys, labels=targets, classifier=classifier,
+                            n_trials=n_trials, name=name, outdir=outdir, fold=fold, inner_fold=inner_fold, verbosity=verbosity )
+
+
+
+
+def nested_cv_plot_all( algorithms_configspaces:dict, X, ys, labels,
+                        n_trials:int, name:str, outdir, fold, inner_fold, verbosity:int ):
     """
+    Perform nested cross-validation, extract and plot results for possible algorithms
+    """
+    for algorithm_name, alg_info in tqdm(algorithms_configspaces.items()):
+        print(f"{algorithm_name}:")
+        metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys, labels=labels, classifier=alg_info["classifier"],
+                                                                                        configuration_space=alg_info["configuration_space"], n_trials=n_trials,
+                                                                                        name=name, algorithm_name=algorithm_name, outdir=outdir,
+                                                                                        fold=StratifiedKFold(n_splits=outer_fold), inner_fold=inner_fold, verbosity=verbosity)
 
-    # TODO: Train model with best algorithm
-    """
-    cross_validate_train_model_sklearn( X=X, ys=ys, labels=targets, classifier=classifier,
-                                        configuration_space=configuration_space, n_trials=n_trials,
-                                        name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                        fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
-    """
+        plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
+
 
 
 
@@ -312,6 +279,8 @@ if __name__ == "__main__":
     parser.add_argument('-b', '--backend',  required=True)
     parser.add_argument('-c', '--computation', required=True)
     parser.add_argument('-n', '--name', required=False)
+
+    parser.add_argument('-a', '--algorithm', required=True)
 
     parser.add_argument('-v', '--verbosity', type=int, required=False)
     args = parser.parse_args()

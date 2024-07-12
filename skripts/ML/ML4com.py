@@ -34,7 +34,7 @@ import tensorflow as tf
 import keras
 from keras import layers, activations, backend
 
-from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer, Constant
+from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCondition, Float, InCondition, Integer, Constant, ForbiddenAndConjunction, ForbiddenEqualsClause
 from smac import HyperparameterOptimizationFacade, MultiFidelityFacade, Scenario
 from smac.intensifier.hyperband import Hyperband
 

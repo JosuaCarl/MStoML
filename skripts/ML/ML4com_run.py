@@ -64,7 +64,7 @@ def main(args):
         ys = pd.read_csv( os.path.join(orig_dir, "comb_one_hot.tsv"), sep="\t")
         X = met_raw_comb.transpose()
 
-    targets = strains["Organism"].values
+    labels = strains["Organism"].values
 
     print(f"Shape of input data: {X.shape}")
 
@@ -202,10 +202,15 @@ def main(args):
 
     hyperparameters = [ 
                         Categorical( "solver",      ["svd", "lsqr", "eigen"], default="svd"),
-                        Categorical("shrinkage",       ["auto", None], default=None),
-                        Float("tol",                   (1e-6,1e-2), log=True, default=1e-4)
+                        Categorical("shrinkage",    ["auto"], default="auto"),
+                        Float("tol",                (1e-6,1e-2), log=True, default=1e-4)
                     ]
+    conditions = [
+                    InCondition(hyperparameters[1], hyperparameters[0], ["lsqr", "eigen"])
+                ]
     configuration_space.add_hyperparameters(hyperparameters)
+    configuration_space.add_conditions(conditions)
+    
 
     algorithms_configspaces["Linear Discriminant Analysis"] = {"classifier": LinearDiscriminantAnalysis, "configuration_space": configuration_space}
 
@@ -216,17 +221,28 @@ def main(args):
     configuration_space = ConfigurationSpace()
 
     hyperparameters = [ 
-                        Constant("random_state",        42)
-                        Constant("dual",                False)
-                        Constant("max_iter",            100)
-                        Categorical("penalty"           ["l1", "l2", "elasticnet", None], default="l2"),
+                        Constant("random_state",        42),
+                        Constant("max_iter",            100),
+                        Categorical("penalty",          ["l1", "l2", "elasticnet"], default="l2"),
                         Categorical( "solver",          ["lbfgs", "liblinear", "newton-cg", "newton-cholesky", "sag", "saga"], default="lbfgs"),
-                        Float("tol",                    (1e-6,1e-2), log=True, default=1e-4)
-                        Float("C",                      (1e-3,1e3), log=True, default=1.0)
-                        Float("intercept_scaling",      (1e-3,1e3), log=True, default=1.0)
+                        Float("tol",                    (1e-6,1e-2), log=True, default=1e-4),
+                        Float("C",                      (1e-3,1e3), log=True, default=1.0),
+                        Float("intercept_scaling",      (1e-3,1e3), log=True, default=1.0),
                         Float("l1_ratio",               (0.0, 1.0), default=0.5)
                     ]
-    configuration_space.add_hyperparameters(hyperparameters)
+    conditions = [
+                    InCondition(hyperparameters[7], hyperparameters[2], ["elasticnet"]),
+                    InCondition(hyperparameters[2], hyperparameters[3], ["saga", "liblinear"])           
+                ]
+    clauses = [
+        ForbiddenAndConjunction(
+                                    ForbiddenEqualsClause(hyperparameters[3], "liblinear"),
+                                    ForbiddenEqualsClause(hyperparameters[2], "elasticnet")
+                                )
+            ]
+    configuration_space.add_hyperparameters( hyperparameters )
+    configuration_space.add_conditions( conditions )
+    configuration_space.add_forbidden_clauses( clauses )
 
     algorithms_configspaces["Logistic Regression"] = {"classifier": LogisticRegression, "configuration_space": configuration_space}
     
@@ -238,20 +254,20 @@ def main(args):
                 algorithms_configspaces_acc[algorithm] = algorithms_configspaces[algorithm]
             else:
                 raise( ValueError(f"-a/--algorithm is unknown. Choose one of {list(algorithms_configspaces.keys())}"))
-       algorithms_configspaces = algorithms_configspaces_acc
+        algorithms_configspaces = algorithms_configspaces_acc
 
    
     if task == "train":
         print("Training:")
         for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
-            cross_validate_train_model_sklearn( X=X, ys=ys, labels=targets, classifier=algorithms_configspace[algorithm_name]["classifier"],
+            cross_validate_train_model_sklearn( X=X, ys=ys, labels=labels, classifier=algorithms_configspace[algorithm_name]["classifier"],
                                                         configuration_space=algorithms_configspace[algorithm_name]["configuration_space"],
                                                         n_trials=n_trials, name=name, algorithm_name=algorithm_name, outdir=outdir,
                                                         fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
     else:
         print("Tuning:")
         for algorithm_name, alg_info in tqdm(algorithms_configspaces.items()):
-            print(f"{algorithm_name}:")
+            print(f"\n{algorithm_name}:")
             metrics_df, organism_metrics_df, overall_metrics_df = nested_cross_validate_model_sklearn( X=X, ys=ys,
                                                                                                        labels=labels,
                                                                                                        classifier=alg_info["classifier"],

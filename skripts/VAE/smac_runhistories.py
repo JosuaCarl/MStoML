@@ -67,7 +67,7 @@ def read_runhistories(folder_path, skip_dirs:list, verbosity:int=0) -> RunHistor
     """
     runhistories = RunHistory()
     for d in os.listdir(folder_path):
-        if d in skip_dirs or not os.path.isdir(d):
+        if d in skip_dirs or not os.path.isdir(os.path.join(folder_path, d)):
             continue
         for sub in tqdm(os.listdir(os.path.join(folder_path, d))):
             with open(os.path.join(folder_path, d, sub, 'configspace.json'), 'r') as f:

@@ -74,13 +74,16 @@ def main(args):
     from sklearn.neighbors import KNeighborsClassifier 
     configuration_space = ConfigurationSpace()
     hyperparameters = [ 
-                        Constant("n_neighbors",   2),
+                        Integer("n_neighbors",   (2,100), default=5),
                         Categorical("weights",    ["uniform", "distance"], default="uniform"),
                         Integer("leaf_size",      (10, 100), log=True, default=30),
                         Integer("p",              (1, 2), default=2),
-                        Constant("metric",        "minkowski")
+                        Categorical("metric",     ["minkowski", "cosine"])
                     ]
-    configuration_space.add_hyperparameters( hyperparameters ) 
+    configuration_space.add_hyperparameters( hyperparameters )
+    conditions = [
+                    InCondition(hyperparameters[3], hyperparameters[4], ["minkowski"])
+                ]
 
     algorithms_configspaces["K-neighbours classifier"] = {"classifier": KNeighborsClassifier, "configuration_space": configuration_space}
 
@@ -247,7 +250,7 @@ def main(args):
     algorithms_configspaces["Logistic Regression"] = {"classifier": LogisticRegression, "configuration_space": configuration_space}
     
 
-    if algorithms:
+    if algorithms and "all" not in algorithms:
         algorithms_configspaces_acc = {}
         for algorithm in algorithms:
             if algorithm in algorithms_configspaces:

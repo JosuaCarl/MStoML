@@ -16,6 +16,7 @@ def main(args):
     algorithms = args.algorithms if args.algorithms else None
     task = args.task if args.task else None
 
+    n_workers = args.workers if args.workers else 1
     n_trials = args.trials
     inner_fold = args.inner_fold
     outer_fold = args.outer_fold
@@ -74,7 +75,7 @@ def main(args):
     from sklearn.neighbors import KNeighborsClassifier 
     configuration_space = ConfigurationSpace()
     hyperparameters = [ 
-                        Integer("n_neighbors",   (2,100), default=5),
+                        Integer("n_neighbors",   (2,50), default=5),
                         Categorical("weights",    ["uniform", "distance"], default="uniform"),
                         Integer("leaf_size",      (10, 100), log=True, default=30),
                         Integer("p",              (1, 2), default=2),
@@ -280,6 +281,7 @@ def main(args):
                                                                                                        outdir=outdir,
                                                                                                        fold=StratifiedKFold(n_splits=outer_fold),
                                                                                                        inner_fold=inner_fold,
+                                                                                                       n_workers=n_workers,
                                                                                                        verbosity=verbosity)
 
             plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
@@ -296,6 +298,7 @@ if __name__ == "__main__":
     parser.add_argument('-fn', '--filename', required=True)
     
 
+    parser.add_argument('-w', '--workers', type=int, required=False)
     parser.add_argument('-t', '--trials', type=int, required=True)
     parser.add_argument('-if', '--inner_fold', type=int, required=True)
     parser.add_argument('-of', '--outer_fold', type=int, required=False)

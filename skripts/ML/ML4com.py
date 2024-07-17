@@ -189,14 +189,14 @@ class SKL_Classifier:
         return 1.0 - score
 
 
-def tune_classifier(X, y, classifier, cv, configuration_space, n_trials, name, algorithm_name, outdir, verbosity):
+def tune_classifier(X, y, classifier, cv, configuration_space, n_workers, n_trials, name, algorithm_name, outdir, verbosity):
     """
     Perform hyperparameter tuning on an Sklearn classifier.
     """
     classifier = SKL_Classifier(X, y, cv=cv, configuration_space=configuration_space, classifier=classifier, n_trials=n_trials)
 
     scenario = Scenario( classifier.configuration_space, deterministic=True, 
-                         n_workers=1, n_trials=n_trials,
+                         n_workers=n_workers, n_trials=n_trials,
                          walltime_limit=np.inf, cputime_limit=np.inf, trial_memory_limit=None,
                          output_directory=outdir )
 
@@ -244,7 +244,7 @@ def extract_best_hyperparameters_from_incumbent(incumbent, configuration_space):
 
 def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration_space, n_trials,
                                         name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
-                                        inner_fold:int=3, verbosity=0):
+                                        inner_fold:int=3, n_workers:int=1, verbosity:int=0):
     """
     Cross-validate a model against the given hyperparameters for all organisms
     """
@@ -271,8 +271,8 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
             validation_labels = y.iloc[val_index]
 
             # Hyperparameter Tuning with inner CV loop
-            incumbent = tune_classifier(training_data, training_labels, classifier, inner_fold, configuration_space, n_trials,
-                                        name, algorithm_name, outdir, verbosity)
+            incumbent = tune_classifier(training_data, training_labels, classifier, inner_fold, configuration_space,
+                                        n_workers, n_trials, name, algorithm_name, outdir, verbosity)
             
             # Model definition and fitting
             best_hp = extract_best_hyperparameters_from_incumbent(incumbent=incumbent, configuration_space=configuration_space)
@@ -283,7 +283,9 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
 
             # Prediction and scoring
             prediction = model.predict( np.array(validation_data) )
-            if hasattr(model, "predict_proba"):
+            if hasattr(model, "decision_function"):
+                scoring = model.decision_function( np.array(validation_data) )
+            elif hasattr(model, "predict_proba"):
                 scoring = model.predict_proba( np.array(validation_data) )[::,1]
             else:
                 scoring = prediction

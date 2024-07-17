@@ -157,7 +157,7 @@ class SKL_Classifier:
     """
     Representation of Scikit-learn classifier for SMAC3
     """
-    def __init__(self, X, ys, cv:int, configuration_space:ConfigurationSpace, classifier, n_trials):
+    def __init__(self, X, ys, cv, configuration_space:ConfigurationSpace, classifier, n_trials):
         self.X = X
         self.ys = ys
         self.cv = cv
@@ -173,7 +173,10 @@ class SKL_Classifier:
 
         with mlflow.start_run(run_name=f"run_{self.count}", nested=True):
             mlflow.set_tag("test_identifier", f"child_{self.count}")
-            splitter = StratifiedKFold(n_splits=self.cv, shuffle=True, random_state=seed)
+            if isinstance(self.cv, int):
+                splitter = StratifiedKFold(n_splits=self.cv, shuffle=True, random_state=seed)
+            else:
+                splitter = self.cv
             scores = []
             for train, test in splitter.split(self.X, self.ys):
                 model = self.classifier(**config)
@@ -317,17 +320,17 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
     return (metrics_df, organism_metrics_df, overall_metrics_df)
 
 
-def cross_validate_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_trials,
-                                        name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
-                                        verbosity=0 ):
+def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_workers, n_trials,
+                                name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
+                                verbosity=0 ):
     """
-    Cross-validate a model against the given hyperparameters for all organisms
+    Tune and train a model against the given hyperparameters for all organisms
     """
     # Iterate over all organisms for binary distinction
     for i, org in enumerate(tqdm(ys.columns)):
         y = ys[org]
 
-        incumbent = tune_classifier(X, y, classifier, fold, configuration_space, n_trials,
+        incumbent = tune_classifier(X, y, classifier, fold, configuration_space, n_workers, n_trials,
                                     name, algorithm_name, outdir, verbosity)
         
         # Model definition and fitting
@@ -341,6 +344,29 @@ def cross_validate_train_model_sklearn( X, ys, labels, classifier, configuration
             pickle.dump(model ,f)
 
 
+def evaluate_model_sklearn( X, ys, labels, indir, name, algorithm_name, outdir,
+                            verbosity=0 ):
+    """
+    Evaluate a model against the given hyperparameters for all organisms and save the resulting metrics.
+    """
+    eval_metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+    # Iterate over all organisms for binary distinction
+    for i, org in enumerate(tqdm(ys.columns)):
+        y = ys[org]
+
+        with open(os.path.join(outdir, f'model_{algorithm_name}_{labels[i]}.pkl'), 'rb') as f:
+            model = pickle.load(f)
+
+    prediction = model.predict( np.array(X) )
+    if hasattr(model, "decision_function"):
+        scoring = model.decision_function( np.array(X) )
+    elif hasattr(model, "predict_proba"):
+        scoring = model.predict_proba( np.array(X) )[::,1]
+    else:
+        scoring = prediction
+    
+    eval_metrics_df = extract_metrics(y, prediction, scoring, labels[i], 0, eval_metrics_df)
+    eval_metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_eval_metrics.tsv"), sep="\t")
 
 # PLOTTING
 def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, name):

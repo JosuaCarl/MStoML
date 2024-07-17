@@ -264,10 +264,17 @@ def main(args):
     if task == "train":
         print("Training:")
         for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
-            cross_validate_train_model_sklearn( X=X, ys=ys, labels=labels, classifier=algorithms_configspace[algorithm_name]["classifier"],
-                                                        configuration_space=algorithms_configspace[algorithm_name]["configuration_space"],
-                                                        n_trials=n_trials, name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                                        fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
+            tune_train_model_sklearn( X=X, ys=ys, labels=labels, classifier=algorithms_configspaces[algorithm_name]["classifier"],
+                                        configuration_space=algorithms_configspaces[algorithm_name]["configuration_space"],
+                                        n_workers=n_workers, n_trials=n_trials, name=name, algorithm_name=algorithm_name, outdir=outdir,
+                                        fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
+    elif task == "evaluate":
+        print("Evaluating:")
+        for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
+            evaluate_model_sklearn( X=X, ys=ys, labels=labels, classifier=algorithms_configspaces[algorithm_name]["classifier"],
+                                    configuration_space=algorithms_configspaces[algorithm_name]["configuration_space"],
+                                    n_trials=n_trials, name=name, algorithm_name=algorithm_name, outdir=outdir,
+                                    fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
     else:
         print("Tuning:")
         for algorithm_name, alg_info in tqdm(algorithms_configspaces.items()):

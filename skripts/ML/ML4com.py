@@ -267,7 +267,7 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
         y_deshuffled = np.ndarray((0))
 
         # Outer Loop
-        for cv_i, (train_index, val_index) in enumerate(fold.split(X, y)):
+        for cv_i, (train_index, val_index) in enumerate(tqdm(fold.split(X, y))):
             training_data = X.iloc[train_index]
             training_labels = y.iloc[train_index]
             validation_data = X.iloc[val_index]
@@ -321,7 +321,7 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
 
 
 def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_workers, n_trials,
-                                name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
+                                source:str, name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
                                 verbosity=0 ):
     """
     Tune and train a model against the given hyperparameters for all organisms
@@ -340,33 +340,41 @@ def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_
         model = classifier(**best_hp)		# Ensures model resetting for each cross-validation
 
         model.fit(np.array(X), np.array(y))
-        with open(os.path.join(outdir, f'model_{algorithm_name}_{labels[i]}.pkl'), 'wb') as f:
+        with open(os.path.join(outdir, f'model_{algorithm_name}_{labels[i]}_{source}.pkl'), 'wb') as f:
             pickle.dump(model ,f)
 
 
-def evaluate_model_sklearn( X, ys, labels, indir, name, algorithm_name, outdir,
-                            verbosity=0 ):
+def evaluate_model_sklearn( X, ys, labels, indir, source, target, algorithm_name, outdir, verbosity=0 ):
     """
-    Evaluate a model against the given hyperparameters for all organisms and save the resulting metrics.
+    Evaluate a model against the given hyperparameters for all organisms and save the resulting metrics and feature importances.
     """
     eval_metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
-    # Iterate over all organisms for binary distinction
+    feature_importances = {}
+
     for i, org in enumerate(tqdm(ys.columns)):
         y = ys[org]
 
-        with open(os.path.join(outdir, f'model_{algorithm_name}_{labels[i]}.pkl'), 'rb') as f:
+        with open(os.path.join(indir, f'model_{algorithm_name}_{labels[i]}_{source}.pkl'), 'rb') as f:
             model = pickle.load(f)
 
-    prediction = model.predict( np.array(X) )
-    if hasattr(model, "decision_function"):
-        scoring = model.decision_function( np.array(X) )
-    elif hasattr(model, "predict_proba"):
-        scoring = model.predict_proba( np.array(X) )[::,1]
-    else:
-        scoring = prediction
-    
-    eval_metrics_df = extract_metrics(y, prediction, scoring, labels[i], 0, eval_metrics_df)
-    eval_metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_eval_metrics.tsv"), sep="\t")
+        prediction = model.predict( np.array(X) )
+        if hasattr(model, "decision_function"):
+            scoring = model.decision_function( np.array(X) )
+        elif hasattr(model, "predict_proba"):
+            scoring = model.predict_proba( np.array(X) )[::,1]
+        else:
+            scoring = prediction
+        
+        eval_metrics_df = extract_metrics(y, prediction, scoring, labels[i], 0, eval_metrics_df)
+
+        model.fit(X.values, y)
+        if hasattr(model, "feature_importances_"):
+            feature_importances[lables[i]] = model.feature_importances_
+
+    feat_imp_df = pd.DataFrame(feature_importances, index=X.columns)
+    feat_imp_df.to_csv(os.path.join(outdir, f"/feature_importance_{algorithm_name}_{target}.tsv", sep="\t"))
+
+    eval_metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_{target}_eval_metrics.tsv"), sep="\t")
 
 # PLOTTING
 def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, name):

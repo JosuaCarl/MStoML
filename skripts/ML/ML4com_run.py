@@ -24,6 +24,7 @@ def main(args):
 
     start_dir = args.start_dir
     source = args.source
+    target = args.target if args.target else None
     sample = args.sample
 
     backend_name = args.backend
@@ -266,15 +267,13 @@ def main(args):
         for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
             tune_train_model_sklearn( X=X, ys=ys, labels=labels, classifier=algorithms_configspaces[algorithm_name]["classifier"],
                                         configuration_space=algorithms_configspaces[algorithm_name]["configuration_space"],
-                                        n_workers=n_workers, n_trials=n_trials, name=name, algorithm_name=algorithm_name, outdir=outdir,
+                                        n_workers=n_workers, n_trials=n_trials, source=source, name=name, algorithm_name=algorithm_name, outdir=outdir,
                                         fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
     elif task == "evaluate":
         print("Evaluating:")
         for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
-            evaluate_model_sklearn( X=X, ys=ys, labels=labels, classifier=algorithms_configspaces[algorithm_name]["classifier"],
-                                    configuration_space=algorithms_configspaces[algorithm_name]["configuration_space"],
-                                    n_trials=n_trials, name=name, algorithm_name=algorithm_name, outdir=outdir,
-                                    fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
+            evaluate_model_sklearn( X=X, ys=ys, labels=labels, indir=outdir, source=source, target=target, algorithm_name=algorithm_name, outdir=outdir,
+                                    verbosity=verbosity )
     else:
         print("Tuning:")
         for algorithm_name, alg_info in tqdm(algorithms_configspaces.items()):
@@ -300,6 +299,7 @@ if __name__ == "__main__":
                                      description='Try different algorithms in nested-cv run.')
     
     parser.add_argument('-s', '--source', required=True)
+    parser.add_argument('-tar', '--target', required=False)
     parser.add_argument('-st', '--start_dir', required=True)
     parser.add_argument('-sam', '--sample', required=True)
     parser.add_argument('-fn', '--filename', required=True)

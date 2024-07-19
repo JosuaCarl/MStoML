@@ -2,7 +2,7 @@ import sys
 sys.path.append( '..' )
 
 from helpers.normalization import *
-from FIA import *
+from FIA.FIA import *
 from ML.ML4com import *
 
 from itertools import combinations

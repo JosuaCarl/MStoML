@@ -44,7 +44,7 @@ runtimes = {}
 
 def main(args):
     """
-    One-time traing of Variational Autoencoder
+    Training of Variational Autoencoder
 
     Example:
         The  following extracts data from ../data and uses ../runs as a directory to save to.
@@ -228,7 +228,7 @@ def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 def spectral_entropy(spectrum):
     """
-    Computes the spectral entropy for a spectra $S_i \in S$ with elements $s_i \in S_i$: -sum(s_i * ln(s_i))
+    Computes the spectral entropy for a spectra $S_i \in S$ with elements $s_i \in S_i$: $-\sum (s_i * ln(s_i))$
     """
     spectrum = ops.normalize(spectrum, order=1) # Total count normalization
     return -ops.sum( ops.multiply( spectrum, ops.log( ops.add(spectrum, 1e-32) ) ), axis=-1 )

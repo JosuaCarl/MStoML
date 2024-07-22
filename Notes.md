@@ -34,3 +34,10 @@
 4. COM8 (equal concentration combinations) community prediction mit latent space und annotierten Metaboliten
 5. Training der besten Classification Algorithmen mit COM8 (equal concentration combinations)
 6. Anwendung der Classification-Modelle auf COM8 (grown together) um Übertragbarkeit zu testen
+
+
+
+ANOVA
+- LDA - ANOVA Connection
+- Volcano plot for all organisms + mark all picked by XGBoost
+- Violin + Importance plot of all organisms

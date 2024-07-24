@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""
+Flow injection analysis with OpenMS.
+"""
+
 # Imports
 import os
 import time

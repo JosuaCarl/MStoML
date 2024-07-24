@@ -53,3 +53,4 @@ Make:
 	- Tests for important functions
 	- Documentation with Sphinx (see YT) 
 	- all .bak files
+	- group_interpret.sh

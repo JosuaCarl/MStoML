@@ -1,48 +1,81 @@
+#!/usr/bin/env python3
+"""
+Methods for Flow-injection-analysis.
+"""
+
+# Imports
 import os
 import gc
 import time
 from typing import List, Tuple, Sequence, Union, Optional
 import shutil
-from matplotlib.figure import Figure
 import requests
 from copy import deepcopy
 from tqdm import tqdm
+import psutil
+
 import numpy as np
 import pandas as pd
 import polars as pl
-import scipy as sci
-import pyopenms as oms
+
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.graph_objects as go
 import plotly.express as px
+
+import pyopenms as oms
+
+import scipy as sci
 from scipy.signal import find_peaks
 from scipy.spatial.distance import pdist
 from scipy.cluster.hierarchy import fcluster, linkage
+
 from sklearn.impute import KNNImputer
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.pipeline import Pipeline
 
-import psutil
 
-### DATA OBTAIN ###
+## Data
 def batch_download(base_url:str, file_urls:list, save_directory:str) -> None:
     """
     Download files from a list into a directory.
-    """
+
+    :param base_url: Base URL
+    :type base_url: str
+    :param file_urls: Individual file URLS which are appended to the base
+    :type file_urls: list
+    :param save_directory: Directory to save files to.
+    :type save_directory: str
+    """    
     for file_url in file_urls:
         request = requests.get(base_url + file_url, allow_redirects=True)
         open(os.path.join(save_directory, os.path.basename(file_url)), "wb").write(request.content)
 
-### DIRECTORIES ###
+
+
+## Directories
 def build_directory(dir_path:str) -> None:
     """
     Build a new directory in the given path.
-    """
+
+    :param dir_path: Directory path
+    :type dir_path: str
+    """    
     if not os.path.isdir(os.path.join(os.getcwd(), dir_path)):
         os.mkdir(os.path.join(os.getcwd(), dir_path))
 
-def clean_dir(dir_path:str, subfolder:Optional[str]=None) -> str: 
+def clean_dir(dir_path:str, subfolder:Optional[str]=None) -> str:
+    """
+    Delete a directory or its subfolder and reconstruct the directory.
+
+    :param dir_path: Directory path
+    :type dir_path: str
+    :param subfolder: Subfolder path, defaults to None
+    :type subfolder: Optional[str], optional
+    :return: Directory path
+    :rtype: str
+    """    
     if subfolder:
         dir_path = os.path.join(dir_path, subfolder)
     if os.path.exists(dir_path):
@@ -51,17 +84,36 @@ def clean_dir(dir_path:str, subfolder:Optional[str]=None) -> str:
     return dir_path
 
 
-### FILES ###
-# Checking
-def check_ending_experiment(file:str):
+
+## Files
+### Checking
+def check_ending_experiment(file:str) -> bool:
+    """
+    Check whether the file has a mzML or mzXML ending.
+
+    :param file: Path to file
+    :type file: str
+    :return: Ending is mzML or mzXML
+    :rtype: bool
+    """    
     return file.endswith(".mzML") or file.endswith(".MzML") or file.endswith(".mzXML") or file.endswith(".MzXML")
 
 
-# Loading
+
+### Loading
 def read_experiment(experiment_path: str, separator:str="\t") -> oms.MSExperiment:
     """
-    Read in MzXML or MzML File as a pyopenms experiment. If the file is in tabular format, assumes that is is in long form with two columns ["mz", "inty"]
-    """
+    Read in MzXML or MzML File as a pyopenms experiment. If the file is in tabular format,
+    assumes that is is in long form with two columns ["mz", "inty"]
+
+    :param experiment_path: Path to experiment
+    :type experiment_path: str
+    :param separator: Separator of data, defaults to "\t"
+    :type separator: str, optional
+    :raises ValueError: The experiment must end with a valid ending.
+    :return: Experiment
+    :rtype: pyopenms.MSExperiment
+    """    
     experiment = oms.MSExperiment()
     if experiment_path.endswith(".mzML") or experiment_path.endswith(".MzML"):
         file = oms.MzMLFile()
@@ -82,6 +134,14 @@ def read_experiment(experiment_path: str, separator:str="\t") -> oms.MSExperimen
 def load_experiment(experiment:Union[oms.MSExperiment, str], separator:str="\t") -> oms.MSExperiment:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
+    Collects garbage with gc.collect() to ensure space in the RAM.
+
+    :param experiment: Experiment, or Path to experiment
+    :type experiment: Union[oms.MSExperiment, str]
+    :param separator: Separator of data, defaults to "\t"
+    :type separator: str, optional
+    :return: Experiment
+    :rtype: pyopenms.MSExperiment
     """
     gc.collect()
     if isinstance(experiment, oms.MSExperiment):
@@ -92,7 +152,22 @@ def load_experiment(experiment:Union[oms.MSExperiment, str], separator:str="\t")
 def load_experiments(experiments:Union[Sequence[Union[oms.MSExperiment,str]], str], file_ending:Optional[str]=None,
                      separator:str="\t", data_load:bool=True) -> Sequence[Union[oms.MSExperiment,str]]:
     """
-    If no experiment is given, loads and returns it from either .mzML or .mzXML file.
+    Load a batch of experiments.
+
+    :param experiments: Experiments, either described by a list of paths or one path as base directory,
+    or an existing experiment.
+    :type experiments: Union[Sequence[Union[oms.MSExperiment,str]], str]
+    :param file_ending: Ending of experiment file, defaults to None
+    :type file_ending: Optional[str], optional
+    :param separator: Separator of data, defaults to "\t"
+    :type separator: str, optional
+    :param data_load: Load the data or just combine the base string to a list of full filepaths, defaults to True
+    :type data_load: bool, optional
+    :return: Experiments
+    :rtype: Sequence[Union[oms.MSExperiment,str]]
+    """    
+    """
+    
     """
     if isinstance(experiments, str):
         if file_ending:
@@ -105,6 +180,19 @@ def load_experiments(experiments:Union[Sequence[Union[oms.MSExperiment,str]], st
 
 
 def load_name(experiment:Union[oms.MSExperiment, str], alt_name:Optional[str]=None, file_ending:Optional[str]=None) -> str:
+    """
+    Load the name of an experiment.
+
+    :param experiment: Experiment
+    :type experiment: Union[oms.MSExperiment, str]
+    :param alt_name: Alternative Name if none is found, defaults to None
+    :type alt_name: Optional[str], optional
+    :param file_ending: Ending of experiment file, defaults to None
+    :type file_ending: Optional[str], optional
+    :raises ValueError: Raises error if no file name is found and no alt_name is given.
+    :return: Name of experiment or alternative name
+    :rtype: str
+    """    
     if isinstance(experiment, str):
         return "".join(experiment.split(".")[:-1])
     else:
@@ -118,7 +206,14 @@ def load_name(experiment:Union[oms.MSExperiment, str], alt_name:Optional[str]=No
 def load_names_batch(experiments:Union[Sequence[Union[oms.MSExperiment,str]], str], file_ending:str=".mzML") -> List[str]:
     """
     If no experiment is given, loads and returns it from either .mzML or .mzXML file.
-    """
+
+    :param experiments: Experiments
+    :type experiments: Union[Sequence[Union[oms.MSExperiment,str]], str]
+    :param file_ending: Ending of experiment file, defaults to ".mzML"
+    :type file_ending: str, optional
+    :return: List of experiment names
+    :rtype: List[str]
+    """    
     if isinstance(experiments, str):
         if file_ending:
             return [load_name(file) for file in tqdm(os.listdir(experiments)) if file.endswith(file_ending)]
@@ -132,6 +227,22 @@ def load_names_batch(experiments:Union[Sequence[Union[oms.MSExperiment,str]], st
     
 
 def load_fia_df(data_dir:str, file_ending:str, separator:str="\t", data_load:bool=True, backend=pd) -> Union[pd.DataFrame, pl.DataFrame]:
+    """
+    Load a Flow injection analysis dataframe, defining important properties.
+
+    :param data_dir: Data directory
+    :type data_dir: str
+    :param file_ending: Ending of file
+    :type file_ending: str
+    :param separator: Separator for file, defaults to "\t"
+    :type separator: str, optional
+    :param data_load: Load data or only return list of experiments, defaults to True
+    :type data_load: bool, optional
+    :param backend: Use pandas or polars as backend, defaults to pd
+    :type backend: _type_, optional
+    :return: _description_
+    :rtype: Union[pandas.DataFrame, polars.DataFrame]
+    """    
     print("Loading names:")
     names = load_names_batch(data_dir, file_ending)
     samples = [name.split("_")[0] for name in names]
@@ -147,8 +258,11 @@ def load_fia_df(data_dir:str, file_ending:str, separator:str="\t", data_load:boo
 def read_mnx(filepath: str) -> pd.DataFrame:
     """
     Read in chem_prop.tsv file from MetaNetX
-    @filepath: path to file
-    return: pandas.DataFrame
+
+    :param filepath: Path to file
+    :type filepath: str
+    :return: DataFrame
+    :rtype: pd.DataFrame
     """
     return pd.read_csv(filepath, sep="\t",
                        header=351, engine="pyarrow"
@@ -157,7 +271,12 @@ def read_mnx(filepath: str) -> pd.DataFrame:
 
 def read_feature_map_XML(path_to_featureXML:str) -> oms.FeatureMap:
     """
-    Reads in feature Map from file
+    Reads in feature Map from .featureXML file.
+
+    :param path_to_featureXML: Path to featureXML file.
+    :type path_to_featureXML: str
+    :return: Feature map
+    :rtype: pyopenms.FeatureMap
     """
     fm = oms.FeatureMap()
     fh = oms.FeatureXMLFile()
@@ -167,7 +286,12 @@ def read_feature_map_XML(path_to_featureXML:str) -> oms.FeatureMap:
 def read_feature_maps_XML(path_to_featureXMLs:str) -> list:
     """
     Reads in feature Maps from file
-    """
+
+    :param path_to_featureXMLs: Path to featureXML file directory.
+    :type path_to_featureXMLs: str
+    :return: List of feature maps
+    :rtype: list
+    """    
     feature_maps = []
     print("Reading in feature maps:")
     for file in tqdm(os.listdir(path_to_featureXMLs)):
@@ -178,8 +302,15 @@ def read_feature_maps_XML(path_to_featureXMLs:str) -> list:
 
 def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
     """
-    Read tsv file and create list of FeatureFinderMetaboIdentCompound
-    """
+    Read tsv file and create list of FeatureFinderMetaboIdentCompound.
+
+    :param path_to_library_file: Path to library file
+    :type path_to_library_file: str
+    :param mass_range: Range of m/z values
+    :type mass_range: list
+    :return: Metabolite table
+    :rtype: list
+    """    
     metabo_table = []
     df = pd.read_csv(path_to_library_file, quotechar='"', sep="\t")
     print(f"Read in {len(df.index)} metabolites.")
@@ -201,23 +332,29 @@ def define_metabolite_table(path_to_library_file:str, mass_range:list) -> list:
 
 
 
-# Copying
+### Copying
 def copy_experiment(experiment: oms.MSExperiment) -> oms.MSExperiment:
     """
-    Makes a complete (recursive) copy of an experiment
-    @experiment: pyopenms.MSExperiment
-    return: pyopenms.MSExperiment
+    Makes a complete (recursive) copy of an experiment.
+
+    :param experiment: Experiment
+    :type experiment: pyopenms.MSExperiment
+    :return: Copy of experiment.
+    :rtype: pyopenms.MSExperiment
     """
     return deepcopy(experiment)
 
 
 
-# Formatting
+### Formatting
 def mnx_to_oms(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Turns a dataframe from MetaNetX into the required format by pyopenms for feature detection
-    @df: pandas.DataFrame
-    return: pandas.DataFrame
+    Turns a dataframe from MetaNetX into the required format by pyopenms for feature detection.
+
+    :param df: Parameters Dataframe
+    :type df: pandas.DataFrame
+    :return: DataFrame with essential information.
+    :rtype: pandas.DataFrame
     """
     return pd.DataFrame(list(zip(df["name"].values,
                                  df["formula"].values,
@@ -232,12 +369,17 @@ def mnx_to_oms(df: pd.DataFrame) -> pd.DataFrame:
 
 def join_df_by(df: pd.DataFrame, joiner: str, combiner: str) -> pd.DataFrame:
     """
-    Combines datframe with same <joiner>, while combining the name of <combiner> as the new index
-    @df: pandas.DataFrame
-    @joiner: string, that indicates the column that is the criterium for joining the rows
-    @combiner: string, that indicates the column that should be combined as an identifier
-    return: 
-    """
+    Combines datframe with same <joiner>, while combining the name of <combiner> as the new index.
+
+    :param df: Input DataFrame
+    :type df: pd.DataFrame
+    :param joiner: Indicates the column that is the criterium for joining the rows
+    :type joiner: str
+    :param combiner: Indicates the column that should be combined as an identifier
+    :type combiner: str
+    :return: Combined DataFrame
+    :rtype: pd.DataFrame
+    """ 
     comb = pd.DataFrame(columns=df.columns)
     for j in tqdm(df[joiner].unique()):
         query = df.loc[df[joiner] == j]
@@ -249,9 +391,23 @@ def join_df_by(df: pd.DataFrame, joiner: str, combiner: str) -> pd.DataFrame:
 
 
 
-# Annotation
+### Annotation
 def annotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.DataFrame, result_path:str=".",
                               mz_tolerance:float=1e-05) -> pd.DataFrame:
+    """
+    Annotate consensus map DataFrame.
+
+    :param consensus_map_df: Input Consensus map DataFrame
+    :type consensus_map_df: pd.DataFrame
+    :param mass_search_df: Mass search DataFrame
+    :type mass_search_df: pd.DataFrame
+    :param result_path: Path to output results, defaults to "."
+    :type result_path: str, optional
+    :param mz_tolerance: Tolerance of m/z deviation, defaults to 1e-05
+    :type mz_tolerance: float, optional
+    :return: Identified Metabolites DataFrame
+    :rtype: pd.DataFrame
+    """    
     id_df = consensus_map_df[["mz", "centroided_intensity"]].copy()
 
     id_df["identifier"] = pd.Series([""]*len(id_df.index))
@@ -271,10 +427,12 @@ def annotate_consensus_map_df(consensus_map_df:pd.DataFrame, mass_search_df:pd.D
 # Storing
 def store_experiment(experiment_path:str, experiment: oms.MSExperiment) -> None:
     """
-    Store Experiment as MzXML file
-    @experiment: pyopenms.MSExperiment
-    @experiment_path: string with path to savefile
-    return: None
+    Stores the experiment.
+
+    :param experiment_path: Path to be stored at (must end with .mzMl or .mzXML)
+    :type experiment_path: str
+    :param experiment: Experiment
+    :type experiment: pyopenms.MSExperiment
     """
     if experiment_path.endswith(".mzXML"):
         oms.MzXMLFile().store(experiment_path, experiment)
@@ -285,7 +443,18 @@ def store_experiment(experiment_path:str, experiment: oms.MSExperiment) -> None:
 
 
 def store_feature_maps(feature_maps: list, out_dir:str, names: Union[list[str], str]=[], file_ending:str=".mzML") -> None:
-    # Store the feature maps as featureXML files!
+    """
+    Stores the feature maps as featureXML files.
+
+    :param feature_maps: Feature Maps
+    :type feature_maps: list
+    :param out_dir: Output directory
+    :type out_dir: str
+    :param names: Names of feature maps, defaults to []
+    :type names: Union[list[str], str], optional
+    :param file_ending: Ending of file, defaults to ".mzML"
+    :type file_ending: str, optional
+    """    
     clean_dir(out_dir)
     print("Storing feature maps:")
     if isinstance(names, str):
@@ -302,13 +471,16 @@ def store_feature_maps(feature_maps: list, out_dir:str, names: Union[list[str], 
 
 
 
-### Compound tables transformation ###
+## Compound tables transformation
 def merge_compounds(path_to_tsv:str) -> pd.DataFrame:
-	"""
-	Joins entries with equal Mass and SumFormula.
-	Links CompoundName with: ;
-	Links rest with: ,
-	"""
+    """
+    Joins entries with equal Mass and SumFormula. Links CompoundName with: ;. Links rest with: ,.
+
+    :param path_to_tsv: Path to TSV
+    :type path_to_tsv: str
+    :return: Merged compounds
+    :rtype: pd.DataFrame
+    """
 	df = pd.read_csv(path_to_tsv, sep="\t")
 	
 	aggregation_functions = {'CompoundName': lambda x: ";".join(x)}
@@ -333,8 +505,9 @@ def merge_compounds(path_to_tsv:str) -> pd.DataFrame:
 	return df_new[["CompoundName", "SumFormula", "Mass", "Charge", "RetentionTime", "RetentionTimeRange", "IsotopeDistribution"]].reset_index(drop=True)
 
 
-### MS DATA TRANSFORMATION ###
-# Binning
+# TODO: Continue Documentation
+## MS data transformation
+### Binning
 def bin_df_stepwise(df:Union[pd.DataFrame, pl.DataFrame], binning_var="mz", binned_var="inty", statistic="sum",
                     start:float=0.0, stop:float=2000.0, step:float=0.001, backend=pd) -> Union[pd.DataFrame, pl.DataFrame]:
     bins = np.append(np.arange(start, stop, step), stop)

@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""
+Methods for Machine Learning for community inference.
+"""
+
 # imports
 import os
 import gc

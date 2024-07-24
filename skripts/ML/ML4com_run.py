@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 ML4com runscript through shell commands. The parameter boundaries for the hyperparameters are defined here.
 """
@@ -16,6 +17,10 @@ warnings.simplefilter(action='ignore', category=sklearn.exceptions.UndefinedMetr
 
 
 def main(args):
+    """Main method for executing runscript
+
+    :param args: arguments for runscript, see ML4com_run.py --help for more information
+    """    
     algorithms = args.algorithms if args.algorithms else None
     task = args.task if args.task else None
 
@@ -34,7 +39,7 @@ def main(args):
     computation = args.computation
     name = args.name if args.name else None
     file_name = args.filename
-    model_filename = args.model_filename if model_filename else None
+    model_filename = args.model_filename if args.model_filename else None
 
     
     orig_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/data/{sample}"))

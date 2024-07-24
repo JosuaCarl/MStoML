@@ -40,4 +40,16 @@
 ANOVA
 - LDA - ANOVA Connection
 - Volcano plot for all organisms + mark all picked by XGBoost
-- Violin + Importance plot of all organisms
+- Violin + Importance plot of all organisms#
+
+
+Delete:
+	- quick_cmds.txt
+	- Notes.md
+	- dump
+	- .vscode in skripts
+
+Make:
+	- Tests for important functions
+	- Documentation with Sphinx (see YT) 
+	- all .bak files

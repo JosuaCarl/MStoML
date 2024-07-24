@@ -10,11 +10,16 @@ files = []
 
 [[package]]
 name = "cuda-python"
-version = "12.4.0"
+version = "12.5.0"
 description = "Python bindings for CUDA"
 optional = false
 python-versions = "*"
 files = []
+develop = false
+
+[package.source]
+type = "directory"
+url = "../../../../../../opt/conda/conda-bld/cuda-python_1714499090239/work"
 
 [[package]]
 name = "databricks-sdk"
@@ -154,11 +159,16 @@ files = []
 
 [[package]]
 name = "pyzmq"
-version = "26.0.0"
+version = "26.0.3"
 description = "Python bindings for 0MQ"
 optional = false
 python-versions = "*"
 files = []
+develop = false
+
+[package.source]
+type = "directory"
+url = "../../../../../../home/conda/feedstock_root/build_artifacts/pyzmq_1715024370414/work"
 
 [[package]]
 name = "rsa"
@@ -259,4 +269,4 @@ files = []
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "8ad1998e0034208052772553057d1fbe2bcdd2822b27bd510e7904efc99a8f13"
+content-hash = "08e3d4df1e4a33253663b4538cff9b9a11e6c491c3fb4f53b4c3b0f7c1bfcf16"

@@ -31,7 +31,7 @@ def test_metabolites_organism(data, community_composition, organism_idx, alpha, 
 
 
 def plot_volcanos(data, strains, community_composition, ref_masses,
-                  color_map:dict, sig_p:float=None, sig_fc_pos:float=None, sig_fc_neg:float=None,
+                  color_map:dict, test=f_oneway, sig_p:float=None, sig_fc_pos:float=None, sig_fc_neg:float=None,
                   show_labels:bool=True, width:int=1600, height:int=900, outfolder:str="."):
     
     if not color_map:
@@ -47,7 +47,7 @@ def plot_volcanos(data, strains, community_composition, ref_masses,
     includes = {}
     for e, org in enumerate(strains["Organism"]):
         test_stat, included = test_metabolites_organism(data=data, community_composition=community_composition,
-                                                        organism_idx=e, alpha=1e-21, test=f_oneway)
+                                                        organism_idx=e, alpha=1e-21, test=test)
 
         colors = []
         labels = []

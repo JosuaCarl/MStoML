@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+ML4com runscript through shell commands. The parameter boundaries for the hyperparameters are defined here.
+"""
 
 # imports
 import sys
@@ -24,13 +27,14 @@ def main(args):
 
     start_dir = args.start_dir
     source = args.source
-    target = args.target if args.target else None
+    model_source = args.model_source if args.model_source else None
     sample = args.sample
 
     backend_name = args.backend
     computation = args.computation
     name = args.name if args.name else None
     file_name = args.filename
+    model_filename = args.model_filename if model_filename else None
 
     
     orig_dir = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/data/{sample}"))
@@ -80,7 +84,7 @@ def main(args):
                         Categorical("weights",    ["uniform", "distance"], default="uniform"),
                         Integer("leaf_size",      (10, 100), log=True, default=30),
                         Integer("p",              (1, 2), default=2),
-                        Categorical("metric",     ["minkowski", "cosine"])
+                        Categorical("metric",     ["minkowski", "cosine"], default="minkowski")
                     ]
     configuration_space.add_hyperparameters( hyperparameters )
     conditions = [
@@ -265,14 +269,28 @@ def main(args):
     if task == "train":
         print("Training:")
         for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
+            print(f"\n{algorithm_name}:")
             tune_train_model_sklearn( X=X, ys=ys, labels=labels, classifier=algorithms_configspaces[algorithm_name]["classifier"],
                                         configuration_space=algorithms_configspaces[algorithm_name]["configuration_space"],
                                         n_workers=n_workers, n_trials=n_trials, source=source, name=name, algorithm_name=algorithm_name, outdir=outdir,
                                         fold=StratifiedKFold(n_splits=outer_fold), verbosity=verbosity )
     elif task == "evaluate":
         print("Evaluating:")
+        if source == "latent":
+            indir = Path( os.path.normpath( os.path.join(run_dir, f"{model_source}_{name}")) )
+        elif source == "annotated":
+            indir = Path( os.path.normpath( os.path.join(run_dir, model_source)) )
+
+            # Makes transfer of data along annotated Data possible
+            orig_dir_2 = os.path.normpath(os.path.join(os.getcwd(), f"{start_dir}/data/{model_source}"))
+            met_raw_pos_2 = pd.read_excel( os.path.join( orig_dir_2, model_filename ), sheet_name="pos" )
+            met_raw_neg_2 = pd.read_excel( os.path.join( orig_dir_2, model_filename ), sheet_name="neg" )
+            met_raw_comb_2 = pd.concat( [ total_ion_count_normalization( join_df_metNames(met_raw_pos_2, grouper="mass") ),
+                                          total_ion_count_normalization( join_df_metNames(met_raw_neg_2, grouper="mass") ) ] )
+            X = intersect_impute_on_left(met_raw_comb_2, met_raw_comb, imputation="zero").transpose()
+
         for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
-            evaluate_model_sklearn( X=X, ys=ys, labels=labels, indir=outdir, source=source, target=target, algorithm_name=algorithm_name, outdir=outdir,
+            evaluate_model_sklearn( X=X, ys=ys, labels=labels, indir=indir, data_source=source, algorithm_name=algorithm_name, outdir=outdir,
                                     verbosity=verbosity )
     else:
         print("Tuning:")
@@ -299,10 +317,11 @@ if __name__ == "__main__":
                                      description='Try different algorithms in nested-cv run.')
     
     parser.add_argument('-s', '--source', required=True)
-    parser.add_argument('-tar', '--target', required=False)
+    parser.add_argument('-ms', '--model_source', required=False)
     parser.add_argument('-st', '--start_dir', required=True)
     parser.add_argument('-sam', '--sample', required=True)
     parser.add_argument('-fn', '--filename', required=True)
+    parser.add_argument('-mfn', '--model_filename', required=False)
     
 
     parser.add_argument('-w', '--workers', type=int, required=False)

@@ -39,7 +39,16 @@ from smac import HyperparameterOptimizationFacade, MultiFidelityFacade, Scenario
 from smac.intensifier.hyperband import Hyperband
 
 
-# Combination of pos/neg 
+
+## Helpers
+def dict_permutations(dictionary:dict) -> List[dict]:
+  """
+  Combine all value combinations in a dictionary into a list of dictionaries.
+  """
+  keys, values = zip(*dictionary.items())
+  return [dict(zip(keys, v)) for v in itertools.product(*values)]
+
+
 def join_df_metNames(df, grouper="peakID", include_mass=False):
     """
     Sets common index for combination of positively and negatively charged dataframes along their metabolite Names
@@ -48,7 +57,7 @@ def join_df_metNames(df, grouper="peakID", include_mass=False):
     data_cols = [col for col in df.columns[df.dtypes == "float"] if col not in [mass_name, "kegg", "kegg_id", "dmz"]]
     cols = ["metNames"] + [f"MS{i+1}" for i in range(len(data_cols))]
     if include_mass:
-        cols = cols + mass_name
+        cols = cols + [mass_name]
     comb = pd.DataFrame(columns=cols)
     
     grouper = mass_name if "mass" in grouper else grouper
@@ -66,83 +75,27 @@ def join_df_metNames(df, grouper="peakID", include_mass=False):
     return comb
 
 
-# Helpers
-def dict_permutations(dictionary:dict) -> List[dict]:
-  """
-  Combine all value combinations in a dictionary into a list of dictionaries.
-  """
-  keys, values = zip(*dictionary.items())
-  return [dict(zip(keys, v)) for v in itertools.product(*values)]
-
-'''
-# SKLEARN
-def mult_cv_model(model, X, ys, n_fold):
+def intersect_impute_on_left(df_base:pd.DataFrame, df_right:pd.DataFrame, imputation:str="zero"):
     """
-    Performs model training and cross-validation over each column
+    Use all indices from the left (df_base) DataFrame and fill it with the intersection of df_right.
+    Indices without match are imputed by zero, mean or via kNN, whereas k can be specified as a number.
+    The default is 5.
     """
-    # Matrices for report
-    accuracies = []
-    confusion_matrices = []
-    
-    # Perform cross-validation for each strain separately
-    kf = KFold(n_splits=n_fold)
-    for y in ys.transpose():
-        validation_preds = np.array([])
-        accs = []
-        for train_index, val_index in kf.split(X, y):
-            model_test = model
-            training_data = X[train_index]
-            training_labels = y[train_index]
-            validation_data = X[val_index]
-            validation_labels = y[val_index]
-
-            model_test.fit(training_data, training_labels)
-            validation_pred = model_test.predict(validation_data)
-            accs.append(accuracy_score(validation_labels, validation_pred))
-            validation_preds = np.append(validation_preds, validation_pred)
-        accuracies.append(accs)
-        confusion_matrices.append(confusion_matrix(y, validation_preds))
-
-    return (accuracies, confusion_matrices)
+    df_merged = pd.merge(df_base, df_right, left_index=True, right_index=True, how="left")
+    df_merged = df_merged.loc[:, ~df_merged.columns.str.endswith('_x')]
+    df_merged.columns = [col.replace("_y", "") for col in df_merged.columns]
+    df_merged = df_merged[df_right.columns]
+    if imputation == "zero":
+        df_merged = df_merged.fillna(0.0)
+    elif imputation == "mean":
+        df_merged = df_merged.fillna(np.mean(df_merged))
+    elif imputation.endswith("NN"):
+        k = 5 if imputation[0] == "k" else int(imputation[0])
+        imputer = KNNImputer(n_neighbors=k, keep_empty_features=True)
+        df_merged.values = imputer.fit_transform(df_merged)
+    return df_merged
 
 
-def grid_search_params_cv_model(classifier, param_grid, X, ys, targets, n_splits:int=5, n_jobs:int=1):
-    """
-    #Perform Grid parameter search for a 
-    """
-    grids = {}
-    for i, y in enumerate(ys.transpose()):
-        cv = StratifiedShuffleSplit(n_splits=n_splits, test_size=1/n_splits, random_state=42)
-        grid = GridSearchCV(classifier(), param_grid=param_grid, cv=cv, n_jobs=n_jobs, verbose=2)
-        grid.fit(X, y)
-        grids[targets[i]] = grid
-    return grids
-
-
-def train_cv_model(classifier, param_grid, X, ys, target_labels, outdir:str, suffix:str="", n_fold:int=5):
-    # Evaluation data
-    results = pd.DataFrame(columns=["model_nr", "parameters", "target", "accuracy"])
-
-    model_count = 1
-    for i, grid in enumerate(param_grid):
-        print(f"Parameter combinations {i+1}:")
-        for param_dict in tqdm(dict_permutations(grid)):
-            # Model definition
-            model = classifier(**param_dict)
-
-            accuracies, confusion_matrices = mult_cv_model(model=model, X=np.array(X), ys=np.array(ys), n_fold=n_fold)
-            for i in range(len(target_labels)):
-                results.loc[len(results.index)] = [model_count, param_dict, target_labels[i], accuracies[i], ]
-
-            model_count += 1
-            
-            param_dict_str = "_".join(["-".join([str(k), str(v)]) for k,v in param_dict.items()]).replace(":", "")
-            name = f"{param_dict_str}_{suffix}"
-            plot_cv_confmat(ys=ys, target_labels=target_labels, accuracies=np.mean(accuracies, axis=1), confusion_matrices=confusion_matrices, outdir=outdir, name=name)
-
-    results.to_csv(os.path.join(outdir, f"accuracies_{suffix}.tsv"), sep="\t")
-    return results
-'''
 
 ## SKLearn
 def individual_layers_to_tuple(config) -> dict:
@@ -344,17 +297,17 @@ def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_
             pickle.dump(model ,f)
 
 
-def evaluate_model_sklearn( X, ys, labels, indir, source, target, algorithm_name, outdir, verbosity=0 ):
+def evaluate_model_sklearn( X, ys, labels, indir, data_source, algorithm_name, outdir, verbosity=0 ):
     """
     Evaluate a model against the given hyperparameters for all organisms and save the resulting metrics and feature importances.
     """
-    eval_metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+    eval_metrics_df = pd.DataFrame(columns=["Organism", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
     feature_importances = {}
 
     for i, org in enumerate(tqdm(ys.columns)):
         y = ys[org]
 
-        with open(os.path.join(indir, f'model_{algorithm_name}_{labels[i]}_{source}.pkl'), 'rb') as f:
+        with open(os.path.join(indir, f'model_{algorithm_name}_{labels[i]}.pkl'), 'rb') as f:
             model = pickle.load(f)
 
         prediction = model.predict( np.array(X) )
@@ -369,12 +322,14 @@ def evaluate_model_sklearn( X, ys, labels, indir, source, target, algorithm_name
 
         model.fit(X.values, y)
         if hasattr(model, "feature_importances_"):
-            feature_importances[lables[i]] = model.feature_importances_
+            feature_importances[labels[i]] = model.feature_importances_
 
     feat_imp_df = pd.DataFrame(feature_importances, index=X.columns)
-    feat_imp_df.to_csv(os.path.join(outdir, f"/feature_importance_{algorithm_name}_{target}.tsv", sep="\t"))
+    feat_imp_df.to_csv(os.path.join(outdir, f"feature_importance_{algorithm_name}_{data_source}.tsv"), sep="\t")
 
-    eval_metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_{target}_eval_metrics.tsv"), sep="\t")
+    eval_metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_{data_source}_eval_metrics.tsv"), sep="\t")
+
+
 
 # PLOTTING
 def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, name):
@@ -397,6 +352,9 @@ def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, n
     
 
 def plot_decision_trees(model, feature_names, class_names, outdir, name):
+    """
+    Plot decision tree of a model.
+    """
     fig, axes = plt.subplots(nrows = 1,ncols = 1,figsize = (4,4), dpi=900)
     tree.plot_tree(model,
                 feature_names = feature_names, 

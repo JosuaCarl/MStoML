@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Definition and training/testing of a variational Autoencoder for Flow-injection analysis.
+"""
+
 #SBATCH --job-name VAE_training
 #SBATCH --mem 400G
 #SBATCH --nodes 1
@@ -189,12 +193,14 @@ def main(args):
 
 def read_data(data_path:str, verbosity:int=0):
     """
-    Read in the data from a data_matrix and normalize it according to total ion counts
+    Read in the data from a data_matrix and normalize it according to total ion counts.
 
-    Args:
-        data_dir (str): Directory with "data_matrix.tsv" file. The rows must represent m/z bins, the columns different samples
-    Returns:
-        X: matrix with total ion count (TIC) normalized data (transposed)
+    :param data_path: Directory with "data_matrix.tsv" file. The rows must represent m/z bins, the columns different samples
+    :type data_path: str
+    :param verbosity: verbosity of process, defaults to 0
+    :type verbosity: int, optional
+    :return: matrix with total ion count (TIC) normalized data (transposed)
+    :rtype: DataFrame
     """
     if data_path.endswith("tsv"):
         binned_dfs = pd.read_csv( data_path, sep="\t", index_col="mz")
@@ -214,6 +220,13 @@ def read_data(data_path:str, verbosity:int=0):
 def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
     """
     Saves the time difference between last and current step
+
+    :param message: printed message at this timestep
+    :type message: str
+    :param verbosity: verbosity of process, defaults to 0
+    :type verbosity: int, optional
+    :param min_verbosity: minimal verbosity to display output, defaults to 1
+    :type min_verbosity: int, optional
     """
     global last_timestamp
     global step
@@ -228,16 +241,28 @@ def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 def spectral_entropy(spectrum):
     """
-    Computes the spectral entropy for a spectra $S_i \in S$ with elements $s_i \in S_i$: $-\sum (s_i * ln(s_i))$
-    """
+    Computes the spectral entropy for a spectra $S_i \in S$ with elements $s_i \in S_i$: $-\sum (s_i * ln(s_i))$:
+
+    :param spectrum: spectrum input
+    :type spectrum: Keras tensor or similar
+    :return: spectral entropy of spectrum
+    :rtype: Keras tensor or similar
+    """    
     spectrum = ops.normalize(spectrum, order=1) # Total count normalization
     return -ops.sum( ops.multiply( spectrum, ops.log( ops.add(spectrum, 1e-32) ) ), axis=-1 )
 
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 def mean_spectral_entropy_divergence(y_true, y_pred):
     """
-    Computes the mean spectral entropy divergence over a given list of spectra
-    """
+    Computes the mean spectral entropy divergence over a given list of spectra.
+
+    :param y_true: True target values
+    :type y_true: Keras tensor or similar
+    :param y_pred: Predicted target values
+    :type y_pred: Keras tensor or similar
+    :return: Mean spectral entropy divergence (MSED) between y_true and y_pred
+    :rtype: Keras tensor or similar
+    """    
     y_comb = ops.add(y_true, y_pred)
     return ops.mean( ops.abs(                     # floating point errors can lead to small negative values
                 ops.divide(
@@ -248,9 +273,21 @@ def mean_spectral_entropy_divergence(y_true, y_pred):
 @keras.saving.register_keras_serializable(package="FIA_VAE")
 class Sampling(layers.Layer):
     """
-    Uses (z_mean, z_log_var) to sample z, the vector encoding a digit.
-    """
+    Sampling class as a sublass of keras layer.
+
+    :param layers: Layer type
+    :type layers: keras.layers.Layer
+    """    
+
     def call(self, inputs):
+        """
+        Uses (z_mean, z_log_var) to sample z, the vector encoding a digit.
+
+        :param inputs: Mean tensor $z_\mu$/z_mean and Logarithmic variance tensor $\ln z_\sigma$/z_log_var.
+        :type inputs: Keras tensor or similar
+        :return: Sampled value within a normal distribution, specified by the input parameters.
+        :rtype: Keras tensor or similar
+        """        
         z_mean, z_log_var = inputs
         z_mean_shape = ops.shape(z_mean)
         batch   = z_mean_shape[0]
@@ -262,16 +299,42 @@ class Sampling(layers.Layer):
 class DenseTied(keras.layers.Layer):
     """
     A Layer Tied to another Dense Layer with shared weights.
-    """
+
+    :param keras: Subclass of layer to share weights and biases with another Dense Layer
+    :type keras: keras.layers.Layer
+    """    
     def __init__(self, tie, activation=None, **kwargs):
+        """
+        Initiation of tied Layer
+
+        :param tie: Layer which this one is tied to.
+        :type tie: keras.layers.Dense
+        :param activation: Activation function, defaults to None
+        :type activation: Function, parsable by keras.activation.get, optional
+        """        
         self.tie = tie
         self.activation = keras.activations.get(activation)
         super().__init__(**kwargs)
     def build(self, batch_input_shape):
+        """
+        Build the Dense Layer for the respective batch_input_shape. The input is ingored, but needs
+        to be present for Keras.
+
+        :param batch_input_shape: Shape of the input, dependent on batch size.
+        :type batch_input_shape: Keras tensor or similar
+        """        
         self.biases = self.add_weight(name="bias", initializer="zeros", shape=[ops.shape(self.tie.input)[-1]])
         self.kernel = ops.transpose(self.tie.kernel)
         super().build(batch_input_shape)
     def call(self, inputs):
+        """
+        Call the layer
+
+        :param inputs: Input tensor
+        :type inputs: Keras tensor or similar
+        :return: Transform layer with weights, activation function and bias.
+        :rtype: Keras tensor or similar
+        """        
         z = ops.matmul(inputs, self.kernel)
         return self.activation(z + self.biases)
 
@@ -280,8 +343,22 @@ class DenseTied(keras.layers.Layer):
 class FIA_VAE(Model):
     """
     A variational autoencoder for flow injection analysis
-    """
+
+    :param Model: Suptype of keras.Model
+    :type Model: keras.Model
+    """    
     def __init__(self, config:Union[Configuration, dict]):
+        """
+        Initalize the variational autoencoder. 
+        The configuration may contain: The original dimension of the input, whether the VAE is tied,
+        the number of intermediate layers, the activation function that is used for the dense layers,
+        a dropout rate for the input, gaussian noise standard deviation for the input, the latent and
+        intermediate stating dimension, the solver/optimizer with a learning rate, the weight of the
+        Kullback-Leibler distance in the loss function, and the reconstruction loss function.
+
+        :param config: Configuration of Autoencoder.
+        :type config: Union[ConfigSpace.Configuration, dict]
+        """        
         super().__init__()
         self.device             = "cuda" if torch.cuda.is_available() else "cpu"
         self.config             = dict(config)
@@ -336,13 +413,13 @@ class FIA_VAE(Model):
 
     def get_activation_function(self, activation_function:str):
         """
-        Convert an activation function string into a keras function
+        Convert an activation function string into a keras function.
 
-        Args:
-            activation_function (str): Activation function in string representation
-        Returns:
-            Activation function as keras.activations or keras.layers
-        """
+        :param activation_function: Activation function in string representation.
+        :type activation_function: str
+        :return: Activation function as keras activation.
+        :rtype: keras.activations.Activation
+        """        
         activation_functions = {"relu": activations.relu, "leaky_relu" : activations.leaky_relu,
                                 "selu": activations.selu, "tanh": activations.tanh,
                                 "silu": activations.silu, "mish": activations.mish}
@@ -352,11 +429,11 @@ class FIA_VAE(Model):
         """
         Convert an activation function string into a keras function
 
-        Args:
-            activation_function (str): Activation function in string representation
-        Returns:
-            Activation function as keras.activations or keras.layers
-        """
+        :param reconstruction_loss_function: Reconstruction loss function in string representation
+        :type reconstruction_loss_function: str
+        :return: Reconstruction loss function as a lambda function or inherent Keras loss function
+        :rtype: keras.losses.Loss
+        """        
         reconstruction_loss_functions = {"mae": losses.mean_absolute_error,
                                          "mse": losses.mean_squared_error,
                                          "cosine": lambda y_true, y_pred: 1 + losses.cosine_similarity(y_true, y_pred),
@@ -370,13 +447,13 @@ class FIA_VAE(Model):
     
     def get_solver(self, solver:str):
         """
-        Convert an solver string into a keras function
+        Convert an solver string into a keras function.
 
-        Args:
-            solver (str): Solver in string representation 
-        Returns:
-            solver as a keras.optimizers class
-        """
+        :param solver: Solver in string representation
+        :type solver: str
+        :return: Solver in Keras optimizer representation
+        :rtype: keras.optimizers.Optimizer
+        """        
         solvers = {"adam": optimizers.Adam, "nadam": optimizers.Nadam, "adamw": optimizers.AdamW}
         return solvers[solver]
     
@@ -384,11 +461,12 @@ class FIA_VAE(Model):
         """
         Loss function for Kullback-Leibler + Reconstruction loss
 
-        Args:
-            true: True values
-            pred: Predicted values
-        Returns:
-            Loss = Kullback-Leibler + Reconstruction loss
+        :param y_true: True values
+        :type y_true: Keras tensor or similar
+        :param y_pred: Predicted values
+        :type y_pred: Keras tensor or similar
+        :return: Loss = Kullback-Leibler * KLD weight + Reconstruction loss
+        :rtype: Keras tensor or similar
         """
         reconstruction_loss = self.reconstruction_loss_function(y_true, y_pred)
         kl_loss = -0.5 * ops.sum( 1.0 + self.sigma - ops.square(self.mu) - ops.exp(self.sigma) )
@@ -398,17 +476,47 @@ class FIA_VAE(Model):
 
     @property
     def metrics(self):
+        """
+        Metrics (Loss, Reconstruction loss, KL-loss), used for model evalutation.
+
+        :return: Metrics
+        :rtype: keras.metrics.Metric
+        """        
         return [self.loss_tracker, self.reconstruction_loss, self.kl_loss]
     
     def get_config(self):
+        """
+        Return configuration pf VAE as a dictionary.
+
+        :return: Configuration of VAE
+        :rtype: dict
+        """        
         return {"config": dict(self.config)}
 
     def call(self, data, training=False):
+        """
+        Encode and decode the data once.
+
+        :param data: Input data
+        :type data: Keras Tensor or similar
+        :param training: Used to switch to training mode, enables dropout and noise, defaults to False
+        :type training: bool, optional
+        :return: Reconstructed Data
+        :rtype: Keras Tensor or similar
+        """        
         x = self.dropout(data, training=training)
         x = self.noise(data, training=training)
         return self.decode(self.encode(x))
 
     def encode(self, data):
+        """
+        Encode the data.
+
+        :param data: Input data
+        :type data: Keras Tensor or similar
+        :return: Encoded Data
+        :rtype: Keras Tensor or similar
+        """        
         x = self.intermediate_enc(data)
         self.mu = self.mu_encoder(x)
         self.sigma = self.sigma_encoder(x)
@@ -416,13 +524,37 @@ class FIA_VAE(Model):
         return self.z
     
     def encode_mu(self, data):
+        """
+        Encode only the mean $\mu$ of the distribution.
+
+        :param data: Input data
+        :type data: Keras Tensor or similar
+        :return: Encoded $\mu$
+        :rtype: Keras Tensor or similar
+        """        
         x = self.intermediate_enc(data)
         return self.mu_encoder(x)
     
     def decode(self, x):
+        """
+        Decode the latent space.
+
+        :param x: Input tensor
+        :type x: Keras Tensor or similar
+        :return: Reconstructed representation of latent space
+        :rtype: Keras Tensor or similar
+        """        
         return self.decoder(x)
 
     def train_step(self, data):
+        """
+        Perform a single step in training.
+
+        :param data: Input data
+        :type data: Keras Tensor or similar
+        :return: Loss
+        :rtype: keras.losses.Loss
+        """        
         x, y = data
         if backend.backend() == "torch":
             x, y = (x.to(self.device) , y.to(self.device))
@@ -454,6 +586,14 @@ class FIA_VAE(Model):
         return loss
     
     def test_step(self, data):
+        """
+        Perform a single step in testing.
+
+        :param data: Input data
+        :type data: Keras Tensor or similar
+        :return: Loss
+        :rtype: keras.losses.Loss
+        """        
         x, y = data
         y_pred = self(x, training=False)
         loss = self.kl_reconstruction_loss(y, y_pred)
@@ -465,8 +605,8 @@ class FIA_VAE(Model):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='VAE_smac_run',
-                                     description='Hyperparameter tuning for Variational Autoencoder with SMAC')
+    parser = argparse.ArgumentParser(prog='vae',
+                                     description='Training a Variational Autoencoder')
     parser.add_argument('-d', '--data_dir', required=True)
     parser.add_argument('-r', '--run_dir', required=True)
     parser.add_argument('-t', '--tune_dir', required=True)

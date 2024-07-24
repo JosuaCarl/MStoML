@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+"""
+Extract and interpret runhistories from SMAC run.
+"""
 #SBATCH --job-name Runhistory-collection
 #SBATCH --time 00:30:00
 #SBATCH --nodes 2
@@ -22,7 +25,7 @@ from helpers.pc_stats import *
 
 def main():
     """
-    Interpretation of SMAC run
+    Interpretation of SMAC run.
     """
     parser = argparse.ArgumentParser(prog='Interpret_smac',
                                      description='Hyperparameter tuning for Variational Autoencoder with SMAC')
@@ -58,12 +61,16 @@ def main():
 
 def read_runhistories(folder_path, skip_dirs:list, verbosity:int=0) -> RunHistory:
     """
-    Read in different runhistories
+    Read in different runhistories.
 
-    Args:
-        folder_path (str): Path to the folders with two subdirectories, containing 'configspace.json'
-    Returns:
-        runhistories (RunHistory)
+    :param folder_path: Path to the folders with two subdirectories, containing 'configspace.json'
+    :type folder_path: str
+    :param skip_dirs: Directories to skip over
+    :type skip_dirs: list
+    :param verbosity: Level of verbosity, defaults to 0
+    :type verbosity: int, optional
+    :return: runhistories
+    :rtype: RunHistory
     """
     runhistories = RunHistory()
     for d in os.listdir(folder_path):
@@ -86,16 +93,20 @@ def read_runhistories(folder_path, skip_dirs:list, verbosity:int=0) -> RunHistor
     return (best_config, runhistories)
 
 
-def save_runhistory(runhistory, project:str, out_dir:str, verbosity:int=0) -> RunHistory:
+def save_runhistory(runhistory, project:str, out_dir:str, verbosity:int=0) -> pd.DataFrame:
     """
-    Saves the history of one run
+    Saves the history of one run.
 
-    Args:
-        runhistory (smac.RunHistory): Runhistory of one or multiple run(s)
-        run_dir (str): The directory where the results are saved to
-        verbosity (int): level of verbosity
-    Returns:
-        results (pd.DataFrame): Summary of the runhistory in DataFrame format
+    :param runhistory: Runhistory of one or multiple run(s).
+    :type runhistory: smac.RunHistory
+    :param project: Project identification string.
+    :type project: str
+    :param out_dir: Directory to save the results.
+    :type out_dir: str
+    :param verbosity: Level of verbosity, defaults to 0
+    :type verbosity: int, optional
+    :return: Summary of the runhistory in DataFrame format.
+    :rtype: pandas.DataFrame
     """
     results = pd.DataFrame(columns=["config_id", "config", "instance", "budget", "seed", "loss", "time", "status", "additional_info"])
     for trial_info, trial_value in runhistory.items():

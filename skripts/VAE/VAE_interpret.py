@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Interpret the Hyperparameter tuning with SMAC of a variational autoencoder.
+"""
+
 #SBATCH --job-name VAE_interpret
 #SBATCH --mem 100G
 #SBATCH --nodes 1
@@ -13,17 +17,13 @@ sys.path.append( '..' )
 from VAE.smac_runhistories import *
 from VAE.vae import *
 
-# reports_dir  "/mnt/d/reports/VAE"
-# results_dir  "/mnt/d/runs/VAE/results"
-# data_dir  "/mnt/d/runs/FIA/Com8_grown_together/merged"
-# training_dir "/mnt/d/runs/VAE/training"
-# backend_name = "tensorflow"
-# computation = "cpu"
-# name = "mae_2"
-# project = f"vae_{backend_name}_{computation}_{name}"
-
-
 def main(args):
+    """
+    Main method for script execution.
+
+    :param args: Arguments from shell. More information with VAE_interpret.py --help.
+    :type args: dict-like
+    """    
     # Define dictionaries
     data_dir, results_dir, reports_dir, training_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.results_dir, args.reports_dir, args.training_dir]]
 
@@ -52,7 +52,23 @@ def main(args):
         encode_reconstruct(model=model, data_dir=data_dir, results_dir=results_dir, name=name, source="", verbosity=verbosity)
 
 
-def encode_reconstruct(model, data_dir, results_dir, name, source, verbosity):
+def encode_reconstruct(model, data_dir, results_dir, name, source, verbosity:int=0):
+    """
+    Encode the model and reconstruct the data for plotting.
+
+    :param model: Model
+    :type model: keras.Model or similar
+    :param data_dir: Directory with data.
+    :type data_dir: str
+    :param results_dir: Directory for returning results.
+    :type results_dir: str
+    :param name: Name of run
+    :type name: str
+    :param source: Source file for Data
+    :type source: str
+    :param verbosity: Level of verbosity, defaults to 0
+    :type verbosity: int, optional
+    """    
     outdir = os.path.join(results_dir, source)
     if not os.path.isdir(outdir):
         os.mkdir(outdir)

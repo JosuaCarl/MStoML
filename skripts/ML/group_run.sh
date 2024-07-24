@@ -5,7 +5,7 @@ Run multiple groups of Machine Learning Tuning, Training or Evaluation experimen
 
 partition="cpu3-long"
 time="14-00:00:00"
-declare -a algorithms=("Linear Discriminant Analysis" "Extreme gradient boosting RF")
+declare -a algorithms=("Linear Discriminant Analysis")
 base_out="../../runs/ML/ml_"
 tries=200
 inner_fold=5
@@ -13,7 +13,7 @@ outer_fold=6
 backend="tensorflow"
 source_dir="../.."
 suffix=""
-task="evaluate"
+task="tune"
 
 
 # Com8 equal comb
@@ -22,7 +22,7 @@ model_source="Com8_grown_together"
 file="20240702_FIA-Data_com8_equal_comb_mimedb_raw.xlsx"
 model_file="FIA-Data Com8_20230717_P0024_msAV206-312.xlsx"
 
-sbatch --partition=$partition --time=$time --output="${base_out}ec_annot${task}${suffix}.out" \
+sbatch --partition=$partition --nodelist=c011 --time=$time --output="${base_out}ec_annot${task}${suffix}.out" \
     ML4com_run.py \
     -t $tries -if $inner_fold -of $outer_fold -v 0 -st $source_dir -s "annotated" -sam $source -ms $model_source \
     -b $backend -c "gpu" -n "cosine_2" -fn "${file}" -mfn "${model_file}" -a "${algorithms[@]}" -ta $task

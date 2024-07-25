@@ -73,7 +73,7 @@ def join_df_metNames(df, grouper="peakID", include_mass=False):
             comb_met_name += row["MetName"] + "\n"
             ref_mass = row[mass_name]
         if include_mass:
-            comb.loc[len(comb.index)] = [comb_met_name[:-2], ref_mass] + list(grouped_rows.iloc[0][data_cols])
+            comb.loc[len(comb.index)] = [comb_met_name[:-2]] + list(grouped_rows.iloc[0][data_cols]) + [ref_mass]
         else:
             comb.loc[len(comb.index)] = [comb_met_name[:-2]] + list(grouped_rows.iloc[0][data_cols])
     comb = comb.set_index('metNames')

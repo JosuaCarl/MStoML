@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""
-Interpret the Hyperparameter tuning with SMAC of a variational autoencoder.
-"""
 
 #SBATCH --job-name VAE_interpret
-#SBATCH --mem 100G
+#SBATCH --mem 400G
 #SBATCH --nodes 1
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
+
+"""
+Interpret the trained variational autoencoder into encoded latent spaces an reconstructed data.
+"""
 
 import sys
 import os
@@ -17,13 +18,17 @@ sys.path.append( '..' )
 from VAE.smac_runhistories import *
 from VAE.vae import *
 
+last_timestamp = time.time()
+step = 0
+runtimes = {}
+
 def main(args):
     """
     Main method for script execution.
 
     :param args: Arguments from shell. More information with VAE_interpret.py --help.
     :type args: dict-like
-    """    
+    """
     # Define dictionaries
     data_dir, results_dir, reports_dir, training_dir = [os.path.normpath(os.path.join(os.getcwd(), d)) for d in  [args.data_dir, args.results_dir, args.reports_dir, args.training_dir]]
 
@@ -37,9 +42,11 @@ def main(args):
 
     model_dir = Path(os.path.normpath( os.path.join(training_dir, project)))
     outdir = os.path.normpath(os.path.join(reports_dir, project))
+    time_step("Setup loaded", verbosity=verbosity, min_verbosity=2)
 
     # Load model
     model = keras.saving.load_model(os.path.join(model_dir, f"{project}_best.keras"), custom_objects=None, compile=True, safe_mode=True)
+    time_step("Model loaded", verbosity=verbosity, min_verbosity=2)
 
     if verbosity >= 1:
         model.summary()
@@ -50,6 +57,8 @@ def main(args):
             encode_reconstruct(model=model, data_dir=data_dir.replace("*", source), results_dir=results_dir, name=name, source=source, verbosity=verbosity)
     else:
         encode_reconstruct(model=model, data_dir=data_dir, results_dir=results_dir, name=name, source="", verbosity=verbosity)
+    
+    save_runtime(results_dir, verbosity=0)
 
 
 def encode_reconstruct(model, data_dir, results_dir, name, source, verbosity:int=0):
@@ -74,21 +83,25 @@ def encode_reconstruct(model, data_dir, results_dir, name, source, verbosity:int
         os.mkdir(outdir)
 
     X = read_data(data_dir, verbosity=verbosity)
+    time_step("Data loaded", verbosity=verbosity, min_verbosity=2)
 
     # Latent space construction
     vae_enc = pd.DataFrame( model.encode_mu(X) )
     print(f"Shape of latent dimension: {vae_enc.shape}")
-    vae_enc.to_csv( os.path.join(outdir, f"encoded_mu_{name}.tsv"), sep="\t" )
+    time_step("Model encoded", verbosity=verbosity, min_verbosity=2)  
+    
+    # Reconstruction of data for visualization
+    reconstructed_data = total_ion_count_normalization( pd.DataFrame( model(X).numpy() ), axis=1)
+    time_step("Model reconstructed", verbosity=verbosity, min_verbosity=2)
 
+    vae_enc.to_csv( os.path.join(outdir, f"encoded_mu_{name}.tsv"), sep="\t" )
+    reconstructed_data.to_csv( os.path.join(outdir, f"reconstructed_data_{name}.tsv"), sep="\t" )
+    
     ax = sns.lineplot(data=vae_enc[:5].T)
     plt.xlabel("Latent dimension")
     plt.ylabel("Value")
     plt.savefig( os.path.join(outdir, f"encoded_mu_5_{name}.png") )
     plt.close()
-
-    # Reconstruction of data for visualization
-    reconstructed_data = total_ion_count_normalization( pd.DataFrame( model(X).numpy() ), axis=1)
-    reconstructed_data.to_csv( os.path.join(outdir, f"reconstructed_data_{name}.tsv"), sep="\t" )
 
     scale = 1.0
     plot_df = pd.DataFrame(reconstructed_data.loc[0].values * scale , index=X.columns, columns=["inty"]).reset_index()    # Adjustment by scale

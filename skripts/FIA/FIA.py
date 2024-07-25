@@ -481,28 +481,28 @@ def merge_compounds(path_to_tsv:str) -> pd.DataFrame:
     :return: Merged compounds
     :rtype: pd.DataFrame
     """
-	df = pd.read_csv(path_to_tsv, sep="\t")
+    df = pd.read_csv(path_to_tsv, sep="\t")
 	
-	aggregation_functions = {'CompoundName': lambda x: ";".join(x)}
-	groupies = [ df['Mass'], df["SumFormula"], df["Charge"], df["RetentionTime"], df["RetentionTimeRange"], df["IsotopeDistribution"] ]
-	df_new = df.groupby( groupies , as_index=False).aggregate(aggregation_functions)
+    aggregation_functions = {'CompoundName': lambda x: ";".join(x)}
+    groupies = [ df['Mass'], df["SumFormula"], df["Charge"], df["RetentionTime"], df["RetentionTimeRange"], df["IsotopeDistribution"] ]
+    df_new = df.groupby( groupies , as_index=False).aggregate(aggregation_functions)
 
 
-	aggregation_functions = {'Charge': lambda x: x.to_list(),
-							 'RetentionTime': lambda x: x.to_list(),
-							 'RetentionTimeRange': lambda x: x.to_list(),
-							 'IsotopeDistribution': lambda x: x.to_list()}
-	groupies = [ df_new['Mass'], df_new["SumFormula"], df_new["CompoundName"]]
-	df_new = df_new.groupby( groupies , as_index=False).aggregate(aggregation_functions)
+    aggregation_functions = {'Charge': lambda x: x.to_list(),
+                                'RetentionTime': lambda x: x.to_list(),
+                                'RetentionTimeRange': lambda x: x.to_list(),
+                                'IsotopeDistribution': lambda x: x.to_list()}
+    groupies = [ df_new['Mass'], df_new["SumFormula"], df_new["CompoundName"]]
+    df_new = df_new.groupby( groupies , as_index=False).aggregate(aggregation_functions)
 
-	# Exclude inorganics
-	organic_elements = ["H", "C", "N", "P", "I", "Cu", "Mg", "Na", "K", "Zn", "S", "Ca", "Co", "Fe", "O"]
-	elements = ['Ac', 'Ag', 'Al', 'Am', 'Ar', 'As', 'At', 'Au', 'B', 'Ba', 'Be', 'Bh', 'Bi', 'Bk', 'Br', 'C', 'Ca', 'Cd', 'Ce', 'Cf', 'Cl', 'Cm', 'Cn', 'Co', 'Cr', 'Cs', 'Cu', 'Db', 'Ds', 'Dy', 'Er', 'Es', 'Eu', 'F', 'Fe', 'Fl', 'Fm', 'Fr', 'Ga', 'Gd', 'Ge', 'H', 'He', 'Hf', 'Hg', 'Ho', 'Hs', 'I', 'In', 'Ir', 'K', 'Kr', 'La', 'Li', 'Lr', 'Lu', 'Lv', 'Mc', 'Md', 'Mg', 'Mn', 'Mo', 'Mt', 'N', 'Na', 'Nb', 'Nd', 'Ne', 'Nh', 'Ni', 'No', 'Np', 'O', 'Og', 'Os', 'P', 'Pa', 'Pb', 'Pd', 'Pm', 'Po', 'Pr', 'Pt', 'Pu', 'Ra', 'Rb', 'Re', 'Rf', 'Rg', 'Rh', 'Rn', 'Ru', 'S', 'Sb', 'Sc', 'Se', 'Sg', 'Si', 'Sm', 'Sn', 'Sr', 'Ta', 'Tb', 'Tc', 'Te', 'Th', 'Ti', 'Tl', 'Tm', 'Ts', 'U', 'V', 'W', 'Xe', 'Y', 'Yb', 'Zn', 'Zr']
-	exclude_elements = [e for e in elements if e not in organic_elements]
-	for element in exclude_elements:
-		df_new = df_new.loc[~df_new["SumFormula"].str.contains(element)]
+    # Exclude inorganics
+    organic_elements = ["H", "C", "N", "P", "I", "Cu", "Mg", "Na", "K", "Zn", "S", "Ca", "Co", "Fe", "O"]
+    elements = ['Ac', 'Ag', 'Al', 'Am', 'Ar', 'As', 'At', 'Au', 'B', 'Ba', 'Be', 'Bh', 'Bi', 'Bk', 'Br', 'C', 'Ca', 'Cd', 'Ce', 'Cf', 'Cl', 'Cm', 'Cn', 'Co', 'Cr', 'Cs', 'Cu', 'Db', 'Ds', 'Dy', 'Er', 'Es', 'Eu', 'F', 'Fe', 'Fl', 'Fm', 'Fr', 'Ga', 'Gd', 'Ge', 'H', 'He', 'Hf', 'Hg', 'Ho', 'Hs', 'I', 'In', 'Ir', 'K', 'Kr', 'La', 'Li', 'Lr', 'Lu', 'Lv', 'Mc', 'Md', 'Mg', 'Mn', 'Mo', 'Mt', 'N', 'Na', 'Nb', 'Nd', 'Ne', 'Nh', 'Ni', 'No', 'Np', 'O', 'Og', 'Os', 'P', 'Pa', 'Pb', 'Pd', 'Pm', 'Po', 'Pr', 'Pt', 'Pu', 'Ra', 'Rb', 'Re', 'Rf', 'Rg', 'Rh', 'Rn', 'Ru', 'S', 'Sb', 'Sc', 'Se', 'Sg', 'Si', 'Sm', 'Sn', 'Sr', 'Ta', 'Tb', 'Tc', 'Te', 'Th', 'Ti', 'Tl', 'Tm', 'Ts', 'U', 'V', 'W', 'Xe', 'Y', 'Yb', 'Zn', 'Zr']
+    exclude_elements = [e for e in elements if e not in organic_elements]
+    for element in exclude_elements:
+        df_new = df_new.loc[~df_new["SumFormula"].str.contains(element)]
 
-	return df_new[["CompoundName", "SumFormula", "Mass", "Charge", "RetentionTime", "RetentionTimeRange", "IsotopeDistribution"]].reset_index(drop=True)
+    return df_new[["CompoundName", "SumFormula", "Mass", "Charge", "RetentionTime", "RetentionTimeRange", "IsotopeDistribution"]].reset_index(drop=True)
 
 
 # TODO: Continue Documentation

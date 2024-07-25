@@ -154,7 +154,7 @@ def significance_plot(sig_df, includes, title, p_vals=None, ax=None, x_label_rot
     p_vals = p_vals if p_vals is not None else sig_df.loc["p"]
     
     plot_df = sig_df.copy()
-    plot_df = plot_df.loc[[idx not in ["sig", "p", "fc", "-log10p", "log2fc", "position"] for idx in plot_df.index]]
+    plot_df = plot_df.loc[[idx not in ["sig", "p", "fc", "-log10p", "log2fc", "position", "ref_mass", "mass"] for idx in plot_df.index]]
     plot_df["included"] = includes
     plot_df = plot_df.melt(id_vars=["included"])
     if imp_df is not None:
@@ -206,7 +206,7 @@ def importance_plot(imp_df, title, importance_cutoff=0.05, ax=None, x_label_rot=
     imp_df = imp_df.loc[imp_df[title] > importance_cutoff , [title, "metNames"]]
     imp_df.rename(columns={title: "feature importance"}, inplace=True)
 
-    ax = sns.barplot(imp_df, ax=ax, x="metNames", y="feature importance", alpha=0.3, width=0.9, palette=["violet"])
+    ax = sns.barplot(imp_df, ax=ax, x="metNames", y="feature importance", alpha=0.5, width=0.8, palette=["darkmagenta"])
     ax.set_ylim(bottom=0.0, top=1.0)
     ax.grid(False)
     ax.set(title=title)

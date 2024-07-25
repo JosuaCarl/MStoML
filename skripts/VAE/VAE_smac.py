@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Hyperparameter tuning for a variational autoencoder for flow-injection analysis with SMAC.
-"""
+
 #SBATCH --mem=500G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -9,8 +7,11 @@ Hyperparameter tuning for a variational autoencoder for flow-injection analysis 
 #SBATCH --mail-user=josua.carl@student.uni-tuebingen.de   # email address
 #SBATCH --mail-type=END
 #SBATCH --mail-type=FAIL
-
 # available processors: cpu1, cpu2-hm, gpu-a30
+
+"""
+Hyperparameter tuning for a variational autoencoder for flow-injection analysis with SMAC.
+"""
 
 # imports
 import sys
@@ -354,10 +355,6 @@ if __name__ == "__main__":
     os.environ["KERAS_BACKEND"] = args.backend
 
     # Doesn't work with Slurm, because __file__ variable is not preserved when copying to cluster
-    """
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    sys.path.append( os.path.normpath(os.path.join( dir_path, '..' )))
-    """
     sys.path.append("..")
     from helpers.pc_stats import *
     from VAE.vae import keras, np, datetime, read_data, FIA_VAE, backend, torch

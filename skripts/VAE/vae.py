@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""
-Definition and training/testing of a variational Autoencoder for Flow-injection analysis.
-"""
 
 #SBATCH --job-name VAE_training
 #SBATCH --mem 400G
 #SBATCH --nodes 1
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
-
 # available processors: cpu1, cpu2-hm, gpu-a30
 
+"""
+Definition and training/testing of a variational Autoencoder for Flow-injection analysis.
+"""
+
+# Imports
 import sys
 import os
 import argparse
@@ -236,6 +237,27 @@ def time_step(message:str, verbosity:int=0, min_verbosity:int=1):
         print(f"{message} ({runtimes[f'{step}: {message}']}s)")
     last_timestamp = time.time()
     step += 1
+
+
+def save_runtime(run_dir, verbosity:int=0):
+    """
+    Saves the runtime Dataframe.
+
+    :param run_dir: Directory for saving the run.
+    :type run_dir: str
+    :param verbosity: Level of verbosity, defaults to 0
+    :type verbosity: int, optional
+    :return: Runtimes
+    :rtype: pandas.DataFrame
+    """    
+    global runtimes
+    runtimes["total"] = [np.sum(runtimes.values())]
+    runtime_df = pd.DataFrame(runtimes)
+    runtime_df.to_csv(os.path.join(run_dir, "runtimes.tsv"), sep="\t")
+    if verbosity >= 1: 
+        print("Finished!")
+    
+    return runtime_df
 
 
 @keras.saving.register_keras_serializable(package="FIA_VAE")

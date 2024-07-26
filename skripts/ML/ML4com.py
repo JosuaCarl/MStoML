@@ -47,16 +47,31 @@ from smac.intensifier.hyperband import Hyperband
 
 ## Helpers
 def dict_permutations(dictionary:dict) -> List[dict]:
-  """
-  Combine all value combinations in a dictionary into a list of dictionaries.
-  """
-  keys, values = zip(*dictionary.items())
-  return [dict(zip(keys, v)) for v in itertools.product(*values)]
-
-
-def join_df_metNames(df, grouper="peakID", include_mass=False):
     """
-    Sets common index for combination of positively and negatively charged dataframes along their metabolite Names
+    Combine all value combinations in a dictionary into a list of dictionaries.
+
+    :param dictionary: Input dictionary
+    :type dictionary: dict
+    :return: All permutations of dictionary
+    :rtype: List[dict]
+    """
+    keys, values = zip(*dictionary.items())
+    return [dict(zip(keys, v)) for v in itertools.product(*values)]
+
+
+def join_df_metNames(df:pd.Dataframe, grouper="peakID", include_mass=False) -> pd.DataFrame:
+    """
+    Join dataframe column metNames along grouper column. Sets common index for combination
+    of positively and negatively charged dataframes along their metabolite Names
+
+    :param df: Input dataframe
+    :type df: pandas.Dataframe
+    :param grouper: Grouper column, defaults to "peakID"
+    :type grouper: str, optional
+    :param include_mass: Include mass column, defaults to False
+    :type include_mass: bool, optional
+    :return: Combined datafraame
+    :rtype: pandas.Dataframe
     """
     mass_name = "ref_mass" if "ref_mass" in df.columns else "mass"
     data_cols = [col for col in df.columns[df.dtypes == "float"] if col not in [mass_name, "kegg", "kegg_id", "dmz"]]
@@ -80,11 +95,20 @@ def join_df_metNames(df, grouper="peakID", include_mass=False):
     return comb
 
 
-def intersect_impute_on_left(df_base:pd.DataFrame, df_right:pd.DataFrame, imputation:str="zero"):
+def intersect_impute_on_left(df_base:pd.DataFrame, df_right:pd.DataFrame, imputation:str="zero") -> pd.DataFrame:
     """
     Use all indices from the left (df_base) DataFrame and fill it with the intersection of df_right.
     Indices without match are imputed by zero, mean or via kNN, whereas k can be specified as a number.
     The default is 5.
+
+    :param df_base: Left datframe
+    :type df_base: pandas.DataFrame
+    :param df_right: Right dataframe
+    :type df_right: pandas.DataFrame
+    :param imputation: Imputation procedure [zero|mean|kNN], defaults to "zero"
+    :type imputation: str, optional
+    :return: Merged dataframe with imputed values
+    :rtype: pandas.DataFrame
     """
     df_merged = pd.merge(df_base, df_right, left_index=True, right_index=True, how="left")
     df_merged = df_merged.loc[:, ~df_merged.columns.str.endswith('_x')]
@@ -104,6 +128,14 @@ def intersect_impute_on_left(df_base:pd.DataFrame, df_right:pd.DataFrame, imputa
 
 ## SKLearn
 def individual_layers_to_tuple(config) -> dict:
+    """
+    Change hidden_layer_sizes to tuple representation.
+
+    :param config: Configuration
+    :type config: dict-like
+    :return: Config with changed hidden_layer_sizes as tuples
+    :rtype: dict
+    """    
     config = dict(config)
     hidden_layer_sizes = tuple([config.pop(k) for k in list(config.keys()) if k.startswith("n_neurons")])
     if hidden_layer_sizes:
@@ -115,7 +147,23 @@ class SKL_Classifier:
     """
     Representation of Scikit-learn classifier for SMAC3
     """
-    def __init__(self, X, ys, cv, configuration_space:ConfigurationSpace, classifier, n_trials):
+    def __init__(self, X, ys, cv, configuration_space:ConfigurationSpace, classifier, n_trials:int):
+        """
+        Initialization of sklearn classifier
+
+        :param X: Data values
+        :type X: dataframe-like
+        :param ys: True classes
+        :type ys: dataframe-like
+        :param cv: Cross-validation scheme
+        :type cv: cv-scheme
+        :param configuration_space: Configuration Space
+        :type configuration_space: ConfigSpace.ConfigurationSpace
+        :param classifier: Classifier
+        :type classifier: Classifier from sklearn
+        :param n_trials: Number of trials
+        :type n_trials: int
+        """        
         self.X = X
         self.ys = ys
         self.cv = cv
@@ -125,6 +173,16 @@ class SKL_Classifier:
         self.progress_bar = tqdm(total=n_trials)
 
     def train(self, config: Configuration, seed:int=0) -> np.float64:
+        """
+        Train the classifier with given configuration.
+
+        :param config: Configuration
+        :type config: ConfigSpace.Configuration
+        :param seed: Seed value to control randomness, defaults to 0
+        :type seed: int, optional
+        :return: Loss (1-accuracy)
+        :rtype: np.float64
+        """        
         config = individual_layers_to_tuple(config)
         if "hidden_layer_sizes" in config:
             self.progress_bar.set_postfix_str(f'Connection size: {np.prod(config["hidden_layer_sizes"])}')
@@ -150,10 +208,36 @@ class SKL_Classifier:
         return 1.0 - score
 
 
-def tune_classifier(X, y, classifier, cv, configuration_space, n_workers, n_trials, name, algorithm_name, outdir, verbosity):
+def tune_classifier(X, y, classifier, cv, configuration_space:ConfigurationSpace, n_workers:int, n_trials:int, name:str,
+                    algorithm_name:str, outdir, verbosity:int=0):
     """
     Perform hyperparameter tuning on an Sklearn classifier.
-    """
+
+    :param X: Data values
+    :type X: dataframe-like
+    :param ys: True classes for one sample
+    :type ys: dataframe-like
+    :param classifier: Classifier
+    :type classifier: Classifier from sklearn
+    :param cv: Cross-validation scheme
+    :type cv: cv-scheme
+    :param configuration_space: Configuration Space
+    :type configuration_space: ConfigSpace.ConfigurationSpace
+    :param n_workers: Number of workers to work in parallel
+    :type n_workers: int
+    :param n_trials: Number of trials
+    :type n_trials: int
+    :param name: Name of run
+    :type name: str
+    :param algorithm_name: Algorithm name
+    :type algorithm_name: str
+    :param outdir: Output directory
+    :type outdir: path-like
+    :param verbosity: Level of verbosity, defaults to 0
+    :type verbosity: int, optional
+    :return: Incumbent
+    :rtype: configs (list, single config)
+    """    
     classifier = SKL_Classifier(X, y, cv=cv, configuration_space=configuration_space, classifier=classifier, n_trials=n_trials)
 
     scenario = Scenario( classifier.configuration_space, deterministic=True, 
@@ -173,9 +257,27 @@ def tune_classifier(X, y, classifier, cv, configuration_space, n_workers, n_tria
 
 
 def extract_metrics(true_labels, prediction, scoring, run_label=None, cv_i=None,
-                    metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])):
+                    metrics_df:pd.DataFrame=pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+                    ) -> pd.DataFrame:
     """
-    Extract meaningful metrics to score a model according to its label prediction in comparison to true labels.
+    Extract metrics from machine learning. Metrics are TPR, FPR, Thresholds for 
+    ROC curve + AUC and accuracy with confusion matrix.
+
+    :param true_labels: True labels
+    :type true_labels: array-like
+    :param prediction: Prediction
+    :type prediction: array-like
+    :param scoring: Scoring
+    :type scoring: array-like
+    :param run_label: Label of run, defaults to None
+    :type run_label: any, optional
+    :param cv_i: cross-validation instance, defaults to None
+    :type cv_i: any (usually int), optional
+    :param metrics_df: Dataframe with all extracted metrics, defaults to 
+    pd.DataFrame(columns=["Run", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
+    :type metrics_df: pd.DataFrame, optional
+    :return: Dataframe, filled with metrics
+    :rtype: pandas.DataFrame
     """
     fpr, tpr, threshold = roc_curve(true_labels,  scoring)
     auc = roc_auc_score(true_labels,  scoring)
@@ -192,7 +294,17 @@ def extract_metrics(true_labels, prediction, scoring, run_label=None, cv_i=None,
     return metrics_df
 
 
-def extract_best_hyperparameters_from_incumbent(incumbent, configuration_space):
+def extract_best_hyperparameters_from_incumbent(incumbent, configuration_space:ConfigurationSpace):
+    """
+    Extract a optimized set of hyperparameters from incumbent. Returns default if none was found.
+
+    :param incumbent: _description_
+    :type incumbent: config(s)
+    :param configuration_space: Configuration Space
+    :type configuration_space: ConfigSpace.ConfigurationSpace
+    :return: Best hyperparameters
+    :rtype: config
+    """    
     if not incumbent:
         best_hp = configuration_space.get_default_configuration()
     elif isinstance(incumbent, list):
@@ -207,7 +319,36 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
                                         name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
                                         inner_fold:int=3, n_workers:int=1, verbosity:int=0):
     """
-    Cross-validate a model against the given hyperparameters for all organisms
+    Cross-validate a model against the given hyperparameters for all organisms in a nested manner.
+
+    :param X: Data values
+    :type X: dataframe-like
+    :param ys: True classes for one sample
+    :type ys: dataframe-like
+    :param labels: Labels
+    :type labels: dataframe-like
+    :param classifier: Classifier
+    :type classifier: Classifier from sklearn
+    :param configuration_space: Configuration Space
+    :type configuration_space: ConfigSpace.ConfigurationSpace
+    :param n_trials: Number of trials
+    :type n_trials: int
+    :param name: Name of run
+    :type name: str
+    :param algorithm_name: Algorithm name
+    :type algorithm_name: str
+    :param outdir: Output directory
+    :type outdir: path-like
+    :param fold: Outer fold, defaults to KFold()
+    :type fold: Union[KFold, StratifiedKFold], optional
+    :param inner_fold: Inner fold, defaults to 3
+    :type inner_fold: int, optional
+    :param n_workers: Number of workers, defaults to 1
+    :type n_workers: int, optional
+    :param verbosity: Level of verbosity, defaults to 0
+    :type verbosity: int, optional
+    :return: Dataframe with metrics on different levels
+    :rtype: tuple[pandas.DataFrame]
     """
     metrics_df = pd.DataFrame(columns=["Organism", "Cross-Validation run", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
     organism_metrics_df = pd.DataFrame(columns=["Organism", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
@@ -282,7 +423,34 @@ def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_
                                 source:str, name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
                                 verbosity=0 ):
     """
-    Tune and train a model against the given hyperparameters for all organisms
+    Tune and train a model in sklearn.
+
+    :param X: Data values
+    :type X: dataframe-like
+    :param ys: True classes for one sample
+    :type ys: dataframe-like
+    :param labels: Labels
+    :type labels: dataframe-like
+    :param classifier: Classifier
+    :type classifier: Classifier from sklearn
+    :param configuration_space: Configuration Space
+    :type configuration_space: ConfigSpace.ConfigurationSpace
+    :param n_workers: Number of workers
+    :type n_workers: int
+    :param n_trials: Number of trials
+    :type n_trials: int
+    :param source: Source of data
+    :type source: str
+    :param name: Name of run
+    :type name: str
+    :param algorithm_name: Algorithm name
+    :type algorithm_name: str
+    :param outdir: Output directory
+    :type outdir: path-like
+    :param fold: Fold for cross validation during tuning, defaults to KFold()
+    :type fold: Union[KFold, StratifiedKFold], optional
+    :param verbosity: Level of verbosity, defaults to 0
+    :type verbosity: int, optional
     """
     # Iterate over all organisms for binary distinction
     for i, org in enumerate(tqdm(ys.columns)):
@@ -305,6 +473,23 @@ def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_
 def evaluate_model_sklearn( X, ys, labels, indir, data_source, algorithm_name, outdir, verbosity=0 ):
     """
     Evaluate a model against the given hyperparameters for all organisms and save the resulting metrics and feature importances.
+
+    :param X: Data values
+    :type X: dataframe-like
+    :param ys: True classes for one sample
+    :type ys: dataframe-like
+    :param labels: Labels
+    :type labels: dataframe-like
+    :param indir: Input directory
+    :type indir: path-like
+    :param data_source: Data source
+    :type data_source: str
+    :param algorithm_name: Algorithm name
+    :type algorithm_name: str
+    :param outdir: Output directory
+    :type outdir: path-like
+    :param verbosity: Level of verbosity, defaults to 0
+    :type verbosity: int, optional
     """
     eval_metrics_df = pd.DataFrame(columns=["Organism", "Accuracy", "AUC", "TPR", "FPR", "Threshold", "Conf_Mat"])
     feature_importances = {}
@@ -340,6 +525,19 @@ def evaluate_model_sklearn( X, ys, labels, indir, data_source, algorithm_name, o
 def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, name):
     """
     Plot heatmap of confusion matrix
+
+    :param ys: Targets
+    :type ys: dataframe-like
+    :param target_labels: Target labels
+    :type target_labels: array-like
+    :param accuracies: Accuracies
+    :type accuracies: dataframe-like
+    :param confusion_matrices: Confusion matrices
+    :type confusion_matrices: dataframe-like
+    :param outdir: Output directory
+    :type outdir: path-like
+    :param name: Name of run
+    :type name: str
     """
     warnings.filterwarnings("ignore", message="This figure includes Axes that are not compatible with tight_layout, so results might be incorrect*")
     fig, axs = plt.subplots(nrows=4, ncols=2, figsize=(16, 8))
@@ -358,7 +556,18 @@ def plot_cv_confmat(ys, target_labels, accuracies, confusion_matrices, outdir, n
 
 def plot_decision_trees(model, feature_names, class_names, outdir, name):
     """
-    Plot decision tree of a model.
+    Plot decision trees of model
+
+    :param model: Model
+    :type model: model-lie
+    :param feature_names: Feature names
+    :type feature_names: array-like
+    :param class_names: Class names
+    :type class_names: array-like
+    :param outdir: Output directory
+    :type outdir: path-like
+    :param name: Name of run
+    :type name: str
     """
     fig, axes = plt.subplots(nrows = 1,ncols = 1,figsize = (4,4), dpi=900)
     tree.plot_tree(model,
@@ -372,6 +581,19 @@ def plot_decision_trees(model, feature_names, class_names, outdir, name):
 def plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False):
     """
     Plot the extracted metrics as a heatmap and ROC AUC curve
+
+    :param metrics_df: Metrics dataframe
+    :type metrics_df: pandas.DataFrame
+    :param organism_metrics_df: Metrics dataframe on organism level
+    :type organism_metrics_df: pandas.DataFrame
+    :param overall_metrics_df: Metrics dataframe on overall level
+    :type overall_metrics_df: pandas.DataFrame
+    :param algorithm_name: Algorithm name
+    :type algorithm_name: str
+    :param outdir: Output directory
+    :type outdir: path-like
+    :param show: Show plot, defaults to False
+    :type show: bool, optional
     """
     ax = sns.heatmap(metrics_df.pivot(index="Organism", columns="Cross-Validation run", values="Accuracy"),
                     vmin=0, vmax=1.0, annot=True, cmap=sns.diverging_palette(328.87,  221.63, center="light", as_cmap=True))

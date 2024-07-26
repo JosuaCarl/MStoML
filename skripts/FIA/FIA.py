@@ -53,6 +53,21 @@ def batch_download(base_url:str, file_urls:list, save_directory:str) -> None:
         open(os.path.join(save_directory, os.path.basename(file_url)), "wb").write(request.content)
 
 
+# Helpers
+def bits_to_bytes(bits:Union[float, int], factor:Union[float, int]) -> float:
+    """
+    Coverts a number of bits to a number of bytes for readability.
+
+    :param bits: Number of bits to be converted
+    :type bits: Union[float, int]
+    :param factor: / 10**factor (e.g. use 9 for GB)
+    :type factor: Union[float, int]
+    :return: Number of bytes
+    :rtype: float
+    """
+    return round((bits * 0.125) / 10**factor, 5)
+
+
 
 ## Directories
 def build_directory(dir_path:str) -> None:
@@ -505,11 +520,34 @@ def merge_compounds(path_to_tsv:str) -> pd.DataFrame:
     return df_new[["CompoundName", "SumFormula", "Mass", "Charge", "RetentionTime", "RetentionTimeRange", "IsotopeDistribution"]].reset_index(drop=True)
 
 
-# TODO: Continue Documentation
+
 ## MS data transformation
 ### Binning
 def bin_df_stepwise(df:Union[pd.DataFrame, pl.DataFrame], binning_var="mz", binned_var="inty", statistic="sum",
                     start:float=0.0, stop:float=2000.0, step:float=0.001, backend=pd) -> Union[pd.DataFrame, pl.DataFrame]:
+    """
+    Stepwise binning of a dataframe into discrete boxes.
+
+    :param df: Input dataframe
+    :type df: Union[pd.DataFrame, pl.DataFrame]
+    :param binning_var: Binning variable, i.e. distance defining value (column in dataframe), defaults to "mz"
+    :type binning_var: str, optional
+    :param binned_var: Binned value, i.e. combined value (column in dataframe), defaults to "inty"
+    :type binned_var: str, optional
+    :param statistic: Operation to perform on binned values in a window. May take common parameters,
+    defined by sci.stats.binned_statistic. defaults to "sum"
+    :type statistic: str, optional
+    :param start: Starting binning variable point, defaults to 0.0
+    :type start: float, optional
+    :param stop: Stopping binning variable point, defaults to 2000.0
+    :type stop: float, optional
+    :param step: Step distance along binning variable, defaults to 0.001
+    :type step: float, optional
+    :param backend: Backend (pandas or polars), defaults to pd
+    :type backend: _type_, optional
+    :return: Binned dataframe
+    :rtype: Union[pd.DataFrame, pl.DataFrame]
+    """    
     bins = np.append(np.arange(start, stop, step), stop)
     statistic, bin_edges, bin_nrs = sci.stats.binned_statistic(df[binning_var], df[binned_var],
                                                                statistic=statistic, bins=bins, range=(start, stop))
@@ -524,6 +562,29 @@ def bin_df_stepwise_batch(experiments:Union[pd.DataFrame, pl.DataFrame],
                           binning_var="mz", binned_var="inty", statistic="sum",
                           start:float=0.0, stop:float=2000.0, step:float=0.001,
                           backend=pd) -> Union[pd.DataFrame, pl.DataFrame]:
+    """
+    Stepwise binning of a dataframe into discrete boxes of multiple dataframes.
+
+    :param experiments: Input experiments
+    :type experiments: Union[pd.DataFrame, pl.DataFrame]
+    :param binning_var: Binning variable, i.e. distance defining value (column in dataframe), defaults to "mz"
+    :type binning_var: str, optional
+    :param binned_var: Binned value, i.e. combined value (column in dataframe), defaults to "inty"
+    :type binned_var: str, optional
+    :param statistic: Operation to perform on binned values in a window. May take common parameters,
+    defined by sci.stats.binned_statistic. defaults to "sum"
+    :type statistic: str, optional
+    :param start: Starting binning variable point, defaults to 0.0
+    :type start: float, optional
+    :param stop: Stopping binning variable point, defaults to 2000.0
+    :type stop: float, optional
+    :param step: Step distance along binning variable, defaults to 0.001
+    :type step: float, optional
+    :param backend: Backend (pandas or polars), defaults to pd
+    :type backend: _type_, optional
+    :return: Binned dataframe
+    :rtype: Union[pd.DataFrame, pl.DataFrame]
+    """    
     binned_dfs = backend.DataFrame()
     for i, row in tqdm(experiments.iterrows(), total=len(experiments)):
         experiment = row[experiment_var]
@@ -547,8 +608,21 @@ def limit_spectrum(spectrum: oms.MSSpectrum, mz_lower_limit: Union[int, float], 
     """
     Limits the range of the Spectrum to <mz_lower_limit> and <mz_upper_limit>. 
     Uniformly samples <sample_size> number of peaks from the spectrum (without replacement).
-    Returns: openms spectrum
-    """
+
+    :param spectrum: Input spectrum
+    :type spectrum: pyopenms.MSSpectrum
+    :param mz_lower_limit: Lower m/z value limit
+    :type mz_lower_limit: Union[int, float]
+    :param mz_upper_limit: Upper m/z value limit
+    :type mz_upper_limit: Union[int, float]
+    :param sample_size: Number of sampled peaks from the spectrum
+    :type sample_size: int
+    :param statistic: Operation to perform on binned values in a window. May take common parameters,
+    defined by sci.stats.binned_statistic., defaults to "sum"
+    :type statistic: str, optional
+    :return: Limited and sampled spectrum
+    :rtype: pyopenms.MSSpectrum
+    """    
     new_spectrum = oms.MSSpectrum()
     mzs, intensities = spectrum.get_peaks() # type: ignore
 
@@ -579,12 +653,22 @@ def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: U
     """
     Limits the range of all spectra in an experiment to <mz_lower_limit> and <mz_upper_limit>. 
     Uniformly samples <sample_size> number of peaks from the spectrum (without replacement).
-    @experiment: pyopenms.MSExperiment
-    @mz_lower_limit: number
-    @mz_upper_limit: number
-    @sample_size: int
-    @deepcopy: make a deep copy of the Experiment, so it is an independent object
-    Returns: pyopenms.MSExperiment 
+
+    :param experiment: Input experiment
+    :type experiment: Union[pyopenms.MSExperiment, str]
+    :param mz_lower_limit: Lower m/z value limit, defaults to 0
+    :type mz_lower_limit: Union[int, float], optional
+    :param mz_upper_limit: Upper m/z value limit, defaults to 10000
+    :type mz_upper_limit: Union[int, float], optional
+    :param sample_size: Number of sampled peaks from the spectrum, defaults to 100000
+    :type sample_size: int, optional
+    :param statistic: Operation to perform on binned values in a window. May take common parameters,
+    defined by sci.stats.binned_statistic., defaults to "sum"
+    :type statistic: str, optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :return: Limited and sampled experiment
+    :rtype: oms.MSExperiment
     """
     experiment = load_experiment(experiment)
 
@@ -598,9 +682,16 @@ def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: U
 
 
 
-def trim_threshold(experiment:oms.MSExperiment, threshold:float=0.05):
+def trim_threshold(experiment:oms.MSExperiment, threshold:float=0.05) -> oms.Experiment:
     """
-    Removes point below an absolute intensity theshold
+    Removes point below an absolute intensity theshold.
+
+    :param experiment: Input Experiment
+    :type experiment: pyopenms.MSExperiment
+    :param threshold: Threshold for values to be excluded, defaults to 0.05
+    :type threshold: float, optional
+    :return: Trimmed experiment
+    :rtype: oms.Experiment
     """
     tm = oms.ThresholdMower()
     params = tm.getDefaults()
@@ -609,9 +700,19 @@ def trim_threshold(experiment:oms.MSExperiment, threshold:float=0.05):
     tm.filterPeakMap(experiment)
     return experiment
 
-def trim_threshold_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], run_dir:str, file_ending:str=".mzML", threshold:float=0.05, deepcopy:bool=False):
+def trim_threshold_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], run_dir:str,
+                         file_ending:str=".mzML", threshold:float=0.05, deepcopy:bool=False) -> str:
     """
-    Removes point below an absolute intensity theshold
+    Removes points below an absolute intensity theshold in a batch of experiments.
+
+    :param experiments: Input Experiments (as a list of experiments, a directory, or paths to experiemnts)
+    :type experiments: Union[Sequence[Union[pyopenms.MSExperiment,str]], str]
+    :param threshold: Threshold for values to be excluded, defaults to 0.05
+    :type threshold: float, optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :return: Folder with trimmed experiments
+    :rtype: str
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "trimmed") )
 
@@ -631,7 +732,12 @@ def trim_threshold_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]
 # Combination
 def sum_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
     """
-    Sum up spectra in one experiment
+    Sum up spectra in one experiment.
+
+    :param experiment: Input experiment
+    :type experiment: pyopenms.MSExperiment
+    :return: Spectrum with summed intensities along m/z axis
+    :rtype: pyopenms.MSSpectrum
     """
     spectrum = experiment.getSpectra()[0]
     intensities_all = np.zeros(spectrum.size())
@@ -647,6 +753,11 @@ def sum_spectra(experiment:oms.MSExperiment) -> oms.MSSpectrum:
 def combine_spectra_experiments(spectra_container:Sequence[Union[oms.MSExperiment,oms.MSSpectrum]]) -> oms.MSExperiment:
     """
     Combines all spectra/experiements, into different spectra in one experiment
+
+    :param spectra_container: Input experiments
+    :type spectra_container: Sequence[Union[oms.MSExperiment,oms.MSSpectrum]]
+    :return: Experiment with summed intensities along m/z axis
+    :rtype: oms.MSExperiment
     """
     experiment_all = oms.MSExperiment()
     for i, sc in enumerate(spectra_container):
@@ -664,11 +775,16 @@ def combine_spectra_experiments(spectra_container:Sequence[Union[oms.MSExperimen
 # Smoothing
 def smooth_spectra(experiment: Union[oms.MSExperiment, str], gaussian_width: float, deepcopy: bool = False) -> oms.MSExperiment:
     """
-    Apply a Gaussian filter to all spectra in an experiment
-    @experiment: pyopenms.MSExperiment
-    @gaussian_width: float
-    @deepcopy: make a deep copy of the Experiment, so it is an independent object
-    return: oms.MSExperiment
+    Apply a Gaussian filter to all spectra in an experiment.
+
+    :param experiment: Input experiment
+    :type experiment: Union[pyopenms.MSExperiment, str]
+    :param gaussian_width: Window width to apply smoothing to
+    :type gaussian_width: float
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :return: Smoothed experiment
+    :rtype: pyopenms.MSExperiment
     """
     experiment = load_experiment(experiment)
 
@@ -697,10 +813,7 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
                         check_width_internally:str="false", ms1_only:str="true", clear_meta_data:str="false",
                         deepcopy: bool = False) -> oms.MSExperiment:
     """
-    Reduce dataset to centroids
-    @experiment: pyopenms.MSExperiment
-    @deepcopy: make a deep copy of the Experiment, so it is an independent object
-    return: 
+    Reduce dataset to centroids.
 
     Usecase
     fia_df["cent_experiment"] = fia_df["experiment"].apply(lambda experiment: centroid_experiment(experiment, instrument="TOF",                                      # For All
@@ -715,6 +828,61 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
                                                                                                 peak_width=0.0, sn_bin_count=30, nr_iterations=5, sn_win_len=20.0,      # For TOF
                                                                                                 check_width_internally="false", ms1_only="true", clear_meta_data="false",
                                                                                                 deepcopy=False))
+
+    :param experiment: Input experiment
+    :type experiment: Union[pyopenms.MSExperiment, str]
+    :param instrument: Instrument type (TOF or FT-ICR, Orbitrap), defaults to "TOF"
+    :type instrument: str, optional
+    :param signal_to_noise: Signal to noise ratio, defaults to 1.0
+    :type signal_to_noise: float, optional
+    :param spacing_difference_gap: Spacing difference gap, defaults to 4.0
+    :type spacing_difference_gap: float, optional
+    :param spacing_difference: Spacing difference, defaults to 1.5
+    :type spacing_difference: float, optional
+    :param missing: Number of allowed missing values, defaults to 1
+    :type missing: int, optional
+    :param ms_levels: MS levels to consider, defaults to []
+    :type ms_levels: List[int], optional
+    :param report_FWHM: Report full width at half maximum, defaults to "true"
+    :type report_FWHM: str, optional
+    :param report_FWHM_unit: Report full width at half maximum unit, defaults to "relative"
+    :type report_FWHM_unit: str, optional
+    :param max_intensity: Maximum intensity, defaults to -1
+    :type max_intensity: float, optional
+    :param auto_max_stdev_factor: Automatic maximal standard deviation factor, defaults to 3.0
+    :type auto_max_stdev_factor: float, optional
+    :param auto_max_percentile: Automatic maximal percentile to consider, defaults to 95
+    :type auto_max_percentile: int, optional
+    :param auto_mode: Automatic mode (0/1), defaults to 0
+    :type auto_mode: int, optional
+    :param win_len: Window length, defaults to 200.0
+    :type win_len: float, optional
+    :param bin_count: Number of bins, defaults to 30
+    :type bin_count: int, optional
+    :param min_required_elements: Minimum required elements for a peak, defaults to 10
+    :type min_required_elements: int, optional
+    :param noise_for_empty_window: Noise value for an empty window, defaults to 1e+20
+    :type noise_for_empty_window: float, optional
+    :param write_log_messages: Write log messages (true/false), defaults to "true"
+    :type write_log_messages: str, optional
+    :param peak_width: Expected peak width, defaults to 0.0
+    :type peak_width: float, optional
+    :param sn_bin_count: Signal bin count, defaults to 30
+    :type sn_bin_count: int, optional
+    :param nr_iterations: Iterations to recenter peaks, defaults to 5
+    :type nr_iterations: int, optional
+    :param sn_win_len: Signal window length, defaults to 20.0
+    :type sn_win_len: float, optional
+    :param check_width_internally: Check width internally, defaults to "false"
+    :type check_width_internally: str, optional
+    :param ms1_only: Only MS1 spectrum, defaults to "true"
+    :type ms1_only: str, optional
+    :param clear_meta_data: Clear meta data, defaults to "false"
+    :type clear_meta_data: str, optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :return: Centroided experiment
+    :rtype: pyopenms.MSExperiment
     """
     experiment = load_experiment(experiment)
 
@@ -760,18 +928,6 @@ def centroid_experiment(experiment: Union[oms.MSExperiment, str], instrument:str
 
     return centroid_exp
 
-
-def bits_to_bytes(bits, factor):
-    """
-    Coverts a number of bits to a number of bytes
-
-    Args:
-        bits: bits to be converted
-        factor: / 10**factor (e.g. use 9 for GB)
-    """
-    return round((bits * 0.125) / 10**factor, 5)
-
-
 def centroid_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], run_dir:str, file_ending:str=".mzML",
                    instrument:str="TOF",
                    signal_to_noise:float=1.0, spacing_difference_gap:float=4.0,
@@ -786,6 +942,65 @@ def centroid_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str
     """
     Centroids a batch of experiments, extracted from files in a given directory with a given file ending (i.e. .mzML or .mzXML).
     Returns the new directors as path/centroids.
+
+    :param experiments: Input experiments
+    :type experiments: Union[Sequence[Union[oms.MSExperiment,str]], str]
+    :param run_dir: Run directory
+    :type run_dir: str
+    :param file_ending: File ending, defaults to ".mzML"
+    :type file_ending: str, optional
+    :param instrument: Instrument type (TOF or FT-ICR, Orbitrap), defaults to "TOF"
+    :type instrument: str, optional
+    :param signal_to_noise: Signal to noise ratio, defaults to 1.0
+    :type signal_to_noise: float, optional
+    :param spacing_difference_gap: Spacing difference gap, defaults to 4.0
+    :type spacing_difference_gap: float, optional
+    :param spacing_difference: Spacing difference, defaults to 1.5
+    :type spacing_difference: float, optional
+    :param missing: Number of allowed missing values, defaults to 1
+    :type missing: int, optional
+    :param ms_levels: MS levels to consider, defaults to []
+    :type ms_levels: List[int], optional
+    :param report_FWHM: Report full width at half maximum, defaults to "true"
+    :type report_FWHM: str, optional
+    :param report_FWHM_unit: Report full width at half maximum unit, defaults to "relative"
+    :type report_FWHM_unit: str, optional
+    :param max_intensity: Maximum intensity, defaults to -1
+    :type max_intensity: float, optional
+    :param auto_max_stdev_factor: Automatic maximal standard deviation factor, defaults to 3.0
+    :type auto_max_stdev_factor: float, optional
+    :param auto_max_percentile: Automatic maximal percentile to consider, defaults to 95
+    :type auto_max_percentile: int, optional
+    :param auto_mode: Automatic mode (0/1), defaults to 0
+    :type auto_mode: int, optional
+    :param win_len: Window length, defaults to 200.0
+    :type win_len: float, optional
+    :param bin_count: Number of bins, defaults to 30
+    :type bin_count: int, optional
+    :param min_required_elements: Minimum required elements for a peak, defaults to 10
+    :type min_required_elements: int, optional
+    :param noise_for_empty_window: Noise value for an empty window, defaults to 1e+20
+    :type noise_for_empty_window: float, optional
+    :param write_log_messages: Write log messages (true/false), defaults to "true"
+    :type write_log_messages: str, optional
+    :param peak_width: Expected peak width, defaults to 0.0
+    :type peak_width: float, optional
+    :param sn_bin_count: Signal bin count, defaults to 30
+    :type sn_bin_count: int, optional
+    :param nr_iterations: Iterations to recenter peaks, defaults to 5
+    :type nr_iterations: int, optional
+    :param sn_win_len: Signal window length, defaults to 20.0
+    :type sn_win_len: float, optional
+    :param check_width_internally: Check width internally, defaults to "false"
+    :type check_width_internally: str, optional
+    :param ms1_only: Only MS1 spectrum, defaults to "true"
+    :type ms1_only: str, optional
+    :param clear_meta_data: Clear meta data, defaults to "false"
+    :type clear_meta_data: str, optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :return: Directory with centroids
+    :rtype: str
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "centroids") )
     names = load_names_batch(experiments, file_ending)
@@ -809,6 +1024,7 @@ def centroid_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str
     return cleaned_dir
 
 
+
 # Merging
 def merge_experiment(experiment: Union[oms.MSExperiment, str], method:str="block_method",
                      mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", ms_levels:List[int]=[1], sort_blocks:str="RT_ascending",
@@ -818,6 +1034,42 @@ def merge_experiment(experiment: Union[oms.MSExperiment, str], method:str="block
                      deepcopy: bool = False) -> oms.MSExperiment:
     """
     Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals)
+
+    :param experiment: Input experiment
+    :type experiment: Union[oms.MSExperiment, str]
+    :param method: Method to perform merging, defaults to "block_method"
+    :type method: str, optional
+    :param mz_binning_width: m/z binning width, defaults to 1.0
+    :type mz_binning_width: float, optional
+    :param mz_binning_width_unit: m/z binning width unit (ppm/Da), defaults to "ppm"
+    :type mz_binning_width_unit: str, optional
+    :param ms_levels: MS levels to consider, defaults to [1]
+    :type ms_levels: List[int], optional
+    :param sort_blocks: Sort blocks by rentention time, defaults to "RT_ascending"
+    :type sort_blocks: str, optional
+    :param rt_block_size: Block size along retention time, defaults to None
+    :type rt_block_size: Optional[int], optional
+    :param rt_max_length: Maximal length of Retention time, defaults to 0.0
+    :type rt_max_length: float, optional
+    :param spectrum_type: Spectrum type determination, defaults to "automatic"
+    :type spectrum_type: str, optional
+    :param rt_range: Retention time range to merge over, defaults to 5.0
+    :type rt_range: Optional[float], optional
+    :param rt_unit: Unit to merge over, defaults to "scans"
+    :type rt_unit: str, optional
+    :param rt_FWHM: Full width at half maximum, defaults to 5.0
+    :type rt_FWHM: float, optional
+    :param cutoff: Cutoff value during merging, defaults to 0.01
+    :type cutoff: float, optional
+    :param precursor_mass_tol: Percursor mass tolerance, defaults to 0.0
+    :type precursor_mass_tol: float, optional
+    :param precursor_max_charge: Maximal precursor charge, defaults to 1
+    :type precursor_max_charge: int, optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :raises ValueError: Method needs to be in [block_method|average_tophat|average_gaussian]
+    :return: Merged experiment
+    :rtype: pyopenms.MSExperiment
     """
     experiment = load_experiment(experiment)
 
@@ -873,6 +1125,46 @@ def merge_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], 
                 deepcopy: bool = False) -> str:
     """
     Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
+
+    :param experiments: Input experiments
+    :type experiments: Union[Sequence[Union[oms.MSExperiment,str]], str]
+    :param run_dir: Run directory
+    :type run_dir: str
+    :param file_ending: File ending, defaults to ".mzML"
+    :type file_ending: str, optional
+    :param method: Method to perform merging, defaults to "block_method"
+    :type method: str, optional
+    :param mz_binning_width: m/z binning width, defaults to 1.0
+    :type mz_binning_width: float, optional
+    :param mz_binning_width_unit: m/z binning width unit (ppm/Da), defaults to "ppm"
+    :type mz_binning_width_unit: str, optional
+    :param ms_levels: MS levels to consider, defaults to [1]
+    :type ms_levels: List[int], optional
+    :param sort_blocks: Sort blocks by rentention time, defaults to "RT_ascending"
+    :type sort_blocks: str, optional
+    :param rt_block_size: Block size along retention time, defaults to None
+    :type rt_block_size: Optional[int], optional
+    :param rt_max_length: Maximal length of Retention time, defaults to 0.0
+    :type rt_max_length: float, optional
+    :param spectrum_type: Spectrum type determination, defaults to "automatic"
+    :type spectrum_type: str, optional
+    :param rt_range: Retention time range to merge over, defaults to 5.0
+    :type rt_range: Optional[float], optional
+    :param rt_unit: Unit to merge over, defaults to "scans"
+    :type rt_unit: str, optional
+    :param rt_FWHM: Full width at half maximum, defaults to 5.0
+    :type rt_FWHM: float, optional
+    :param cutoff: Cutoff value during merging, defaults to 0.01
+    :type cutoff: float, optional
+    :param precursor_mass_tol: Percursor mass tolerance, defaults to 0.0
+    :type precursor_mass_tol: float, optional
+    :param precursor_max_charge: Maximal precursor charge, defaults to 1
+    :type precursor_max_charge: int, optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :raises ValueError: Method needs to be in [block_method|average_tophat|average_gaussian]
+    :return: Directory with merged experiments
+    :rtype: str
     """
     cleaned_dir = os.path.normpath( clean_dir(run_dir, "merged") )
     names = load_names_batch(experiments, file_ending)
@@ -892,9 +1184,20 @@ def merge_batch(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], 
 
 
 def make_merge_dict(dir:str, file_ending:str=".mzML") -> dict:
+    """
+    Create a dictionary for merging.
+
+    :param dir: Directory to extract samples from.
+    :type dir: str
+    :param file_ending: File ending, defaults to ".mzML"
+    :type file_ending: str, optional
+    :return: Dictonary with sample names as keys and paths for merging as values
+    :rtype: dict
+    """    
     names = load_names_batch(dir)
     samples = {"_".join(name.split("_")[:-1]) for name in names}
     return {sample: [os.path.join(dir, file) for file in os.listdir(dir) if file.startswith(sample) and file.endswith(file_ending)] for sample in samples}
+
 
 def merge_experiments(experiments: Union[Sequence[Union[oms.MSExperiment,str]], str], run_dir:str, file_ending:str=".mzML", method:str="block_method",
                     mz_binning_width:float=1.0, mz_binning_width_unit:str="ppm", ms_levels:List[int]=[1], sort_blocks:str="RT_ascending",
@@ -903,7 +1206,48 @@ def merge_experiments(experiments: Union[Sequence[Union[oms.MSExperiment,str]], 
                     rt_FWHM:float=5.0, cutoff:float=0.01, precursor_mass_tol:float=0.0, precursor_max_charge:int=1,
                     deepcopy: bool = False) -> oms.MSExperiment:
     """
-    Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times)
+    Merge several spectra into one spectrum (useful for MS1 spectra to amplify signals along near retention times).
+    Combines all spectra of given experiments into one experiment to merge over.
+
+    :param experiments: Input experiments
+    :type experiments: Union[Sequence[Union[oms.MSExperiment,str]], str]
+    :param run_dir: Run directory
+    :type run_dir: str
+    :param file_ending: File ending, defaults to ".mzML"
+    :type file_ending: str, optional
+    :param method: Method to perform merging, defaults to "block_method"
+    :type method: str, optional
+    :param mz_binning_width: m/z binning width, defaults to 1.0
+    :type mz_binning_width: float, optional
+    :param mz_binning_width_unit: m/z binning width unit (ppm/Da), defaults to "ppm"
+    :type mz_binning_width_unit: str, optional
+    :param ms_levels: MS levels to consider, defaults to [1]
+    :type ms_levels: List[int], optional
+    :param sort_blocks: Sort blocks by rentention time, defaults to "RT_ascending"
+    :type sort_blocks: str, optional
+    :param rt_block_size: Block size along retention time, defaults to None
+    :type rt_block_size: Optional[int], optional
+    :param rt_max_length: Maximal length of Retention time, defaults to 0.0
+    :type rt_max_length: float, optional
+    :param spectrum_type: Spectrum type determination, defaults to "automatic"
+    :type spectrum_type: str, optional
+    :param rt_range: Retention time range to merge over, defaults to 5.0
+    :type rt_range: Optional[float], optional
+    :param rt_unit: Unit to merge over, defaults to "scans"
+    :type rt_unit: str, optional
+    :param rt_FWHM: Full width at half maximum, defaults to 5.0
+    :type rt_FWHM: float, optional
+    :param cutoff: Cutoff value during merging, defaults to 0.01
+    :type cutoff: float, optional
+    :param precursor_mass_tol: Percursor mass tolerance, defaults to 0.0
+    :type precursor_mass_tol: float, optional
+    :param precursor_max_charge: Maximal precursor charge, defaults to 1
+    :type precursor_max_charge: int, optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :raises ValueError: Method needs to be in [block_method|average_tophat|average_gaussian]
+    :return: Directory with merged experiments
+    :rtype: str
     """
     experiments = load_experiments(experiments, file_ending)
     experiment_all = combine_spectra_experiments(experiments)
@@ -920,8 +1264,19 @@ def merge_experiments(experiments: Union[Sequence[Union[oms.MSExperiment,str]], 
 
 def merge_mz_tolerance(comb_df:pd.DataFrame, charge:int=1, tolerance:float=1e-3, binned:bool=False) -> pd.DataFrame:
     """
-    Weighted average of m/z values that are within absolute tolerance of a row in the primary dataframe
-    """
+    Weighted average of m/z values that are within absolute tolerance of a row in the primary dataframe.
+
+    :param comb_df: Dataframe for merging
+    :type comb_df: pandas.DataFrame
+    :param charge: Theoretical charge, defaults to 1
+    :type charge: int, optional
+    :param tolerance: Tolerance of m/z difference, defaults to 1e-3
+    :type tolerance: float, optional
+    :param binned: Values already binned (simpler process), defaults to False
+    :type binned: bool, optional
+    :return: Merged Dataframe
+    :rtype: pandas.DataFrame
+    """    
     df1 = comb_df.loc[comb_df["polarity"] == charge, "clustered_experiment"].item().get_df(long=True)[["mz", "inty"]]
     df2 = comb_df.loc[comb_df["polarity"] == -charge, "clustered_experiment"].item().get_df(long=True)[["mz", "inty"]]
     df_comb = pd.concat([df1, df2]).sort_values("mz").reset_index(drop=True)
@@ -957,10 +1312,16 @@ def merge_mz_tolerance(comb_df:pd.DataFrame, charge:int=1, tolerance:float=1e-3,
 def normalize_spectra(experiment: Union[oms.MSExperiment, str], normalization_method: str = "to_one",
                       deepcopy: bool = False) -> oms.MSExperiment:
     """
-    Normalizes spectra
-    @experiment: pyopenms.MSExperiment
-    @normalization_method: "to_TIC" | "to_one" 
-    @deepcopy: make a deep copy of the Experiment, so it is an independent object
+    Normalizes spectra by specified method.
+
+    :param experiment: Input experiment
+    :type experiment: Union[oms.MSExperiment, str]
+    :param normalization_method: _description_, defaults to "to_one"
+    :type normalization_method: Normalization method in [to_TIC | to_one] , optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :return: Normlaized experiment along spectra
+    :rtype: oms.MSExperiment
     """
     experiment = load_experiment(experiment)
 
@@ -984,7 +1345,41 @@ def deisotope_spectrum(spectrum: oms.MSSpectrum, fragment_tolerance: float = 0.1
                        keep_only_deisotoped: bool = True, min_isopeaks: int = 2, max_isopeaks: int = 10,
                        make_single_charged: bool = True, annotate_charge: bool = True,
                        annotate_iso_peak_count: bool = True, use_decreasing_model: bool = True,
-                       start_intensity_check: bool = False, add_up_intensity: bool = False):
+                       start_intensity_check: bool = False, add_up_intensity: bool = False) -> oms.MSSpectrum:
+    """
+    Attempt to combine isotopes in a spectrum through exhaustive calculation.
+
+    :param spectrum: Input spectrum
+    :type spectrum: pyopenms.MSSpectrum
+    :param fragment_tolerance: Tolerance for fragments, defaults to 0.1
+    :type fragment_tolerance: float, optional
+    :param fragment_unit_ppm: Use ppm as fragmentation unit, defaults to False
+    :type fragment_unit_ppm: bool, optional
+    :param min_charge: Minimal charge, defaults to 1
+    :type min_charge: int, optional
+    :param max_charge: Maximum charge, defaults to 3
+    :type max_charge: int, optional
+    :param keep_only_deisotoped: Keep only deisotoped signals, defaults to True
+    :type keep_only_deisotoped: bool, optional
+    :param min_isopeaks: Minimum amount of isotopes for a signal, defaults to 2
+    :type min_isopeaks: int, optional
+    :param max_isopeaks: Maximum amount of isotopes in a signal, defaults to 10
+    :type max_isopeaks: int, optional
+    :param make_single_charged: Adapt isotops to single hydrogen adducts/deducts, defaults to True
+    :type make_single_charged: bool, optional
+    :param annotate_charge: Annotate the charge, defaults to True
+    :type annotate_charge: bool, optional
+    :param annotate_iso_peak_count: Annotate isotopic peak count, defaults to True
+    :type annotate_iso_peak_count: bool, optional
+    :param use_decreasing_model: Use decreasing model (decreased chance of isotopes with further changes), defaults to True
+    :type use_decreasing_model: bool, optional
+    :param start_intensity_check: Intensity check at the start, defaults to False
+    :type start_intensity_check: bool, optional
+    :param add_up_intensity: Add intensity of isotopes, defaults to False
+    :type add_up_intensity: bool, optional
+    :return: Deisotoped spectrum
+    :rtype: pyopenms.MSSpectrum
+    """    
     spectrum.setFloatDataArrays([])
 
     oms.Deisotoper.deisotopeAndSingleCharge(
@@ -1014,6 +1409,40 @@ def deisotope_experiment(experiment: Union[oms.MSExperiment, str], fragment_tole
                          annotate_iso_peak_count: bool = True, use_decreasing_model: bool = True,
                          start_intensity_check: bool = False, add_up_intensity: bool = False,
                          deepcopy: bool = False):
+    """
+    Attempt to combine isotopes in an experiment through exhaustive calculation.
+
+    :param spectrum: Input experiment
+    :type spectrum: Union[oms.MSExperiment, str]
+    :param fragment_tolerance: Tolerance for fragments, defaults to 0.1
+    :type fragment_tolerance: float, optional
+    :param fragment_unit_ppm: Use ppm as fragmentation unit, defaults to False
+    :type fragment_unit_ppm: bool, optional
+    :param min_charge: Minimal charge, defaults to 1
+    :type min_charge: int, optional
+    :param max_charge: Maximum charge, defaults to 3
+    :type max_charge: int, optional
+    :param keep_only_deisotoped: Keep only deisotoped signals, defaults to True
+    :type keep_only_deisotoped: bool, optional
+    :param min_isopeaks: Minimum amount of isotopes for a signal, defaults to 2
+    :type min_isopeaks: int, optional
+    :param max_isopeaks: Maximum amount of isotopes in a signal, defaults to 10
+    :type max_isopeaks: int, optional
+    :param make_single_charged: Adapt isotops to single hydrogen adducts/deducts, defaults to True
+    :type make_single_charged: bool, optional
+    :param annotate_charge: Annotate the charge, defaults to True
+    :type annotate_charge: bool, optional
+    :param annotate_iso_peak_count: Annotate isotopic peak count, defaults to True
+    :type annotate_iso_peak_count: bool, optional
+    :param use_decreasing_model: Use decreasing model (decreased chance of isotopes with further changes), defaults to True
+    :type use_decreasing_model: bool, optional
+    :param start_intensity_check: Intensity check at the start, defaults to False
+    :type start_intensity_check: bool, optional
+    :param add_up_intensity: Add intensity of isotopes, defaults to False
+    :type add_up_intensity: bool, optional
+    :return: Deisotoped experiment
+    :rtype: oms.MSExperiment
+    """    
 
     experiment = load_experiment(experiment)
 
@@ -1030,13 +1459,35 @@ def deisotope_experiment(experiment: Union[oms.MSExperiment, str], fragment_tole
     return deisotop_exp
 
 
-### Feature detection ###
+
+## Feature detection
 def mass_trace_detection(experiment: Union[oms.MSExperiment, str],
                          mass_error_ppm: float = 10.0, noise_threshold_int: float = 1000.0, reestimate_mt_sd:str="true",
                          quant_method:str="median", trace_termination_criterion:str="outlier", trace_termination_outliers:int=3,
                          min_trace_length:float=5.0, max_trace_length:float=-1.0) -> list:
     """
-    Mass trace detection
+    Detection of mass traces in experiment over several spectra.
+
+    :param experiment: Input experiment
+    :type experiment: Union[oms.MSExperiment, str]
+    :param mass_error_ppm: Mass error in ppm, defaults to 10.0
+    :type mass_error_ppm: float, optional
+    :param noise_threshold_int: Noise threshold intensity, defaults to 1000.0
+    :type noise_threshold_int: float, optional
+    :param reestimate_mt_sd: Reestimate mass trace standard deviation during run, defaults to "true"
+    :type reestimate_mt_sd: str, optional
+    :param quant_method: Quantification method, defaults to "median"
+    :type quant_method: str, optional
+    :param trace_termination_criterion: Criterion to terminate a trace, defaults to "outlier"
+    :type trace_termination_criterion: str, optional
+    :param trace_termination_outliers: Number of cases that fulfil criterion/outliers to break trace, defaults to 3
+    :type trace_termination_outliers: int, optional
+    :param min_trace_length: Minimal trace length, defaults to 5.0
+    :type min_trace_length: float, optional
+    :param max_trace_length: Maximum trace length, defaults to -1.0
+    :type max_trace_length: float, optional
+    :return: Mass traces
+    :rtype: list
     """
     experiment = load_experiment(experiment)
     experiment.sortSpectra(True)
@@ -1062,8 +1513,31 @@ def mass_trace_detection_batch(experiments: Union[Sequence[Union[oms.MSExperimen
                                quant_method:str="median", trace_termination_criterion:str="outlier", trace_termination_outliers:int=3,
                                min_trace_length:float=5.0, max_trace_length:float=-1.0) -> list:
     """
-    Mass trace detection
-    """
+    Detection of mass traces in experiment over several experiments.
+
+    :param experiments: Input experiments
+    :type experiments: Union[Sequence[Union[oms.MSExperiment,str]], str]
+    :param file_ending: File ending, defaults to ".mzML"
+    :type file_ending: str, optional
+    :param mass_error_ppm: Mass error in ppm, defaults to 10.0
+    :type mass_error_ppm: float, optional
+    :param noise_threshold_int: Noise threshold intensity, defaults to 1000.0
+    :type noise_threshold_int: float, optional
+    :param reestimate_mt_sd: Reestimate mass trace standard deviation during run, defaults to "true"
+    :type reestimate_mt_sd: str, optional
+    :param quant_method: Quantification method, defaults to "median"
+    :type quant_method: str, optional
+    :param trace_termination_criterion: Criterion to terminate a trace, defaults to "outlier"
+    :type trace_termination_criterion: str, optional
+    :param trace_termination_outliers: Number of cases that fulfil criterion/outliers to break trace, defaults to 3
+    :type trace_termination_outliers: int, optional
+    :param min_trace_length: Minimal trace length, defaults to 5.0
+    :type min_trace_length: float, optional
+    :param max_trace_length: Maximum trace length, defaults to -1.0
+    :type max_trace_length: float, optional
+    :return: Mass traces
+    :rtype: list
+    """    
     mass_traces_all = []
     experiments = load_experiments(experiments, file_ending, data_load=False)
     for experiment in tqdm(experiments):
@@ -1081,7 +1555,24 @@ def elution_peak_detection(mass_traces: list, chrom_fwhm:float=10.0, chrom_peak_
                            width_filtering: str = "fixed", min_fwhm:float=1.0, max_fwhm:float=60.0,
                            masstrace_snr_filtering:str="false") -> list:
     """
-    Elution peak detection
+    Elution peak detection along mass traces. Relevant for chromatographic data.
+
+    :param mass_traces: List of mass traces
+    :type mass_traces: list
+    :param chrom_fwhm: Chromatographic full width at half maximum, defaults to 10.0
+    :type chrom_fwhm: float, optional
+    :param chrom_peak_snr: Minimum signal-to-noise a mass trace should have, defaults to 2.0
+    :type chrom_peak_snr: float, optional
+    :param width_filtering: Type of width filtering, defaults to "fixed"
+    :type width_filtering: str, optional
+    :param min_fwhm: Minimal full width at half maximum, defaults to 1.0
+    :type min_fwhm: float, optional
+    :param max_fwhm: Maximal full width at half maximum, defaults to 60.0
+    :type max_fwhm: float, optional
+    :param masstrace_snr_filtering: Filtering by signal to noise ratio, defaults to "false"
+    :type masstrace_snr_filtering: str, optional
+    :return: List of final mass traces
+    :rtype: list
     """
     mass_traces_deconvol = []
     epd = oms.ElutionPeakDetection()
@@ -1107,8 +1598,25 @@ def elution_peak_detection_batch(mass_traces_all: list[list], chrom_fwhm:float=1
                                  width_filtering: str = "fixed", min_fwhm:float=1.0, max_fwhm:float=60.0,
                                  masstrace_snr_filtering:str="false") -> list[list]:
     """
-    Elution peak detection
-    """
+    Elution peak detection along list of mass traces. Relevant for chromatographic data.
+
+    :param mass_traces_all: List of list of all mass traces
+    :type mass_traces_all: list[list]
+    :param chrom_fwhm: Chromatographic full width at half maximum, defaults to 10.0
+    :type chrom_fwhm: float, optional
+    :param chrom_peak_snr: Minimum signal-to-noise a mass trace should have, defaults to 2.0
+    :type chrom_peak_snr: float, optional
+    :param width_filtering: Type of width filtering, defaults to "fixed"
+    :type width_filtering: str, optional
+    :param min_fwhm: Minimal full width at half maximum, defaults to 1.0
+    :type min_fwhm: float, optional
+    :param max_fwhm: Maximal full width at half maximum, defaults to 60.0
+    :type max_fwhm: float, optional
+    :param masstrace_snr_filtering: Filtering by signal to noise ratio, defaults to "false"
+    :type masstrace_snr_filtering: str, optional
+    :return: List of list of final mass traces
+    :rtype: list[list]
+    """    
     mass_traces_all_final = []
     for mass_traces in tqdm(mass_traces_all):
         mass_traces_all_final.append(
@@ -1130,7 +1638,44 @@ def feature_detection_untargeted(experiment: Union[oms.MSExperiment, str],
                                  report_chromatograms:str="false", remove_single_traces: str = "true",
                                  mz_scoring_by_elements: str = "false", elements:str="CHNOPS") -> oms.FeatureMap:
     """
-    Untargeted feature detection
+    Untargeted feature detection in an experiment.
+
+    :param experiment: Input experiment
+    :type experiment: Union[oms.MSExperiment, str]
+    :param mass_traces_deconvol: Deconvoluted mass traces, defaults to []
+    :type mass_traces_deconvol: list, optional
+    :param isotope_filtering_model: Isotope filtering model, defaults to "metabolites (2% RMS)"
+    :type isotope_filtering_model: str, optional
+    :param local_rt_range: Local retention time range, defaults to 3.0
+    :type local_rt_range: float, optional
+    :param local_mz_range: Local m/z range, defaults to 5.0
+    :type local_mz_range: float, optional
+    :param charge_lower_bound: Lower charge bound, defaults to 1
+    :type charge_lower_bound: int, optional
+    :param charge_upper_bound: Upper charge bound, defaults to 3
+    :type charge_upper_bound: int, optional
+    :param chrom_fwhm: Chromatographic full width at half maximum, defaults to 10.0
+    :type chrom_fwhm: float, optional
+    :param report_summed_ints: Report summed intensities, defaults to "true"
+    :type report_summed_ints: str, optional
+    :param enable_RT_filtering: Enable retention time filtering, defaults to "false"
+    :type enable_RT_filtering: str, optional
+    :param mz_scoring_13C: Score m/z by looking at expected Carbon13 peaks, defaults to "false"
+    :type mz_scoring_13C: str, optional
+    :param use_smoothed_intensities: Use smoothed intensities (if smoothed before), defaults to "false"
+    :type use_smoothed_intensities: str, optional
+    :param report_convex_hulls: Report convex hulls, defaults to "true"
+    :type report_convex_hulls: str, optional
+    :param report_chromatograms: Report chromatograms, defaults to "false"
+    :type report_chromatograms: str, optional
+    :param remove_single_traces: Remove single traces (only appear at one retention time), defaults to "true"
+    :type remove_single_traces: str, optional
+    :param mz_scoring_by_elements: Score m/z by present elements, defaults to "false"
+    :type mz_scoring_by_elements: str, optional
+    :param elements: Elements to consider, defaults to "CHNOPS"
+    :type elements: str, optional
+    :return: Feature Map
+    :rtype: pyopenms.FeatureMap
     """
     feature_map = oms.FeatureMap()  # output features
     chrom_out = []  # output chromatograms
@@ -1174,6 +1719,48 @@ def feature_detection_untargeted_batch(experiments:Union[Sequence[Union[oms.MSEx
                                        use_smoothed_intensities:str="false", report_convex_hulls: str = "true",
                                        report_chromatograms:str="false", remove_single_traces: str = "true",
                                        mz_scoring_by_elements: str = "false", elements:str="CHNOPS") -> list[oms.FeatureMap]:
+    """
+    Untargeted feature detection in experiments.
+
+    :param experiments: Input experiments
+    :type experiments: Union[Sequence[Union[oms.MSExperiment,str]], str]
+    :param file_ending: File ending, defaults to ".mzML"
+    :type file_ending: str, optional
+    :param mass_traces_deconvol: Deconvoluted mass traces, defaults to []
+    :type mass_traces_deconvol: list, optional
+    :param isotope_filtering_model: Isotope filtering model, defaults to "metabolites (2% RMS)"
+    :type isotope_filtering_model: str, optional
+    :param local_rt_range: Local retention time range, defaults to 3.0
+    :type local_rt_range: float, optional
+    :param local_mz_range: Local m/z range, defaults to 5.0
+    :type local_mz_range: float, optional
+    :param charge_lower_bound: Lower charge bound, defaults to 1
+    :type charge_lower_bound: int, optional
+    :param charge_upper_bound: Upper charge bound, defaults to 3
+    :type charge_upper_bound: int, optional
+    :param chrom_fwhm: Chromatographic full width at half maximum, defaults to 10.0
+    :type chrom_fwhm: float, optional
+    :param report_summed_ints: Report summed intensities, defaults to "true"
+    :type report_summed_ints: str, optional
+    :param enable_RT_filtering: Enable retention time filtering, defaults to "false"
+    :type enable_RT_filtering: str, optional
+    :param mz_scoring_13C: Score m/z by looking at expected Carbon13 peaks, defaults to "false"
+    :type mz_scoring_13C: str, optional
+    :param use_smoothed_intensities: Use smoothed intensities (if smoothed before), defaults to "false"
+    :type use_smoothed_intensities: str, optional
+    :param report_convex_hulls: Report convex hulls, defaults to "true"
+    :type report_convex_hulls: str, optional
+    :param report_chromatograms: Report chromatograms, defaults to "false"
+    :type report_chromatograms: str, optional
+    :param remove_single_traces: Remove single traces (only appear at one retention time), defaults to "true"
+    :type remove_single_traces: str, optional
+    :param mz_scoring_by_elements: Score m/z by present elements, defaults to "false"
+    :type mz_scoring_by_elements: str, optional
+    :param elements: Elements to consider, defaults to "CHNOPS"
+    :type elements: str, optional
+    :return: List of Feature Maps
+    :rtype: list[pyopenms.FeatureMap]
+    """    
     feature_maps = []
     experiments = load_experiments(experiments, file_ending, data_load=False)
     for i, experiment in enumerate(tqdm(experiments)):
@@ -1197,6 +1784,13 @@ def feature_detection_untargeted_batch(experiments:Union[Sequence[Union[oms.MSEx
 def assign_feature_maps_polarity(feature_maps:list, scan_polarity:Optional[str]=None) -> list:
     """
     Assigns the polarity to a list of feature maps, depending on "pos"/"neg" in file name.
+
+    :param feature_maps: List of feature maps
+    :type feature_maps: list
+    :param scan_polarity: Scan polarity, defaults to None
+    :type scan_polarity: Optional[str], optional
+    :return: List of feature maps with annotated polarity
+    :rtype: list
     """
     print("Assign polarity to feature maps:")
     for fm in tqdm(feature_maps):
@@ -1219,7 +1813,24 @@ def assign_feature_maps_polarity(feature_maps:list, scan_polarity:Optional[str]=
 def detect_adducts(feature_maps: list, potential_adducts:Union[str, bytes]="[]", q_try:str="feature", mass_max_diff:float=10.0, unit:str="ppm", max_minority_bound:int=3,
                    verbose_level:int=0) -> list:
     """
-    Assigning adducts to peaks
+    Attempt adduct detection through exhaustive calculations.
+
+    :param feature_maps: List of feature maps
+    :type feature_maps: list
+    :param potential_adducts: Potential adducts to consider, defaults to "[]"
+    :type potential_adducts: Union[str, bytes], optional
+    :param q_try: Charge discovery dimension, defaults to "feature"
+    :type q_try: str, optional
+    :param mass_max_diff: Maximum mass difference, defaults to 10.0
+    :type mass_max_diff: float, optional
+    :param unit: Unit of mass difference, defaults to "ppm"
+    :type unit: str, optional
+    :param max_minority_bound: Maximum minority bound, defaults to 3
+    :type max_minority_bound: int, optional
+    :param verbose_level: Verbosity level, defaults to 0
+    :type verbose_level: int, optional
+    :return: Feature maps with removed adducts (deconvoluted)
+    :rtype: list
     """
     feature_maps_adducts = []
     print("Detecting adducts:")
@@ -1240,12 +1851,25 @@ def detect_adducts(feature_maps: list, potential_adducts:Union[str, bytes]="[]",
 
     return feature_maps_adducts
 
+
 def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,max_mz_difference:float=10.0, mz_unit:str="ppm",
                           superimposer_max_scaling:float=2.0 ) -> list:
     """
     Use as reference for alignment, the file with the largest number of features
-    Works well if you have a pooled QC for example.
-    Returns the aligned map at the first position
+    Works well if you have a pooled QC for example. Returns the aligned map at the first position.
+
+    :param feature_maps: List of feature maps
+    :type feature_maps: list
+    :param max_num_peaks_considered: Maximum number of considered peaks, defaults to -1
+    :type max_num_peaks_considered: int, optional
+    :param max_mz_difference: Maximum m/z difference, defaults to 10.0
+    :type max_mz_difference: float, optional
+    :param mz_unit: Unit for m/z values, defaults to "ppm"
+    :type mz_unit: str, optional
+    :param superimposer_max_scaling: Maximum scaling during superimposition, defaults to 2.0
+    :type superimposer_max_scaling: float, optional
+    :return: List of feature maps with aligned retention times
+    :rtype: list
     """
     print("Searching feature map with larges number of features:")
     ref_index = np.argmax([fm.size() for fm in feature_maps])
@@ -1276,10 +1900,16 @@ def align_retention_times(feature_maps: list, max_num_peaks_considered:int=-1,ma
 
     return feature_maps
 
+
 def separate_feature_maps_pos_neg(feature_maps:list) -> list:
     """
     Separate the feature maps into positively and negatively charged feature maps.
-    """
+
+    :param feature_maps: Input list of feature maps
+    :type feature_maps: list
+    :return: List of list of feature maps, separates into positive and negatively charged
+    :rtype: list
+    """    
     positive_features = []
     negative_features = []
     print("Separating feature maps:")
@@ -1290,7 +1920,19 @@ def separate_feature_maps_pos_neg(feature_maps:list) -> list:
             negative_features.append(fm)
     return [positive_features, negative_features]
 
+
 def consensus_features_linking(feature_maps: list, feature_grouper_type:str="QT") -> oms.ConsensusMap:
+    """
+    Linking features by consensus voting.
+
+    :param feature_maps: List of feature maps
+    :type feature_maps: list
+    :param feature_grouper_type: Quality threshold clustering (QT) or k-dimensional tree clustering, defaults to "QT"
+    :type feature_grouper_type: str, optional
+    :raises ValueError: Use QT or KD for feature groupers.
+    :return: Consensums map of features
+    :rtype: pyopenms.ConsensusMap
+    """    
     if feature_grouper_type == "KD":
         feature_grouper = oms.FeatureGroupingAlgorithmKD()
     elif feature_grouper_type == "QT":
@@ -1329,13 +1971,35 @@ def untargeted_feature_detection(experiment: Union[oms.MSExperiment, str],
                                  report_convex_hulls="true",
                                  deepcopy: bool = False) -> oms.FeatureMap:
     """
-    Untargeted detection of features.
-    @experiment: pyopenms.MSExperiment
-    @mass_error_ppm: float, error of the mass in parts per million
-    @noise_threshold_int: threshold for noise in the intensity
-    @width_filtering
-    @deepcopy
-    return
+    Untargeted detection of features. Combines mMass trace detection, elution peak detection and 
+    feature finding.
+
+    :param experiment: Input experiment
+    :type experiment: Union[oms.MSExperiment, str]
+    :param feature_filepath: Path to featureXML file, defaults to None
+    :type feature_filepath: Optional[str], optional
+    :param mass_error_ppm: Mass error in ppm, defaults to 10.0
+    :type mass_error_ppm: float, optional
+    :param noise_threshold_int: Noise threshold intensity, defaults to 1000.0
+    :type noise_threshold_int: float, optional
+    :param charge_lower_bound: Lower charge bound, defaults to 1
+    :type charge_lower_bound: int, optional
+    :param charge_upper_bound: Upper charge bound, defaults to 3
+    :type charge_upper_bound: int, optional
+    :param width_filtering: Type of width filtering, defaults to "fixed"
+    :type width_filtering: str, optional
+    :param isotope_filtering_model: Isotope filtering model, defaults to "metabolites (2% RMS)"
+    :type isotope_filtering_model: str, optional
+    :param remove_single_traces: Remove single traces, defaults to "true"
+    :type remove_single_traces: str, optional
+    :param mz_scoring_by_elements: Score m/z by present elements, defaults to "false"
+    :type mz_scoring_by_elements: str, optional
+    :param report_convex_hulls: Report convex hulls, defaults to "true"
+    :type report_convex_hulls: str, optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :return: Feature map
+    :rtype: pyopenms.FeatureMap
     """
     experiment = load_experiment(experiment)
     experiment.sortSpectra(True)
@@ -1372,7 +2036,39 @@ def untargeted_features_detection(in_dir: str, run_dir:str, file_ending:str=".mz
                                     mz_scoring_by_elements:str="false",
                                     report_convex_hulls:str="true",
                                     deepcopy:bool=False) -> list:
-    
+    """
+    Untargeted detection of features. Combines mMass trace detection, elution peak detection and 
+    feature finding.
+
+    :param in_dir: Input directory
+    :type in_dir: str
+    :param run_dir: Run directory
+    :type run_dir: str
+    :param file_ending: File ending, defaults to ".mzML"
+    :type file_ending: str, optional
+    :param mass_error_ppm: Mass error in ppm, defaults to 10.0
+    :type mass_error_ppm: float, optional
+    :param noise_threshold_int: Noise threshold intensity, defaults to 1000.0
+    :type noise_threshold_int: float, optional
+    :param charge_lower_bound: Lower charge bound, defaults to 1
+    :type charge_lower_bound: int, optional
+    :param charge_upper_bound: Upper charge bound, defaults to 3
+    :type charge_upper_bound: int, optional
+    :param width_filtering: Type of width filtering, defaults to "fixed"
+    :type width_filtering: str, optional
+    :param isotope_filtering_model: Isotope filtering model, defaults to "metabolites (2% RMS)"
+    :type isotope_filtering_model: str, optional
+    :param remove_single_traces: Remove single traces, defaults to "true"
+    :type remove_single_traces: str, optional
+    :param mz_scoring_by_elements: Score m/z by present elements, defaults to "false"
+    :type mz_scoring_by_elements: str, optional
+    :param report_convex_hulls: Report convex hulls, defaults to "true"
+    :type report_convex_hulls: str, optional
+    :param deepcopy: Perform a deepcopy to relieably unlink the experiment from the input, defaults to False
+    :type deepcopy: bool, optional
+    :return: List of feature maps
+    :rtype: list
+    """
     feature_maps = []
     feature_folder = clean_dir(run_dir, "features")
 
@@ -1399,7 +2095,26 @@ def feature_detection_targeted(experiment: Union[oms.MSExperiment, str], metab_t
                                mz_window:float=5.0, rt_window:Optional[float]=None, n_isotopes:int=2, isotope_pmin:float=0.01,
                                peak_width:float=60.0) -> oms.FeatureMap:
     """
-    Feature detection with a given metabolic table
+    Feature detection with a given metabolic table.
+
+    :param experiment: Input experiment
+    :type experiment: Union[oms.MSExperiment, str]
+    :param metab_table: Metabilites table
+    :type metab_table: list
+    :param feature_filepath: Filpath to featureXML, defaults to None
+    :type feature_filepath: Optional[str], optional
+    :param mz_window: m/z window width, defaults to 5.0
+    :type mz_window: float, optional
+    :param rt_window: Retention time window width, defaults to None
+    :type rt_window: Optional[float], optional
+    :param n_isotopes: Number of considered isotopes, defaults to 2
+    :type n_isotopes: int, optional
+    :param isotope_pmin: Minimal probability of an isotope to be considered, defaults to 0.01
+    :type isotope_pmin: float, optional
+    :param peak_width: Standard peak width, defaults to 60.0
+    :type peak_width: float, optional
+    :return: Feature map
+    :rtype: oms.FeatureMap
     """
     if isinstance(experiment, str):
         name = experiment
@@ -1436,10 +2151,28 @@ def targeted_feature_detection(experiment: Union[oms.MSExperiment, str], compoun
                                mz_window:float=5.0, rt_window:Optional[float]=None, n_isotopes:int=2, isotope_pmin:float=0.01,
                                peak_width:float=60.0, mass_range:list=[50.0, 10000.0]) -> oms.FeatureMap:
     """
-    @mz_window: ppm
-    @rt_window: s
-    @peak_width: s
-    returns: pyopenms.FeatureMap
+    Feature detection with a given metabolic table with compund library file.
+
+    :param experiment: Input experiment
+    :type experiment: Union[oms.MSExperiment, str]
+    :param compound_library_file: Path to compound library file to define metabolic table from.
+    :type compound_library_file: str
+    :param metab_table: Metabilites table
+    :type metab_table: list
+    :param feature_filepath: Filpath to featureXML, defaults to None
+    :type feature_filepath: Optional[str], optional
+    :param mz_window: m/z window width, defaults to 5.0
+    :type mz_window: float, optional
+    :param rt_window: Retention time window width, defaults to None
+    :type rt_window: Optional[float], optional
+    :param n_isotopes: Number of considered isotopes, defaults to 2
+    :type n_isotopes: int, optional
+    :param isotope_pmin: Minimal probability of an isotope to be considered, defaults to 0.01
+    :type isotope_pmin: float, optional
+    :param peak_width: Standard peak width, defaults to 60.0
+    :type peak_width: float, optional
+    :return: Feature map
+    :rtype: pyopenms.FeatureMap
     """
     experiment = load_experiment(experiment)
     
@@ -1459,12 +2192,33 @@ def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compo
                                 mz_window:float=5.0, rt_window:float=20.0, n_isotopes:int=2, isotope_pmin:float=0.01,
                                 peak_width:float=60.0, mass_range:list=[50.0, 10000.0]) -> list[oms.FeatureMap]:
     """
-    @mz_window: ppm
-    @rt_window: s
-    @peak_width: s
-    returns: pyopenms.FeatureMap
-    """
+    Feature detection with a given metabolic table with compund library file.
 
+    :param in_dir: Input directory
+    :type in_dir: str
+    :param run_dir: Run directory
+    :type run_dir: str
+    :param file_ending: File ending
+    :type file_ending: str
+    :param compound_library_file: Path to compound library file to define metabolic table from.
+    :type compound_library_file: str
+    :param metab_table: Metabilites table
+    :type metab_table: list
+    :param feature_filepath: Filpath to featureXML, defaults to None
+    :type feature_filepath: Optional[str], optional
+    :param mz_window: m/z window width, defaults to 5.0
+    :type mz_window: float, optional
+    :param rt_window: Retention time window width, defaults to None
+    :type rt_window: Optional[float], optional
+    :param n_isotopes: Number of considered isotopes, defaults to 2
+    :type n_isotopes: int, optional
+    :param isotope_pmin: Minimal probability of an isotope to be considered, defaults to 0.01
+    :type isotope_pmin: float, optional
+    :param peak_width: Standard peak width, defaults to 60.0
+    :type peak_width: float, optional
+    :return: List of feature maps
+    :rtype: list[pyopenms.FeatureMap]
+    """
     print("Defining metabolite table...")
     metab_table = define_metabolite_table(compound_library_file, mass_range)
     print("Metabolite table defined...")
@@ -1482,11 +2236,19 @@ def targeted_features_detection(in_dir: str, run_dir:str, file_ending:str, compo
           
     return feature_maps
 
-### Clustering
-def extract_from_clustering(df, clustering):
+
+
+## Clustering
+def extract_from_clustering(df:pd.DataFrame, clustering) -> np.ndarray:
     """
-    accumarray(clusters, (peak_selection(:,1)) .* (peak_selection(:,2)).^5) ./ accumarray(clusters, peak_selection(:,2).^5);
-    accumarray(clusters, peak_selection(:,2),[],@max);   
+    Extract mzs and intensities from clustering
+
+    :param df: Input dataframe
+    :type df: pandas.DataFrame
+    :param clustering: Clustering
+    :type clustering: np.ndarray
+    :return: m/z + inty as paired array
+    :rtype: np.ndarray
     """
     mzs = []
     intys = []
@@ -1504,6 +2266,17 @@ def extract_from_clustering(df, clustering):
 def cluster_matlab(df:pd.DataFrame, height_lim:int=1000, prominence_lim:int=1000, threshold:float=(7e-2)**2):
     """
     Clusters according to FIA matlab routine
+
+    :param df: Input dataframe
+    :type df: pd.DataFrame
+    :param height_lim: height limit, defaults to 1000
+    :type height_lim: int, optional
+    :param prominence_lim: prominence limit, defaults to 1000
+    :type prominence_lim: int, optional
+    :param threshold: threshold to cut off values, defaults to (7e-2)**2
+    :type threshold: float, optional
+    :return: m/z + inty as paired array
+    :rtype: np.ndarray
     """
     # Peak detection
     peaks, *_ = find_peaks(df["inty"], height=height_lim, prominence=prominence_lim)    # type: ignore
@@ -1516,10 +2289,26 @@ def cluster_matlab(df:pd.DataFrame, height_lim:int=1000, prominence_lim:int=1000
     return extract_from_clustering(peaked_df, clustering)
 
 
-def cluster_sliding_window(comb_experiment:oms.MSExperiment, height_lim:int=1000, prominence_lim:int=1000, window_len:int=2000, window_shift=1000, threshold:float=(7e-2)**2):
+def cluster_sliding_window(comb_experiment:oms.MSExperiment, height_lim:int=1000, prominence_lim:int=1000, window_len:int=2000,
+                           window_shift=1000, threshold:float=(7e-2)**2):
     """
     Applies clustering over sliding window in an experiment. The result may contain duplicates or close to duplicates.
-    """
+
+    :param comb_experiment: Input experiment
+    :type comb_experiment: pyopenms.MSExperiment
+    param height_lim: height limit, defaults to 1000
+    :type height_lim: int, optional
+    :param prominence_lim: prominence limit, defaults to 1000
+    :type prominence_lim: int, optional
+    :param window_len: Window length, defaults to 2000
+    :type window_len: int, optional
+    :param window_shift: Window shift, defaults to 1000
+    :type window_shift: int, optional
+    :param threshold: threshold to cut off values, defaults to (7e-2)**2
+    :type threshold: float, optional
+    :return: Clustered experiment
+    :rtype: pyopenms.MSExperiment
+    """    
     n = len(comb_experiment.getSpectra()[0].get_peaks()[0])
     df = comb_experiment.get_df(long=True)
     peaks = []
@@ -1539,15 +2328,33 @@ def cluster_sliding_window(comb_experiment:oms.MSExperiment, height_lim:int=1000
 
 
 
-
-### Label assigning
-# Accurate Mass
+## Label assigning
+### Accurate Mass
 def accurate_mass_search(consensus_map:oms.ConsensusMap, database_dir:str, tmp_dir:str,
                          positive_adducts_file:str, negative_adducts_file:str, 
                          HMDBMapping_file:str, HMDB2StructMapping_file:str,
                          ionization_mode:str="auto") -> pd.DataFrame:
     """
-    Com
+    Assigning metbolites to consensus map masses.
+
+    :param consensus_map: Input consensus map
+    :type consensus_map: pyopenms.ConsensusMap
+    :param database_dir: Database directory
+    :type database_dir: str
+    :param tmp_dir: Directory for temporary saves
+    :type tmp_dir: str
+    :param positive_adducts_file: File with possible positive adducts
+    :type positive_adducts_file: str
+    :param negative_adducts_file: File with possible negative adducts
+    :type negative_adducts_file: str
+    :param HMDBMapping_file: HMDBMapping file
+    :type HMDBMapping_file: str
+    :param HMDB2StructMapping_file: HMDB2StructMapping file
+    :type HMDB2StructMapping_file: str
+    :param ionization_mode: Ionization mode, defaults to "auto"
+    :type ionization_mode: str, optional
+    :return: Annotated dataframe
+    :rtype: pandas.DataFrame
     """
     tmp_dir = clean_dir(tmp_dir)
 
@@ -1577,11 +2384,18 @@ def accurate_mass_search(consensus_map:oms.ConsensusMap, database_dir:str, tmp_d
 
     return ams_df
 
-def annotate_feature_map(feature_map:oms.FeatureMap, metabolite_mass) -> oms.FeatureMap:
-    return feature_map
+
 
 # Transformation to DataFrame
 def consensus_map_to_df(consensus_map:oms.ConsensusMap) -> pd.DataFrame:
+    """
+    Transforms a consensus map into a daraframe
+
+    :param consensus_map: Input consensus map
+    :type consensus_map: pyopenms.ConsensusMap
+    :return: Dataframe from consensus map
+    :rtype: pandas.DataFrame
+    """    
     intensities = consensus_map.get_intensity_df()
     meta_data = consensus_map.get_metadata_df()[["RT", "mz", "quality"]]
 
@@ -1589,11 +2403,21 @@ def consensus_map_to_df(consensus_map:oms.ConsensusMap) -> pd.DataFrame:
     cm_df.reset_index(drop=True, inplace=True)
     return cm_df 
 
+
 # Consensus map filtering
 def filter_consensus_map_df(consensus_map_df:pd.DataFrame, max_missing_values:int=1,
                             min_feature_quality:Optional[float]=0.8) -> pd.DataFrame:
     """
-    Filter consensus map DataFrame according to min
+    Filter consensus map DataFrame according to missing values and feature quality.
+
+    :param consensus_map_df: Input consensus map dataframe
+    :type consensus_map_df: pandas.DataFrame
+    :param max_missing_values: Maximum number of missing values, defaults to 1
+    :type max_missing_values: int, optional
+    :param min_feature_quality: Minimal quality of feature, defaults to 0.8
+    :type min_feature_quality: Optional[float], optional
+    :return: Filtered consensus map dataframe
+    :rtype: pandas.DataFrame
     """
     to_drop = []
     cm_df = deepcopy(consensus_map_df)
@@ -1605,10 +2429,18 @@ def filter_consensus_map_df(consensus_map_df:pd.DataFrame, max_missing_values:in
     cm_df.drop(index=cm_df.index[to_drop], inplace=True)
     return cm_df
 
+
 # Consensus map imputation
 def impute_consensus_map_df(consensus_map_df:pd.DataFrame, n_nearest_neighbours:int=2) -> pd.DataFrame:
     """
-    Data imputation with KNN
+    Data imputation with k-neares-neighbours (kNN).
+
+    :param consensus_map_df: Input consensus map dataframe
+    :type consensus_map_df: pandas.DataFrame
+    :param n_nearest_neighbours: K nearest neighbours, defaults to 2
+    :type n_nearest_neighbours: int, optional
+    :return: Consensus map dataframe with imputed values
+    :rtype: pandas.DataFrame
     """
     if len(consensus_map_df.index) > 0:
         imputer = Pipeline(
@@ -1622,14 +2454,42 @@ def impute_consensus_map_df(consensus_map_df:pd.DataFrame, n_nearest_neighbours:
 
 
 # Merging
-def find_close(df1, df1_col, df2, df2_col, tolerance=0.001):
+def find_close(df1:pd.DataFrame, df1_col, df2:pd.DataFrame, df2_col, tolerance=0.001):
+    """
+    Find close values in two dataframes.
+
+    :param df1: Input dataframe 1
+    :type df1: pandas.DataFrame
+    :param df1_col: Input dataframe 1 matched column
+    :type df1_col: all
+    :param df2: Input dataframe 2
+    :type df2: pandas.DataFrame
+    :param df2_col: Input dataframe 2 matched column
+    :type df2_col: all
+    :param tolerance: Absolute tolerance in difference, defaults to 0.001
+    :type tolerance: float, optional
+    :yield: Datframe of close values
+    :rtype: pandas.DataFrame
+    """    
     for index, value in df1[df1_col].items():
         indices = df2.index[np.isclose(df2[df2_col].values, value, atol=tolerance)]
         s = pd.DataFrame(data={'idx1': index, 'idx2': indices.values})
         yield s
 
 
-def merge_by_mz(id_df_1:pd.DataFrame, id_df_2:pd.DataFrame, mz_tolerance=1e-04):
+def merge_by_mz(id_df_1:pd.DataFrame, id_df_2:pd.DataFrame, mz_tolerance:float=1e-04) -> pd.DataFrame:
+    """
+    Merge dataframes by mz column.
+
+    :param id_df_1: Input dataframe 1
+    :type id_df_1: pandas.DataFrame
+    :param id_df_2: Input dataframe 2
+    :type id_df_2: pandas.DataFrame
+    :param mz_tolerance: Tolerance of m/z deviation, defaults to 1e-04
+    :type mz_tolerance: float, optional
+    :return: _description_
+    :rtype: pandas.DataFrame
+    """    
     id_df = id_df_1.copy()
     df_idx = pd.concat(find_close(id_df_1, "mz", id_df_2, "mz", tolerance=mz_tolerance), ignore_index=True)
     for i, row in df_idx.iterrows():
@@ -1642,7 +2502,10 @@ def merge_by_mz(id_df_1:pd.DataFrame, id_df_2:pd.DataFrame, mz_tolerance=1e-04):
 # Printing
 def print_params(p):
     """
-    Print all parameters
+    Print parameters of pyopenms class.
+
+    :param p: Parameters
+    :type p: dict-like
     """
     if p.size():
         for i in p.keys():
@@ -1657,10 +2520,19 @@ def quick_plot(spectrum: oms.MSSpectrum, xlim: Optional[List[float]] = None, yli
                plottype: str = "line", log:List[str]=[]) -> Figure:
     """
     Shows a plot of a spectrum between the defined borders
-    @spectrum: pyopenms.MSSpectrum
-    @xlim: list of two positions
-    @plottype: "line" | "scatter"
-    returns: None, but displays plot
+
+    :param spectrum: Input spectrum
+    :type spectrum: pyopenms.MSSpectrum
+    :param xlim: x-axis limits, defaults to None
+    :type xlim: Optional[List[float]], optional
+    :param ylim: y-axis limits, defaults to None
+    :type ylim: Optional[List[float]], optional
+    :param plottype: Type of plot [line|scatter], defaults to "line"
+    :type plottype: str, optional
+    :param log: Axes to log-transform [x,y], defaults to []
+    :type log: List[str], optional
+    :return: Figure
+    :rtype: Figure
     """
     fig, ax1 = plt.subplots()
     if plottype == "line":
@@ -1685,11 +2557,30 @@ def sns_plot(x, y, hue=None, size=None, xlim: Optional[List[float]] = None, ylim
             plottype: str = "line", log:List[str]=[], sizes:Optional[Tuple[int, int]]=(20,20), palette:str="hls",
             figsize:Optional[Tuple[int,int]] = (18, 5)) -> None:
     """
-    Shows a plot of a spectrum between the defined borders
-    @spectrum: pyopenms.MSSpectrum
-    @xlim: list of two positions
-    @plottype: "line" | "scatter"
-    returns: None, but displays plot
+    Shows a plot of a spectrum between the defined borders.
+
+    :param x: x-values
+    :type x: array-like
+    :param y: x-values
+    :type y: array-like
+    :param hue: Column to group x and y values, defaults to None
+    :type hue: all, optional
+    :param size: Size of elements, defaults to None
+    :type size: float, optional
+    :param xlim: x-axis limits, defaults to None
+    :type xlim: Optional[List[float]], optional
+    :param ylim: y-axis limits, defaults to None
+    :type ylim: Optional[List[float]], optional
+    :param plottype: Type of plot [line|scatter], defaults to "line"
+    :type plottype: str, optional
+    :param log: Axes to log-transform [x,y], defaults to []
+    :type log: List[str], optional
+    :param sizes: Sizes of points in relation to y-value, defaults to (20,20)
+    :type sizes: Optional[Tuple[int, int]], optional
+    :param palette: Color palette, defaults to "hls"
+    :type palette: str, optional
+    :param figsize: Figure size, defaults to (18, 5)
+    :type figsize: Optional[Tuple[int,int]], optional
     """
     plt.figure(figsize = figsize)
     if plottype == "line":
@@ -1715,9 +2606,13 @@ def dynamic_plot(experiment: oms.MSExperiment, mode: str = "lines", log:List[str
     """
     Shows an interactive plot of all spectra in the experiment. May take a long time for large datasets.
     Recommended after centroiding, or data reduction.
-    @experiment: pyopenms.MSExperiment
-    @mode: "lines" | "markers" | "lines+markers" | other pyplot.graph_objects options
-    returns: None, but displays plot
+
+    :param experiment: Input experiment
+    :type experiment: pyopenms.MSExperiment
+    :param mode: Mode of display ["lines" | "markers" | "lines+markers" | other pyplot.graph_objects options], defaults to "lines"
+    :type mode: str, optional
+    :param log: Axes to log-transform [x,y], defaults to []
+    :type log: List[str], optional
     """
     fig = go.Figure()
     for spectrum in experiment:
@@ -1733,7 +2628,26 @@ def dynamic_plot(experiment: oms.MSExperiment, mode: str = "lines", log:List[str
     fig.update_layout(title='Superplot MSExperiment')
     fig.show()
 
+
 def plot_mass_traces(mass_traces, sel=[0,100], x:str="rt", y:str="mz", z:str="int", threed:bool=True):
+    """
+    Plot mass traces along 3d plot.
+
+    :param mass_traces: List of mass traces
+    :type mass_traces: list
+    :param sel: Selection of convex hull points, defaults to [0,100]
+    :type sel: list, optional
+    :param x: x-axis column, defaults to "rt"
+    :type x: str, optional
+    :param y: y-axis column, defaults to "mz"
+    :type y: str, optional
+    :param z: z-axis column, defaults to "int"
+    :type z: str, optional
+    :param threed: 3D plot, defaults to True
+    :type threed: bool, optional
+    :return: Plot
+    :rtype: plotly-express plot
+    """    
     dfs = []
     for i in range(sel[0], sel[1]):
         peak = len(mass_traces[i].getConvexhull().getHullPoints()) / 2 + 1
@@ -1747,7 +2661,16 @@ def plot_mass_traces(mass_traces, sel=[0,100], x:str="rt", y:str="mz", z:str="in
     else:
         return px.line(ch_df, x=x, y=y, color="id", hover_data=z)
 
+
 def plot_feature_map_rt_alignment(ordered_feature_maps:list, legend:bool=False) -> None:
+    """
+    Plot feature map retention time alignment
+
+    :param ordered_feature_maps: Listof feature maps
+    :type ordered_feature_maps: list
+    :param legend: Display legend, defaults to False
+    :type legend: bool, optional
+    """    
     fig = plt.figure(figsize=(10, 5))
 
     ax = fig.add_subplot(1, 2, 1)
@@ -1794,6 +2717,24 @@ def plot_feature_map_rt_alignment(ordered_feature_maps:list, legend:bool=False) 
 
 def extract_feature_coord(feature:oms.Feature, mzs:np.ndarray, retention_times:np.ndarray, intensities:np.ndarray,
                           labels:np.ndarray, sub_feat:Optional[oms.Feature]=None) -> list:
+    """
+    Extract feature coordinates for plots
+
+    :param feature: Input feature
+    :type feature: oms.Feature
+    :param mzs: m/z values
+    :type mzs: np.ndarray
+    :param retention_times: Retention times
+    :type retention_times: np.ndarray
+    :param intensities: Intensity values
+    :type intensities: np.ndarray
+    :param labels: Labels
+    :type labels: np.ndarray
+    :param sub_feat: Sub-features, defaults to None
+    :type sub_feat: Optional[oms.Feature], optional
+    :return: List of mzs, retention times intensities and matching labels for plots
+    :rtype: list
+    """    
     if sub_feat:
         for i, hull_point in enumerate(sub_feat.getConvexHulls()[0].getHullPoints()):
             mzs = np.append(mzs, sub_feat.getMZ())
@@ -1806,12 +2747,20 @@ def extract_feature_coord(feature:oms.Feature, mzs:np.ndarray, retention_times:n
         intensities = np.append(intensities, feature.getIntensity())
         labels = np.append(labels, feature.getMetaValue("label"))
         
-
     return [mzs, retention_times, intensities, labels]
+
 
 def plot_features_3D(feature_map:oms.FeatureMap, plottype:str="scatter") -> pd.DataFrame:
     """
     Represents found features in 3D
+
+    :param feature_map: Input feature map
+    :type feature_map: oms.FeatureMap
+    :param plottype: Type of plot [scatter|surface|line], defaults to "scatter"
+    :type plottype: str, optional
+    :raises ValueError: Use ['surface','scatter','line']
+    :return: Dataframe with 3d features
+    :rtype: pandas.DataFrame
     """
     mzs = np.empty([0])
     retention_times = np.empty([0])
@@ -1849,7 +2798,18 @@ def plot_features_3D(feature_map:oms.FeatureMap, plottype:str="scatter") -> pd.D
     
     return df
 
+
 def plot_id_df(id_df:pd.DataFrame, x:str="RT", y:str="mz") -> None:
+    """
+    Scatterplot dataframe with identified metabolites.
+
+    :param id_df: Input dataframe
+    :type id_df: pd.DataFrame
+    :param x: x-axis, defaults to "RT"
+    :type x: str, optional
+    :param y: y-axis, defaults to "mz"
+    :type y: str, optional
+    """    
     fig = px.scatter(id_df, x="RT", y="mz", hover_name="identifications")
     fig.update_layout(title="Consensus features with identifications (hover)")
     fig.show()

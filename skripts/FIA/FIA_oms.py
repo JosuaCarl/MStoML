@@ -14,6 +14,9 @@ sys.path.append("..")
 from FIA.FIA import *
 
 def main():
+    """
+    Start shell script
+    """    
     # Argument parser
     parser = argparse.ArgumentParser(prog='FIA_oms',
                                      description='Flow-injection analysis with OpenMS python bindings.')
@@ -42,7 +45,24 @@ def main():
 
 
 class Runner:
-    def __init__(self, data_dir, run_dir, file_ending, runtimes, start_time) -> None:
+    """
+    Class for running FIA analysis via pyopenms.
+    """    
+    def __init__(self, data_dir, run_dir, file_ending:str, runtimes:dict, start_time) -> None:
+        """
+        Initiate runner.
+
+        :param data_dir: Data directory
+        :type data_dir: path-like
+        :param run_dir: Run directory
+        :type run_dir: path-like
+        :param file_ending: File ending
+        :type file_ending: str
+        :param runtimes: Runtimes dictionary
+        :type runtimes: dict
+        :param start_time: Starting time
+        :type start_time: time
+        """        
         self.run_dir = run_dir
         self.last_dir = data_dir
         self.file_ending = file_ending
@@ -52,7 +72,13 @@ class Runner:
         self.merge_dict = {}
 
 
-    def trim(self):
+    def trim(self) -> bool:
+        """
+        Trim batch according to threshold
+
+        :return: Success of operation
+        :rtype: bool
+        """        
         print("Trim values:")
         self.last_dir = trim_threshold_batch(self.last_dir, self.run_dir, file_ending=self.file_ending, threshold=1e3, deepcopy=False)
         self.file_ending = ".mzML"
@@ -62,6 +88,12 @@ class Runner:
         
 
     def centroid(self):
+        """
+        Centroid batch according to parameters in script.
+
+        :return: Success of operation
+        :rtype: bool
+        """
         print("Centroiding:")
         self.last_dir = centroid_batch(self.last_dir, self.run_dir, file_ending=self.file_ending, instrument="TOF",
                                         signal_to_noise=2.0, spacing_difference=1.5,
@@ -75,6 +107,12 @@ class Runner:
 
 
     def merge(self):
+        """
+        Merge batch according to parameters in script.
+
+        :return: Success of operation
+        :rtype: bool
+        """
         print("Merging:")
         self.last_dir = merge_batch(self.last_dir, self.run_dir, file_ending=self.file_ending, method="block_method",
                                 mz_binning_width=10.0, mz_binning_width_unit="ppm",
@@ -88,6 +126,12 @@ class Runner:
 
 
     def pos_neg_merge(self):
+        """
+        Merge batch along positive and negative ionization modes according to parameters in script.
+
+        :return: Success of operation
+        :rtype: bool
+        """
         print("Sample merging:")
         self.merge_dict = make_merge_dict(self.last_dir, file_ending=self.file_ending)
         for sample, files in self.merge_dict.items():
@@ -104,6 +148,12 @@ class Runner:
 
 
     def save_runtimes(self):
+        """
+        Save the runtimes.
+
+        :return: Success of operation
+        :rtype: bool
+        """        
         runtime = time.time() - self.start_time
         self.runtimes["total"] = [runtime]
         runtimes = pd.DataFrame(self.runtimes)

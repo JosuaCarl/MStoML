@@ -682,7 +682,7 @@ def limit_experiment(experiment: Union[oms.MSExperiment, str], mz_lower_limit: U
 
 
 
-def trim_threshold(experiment:oms.MSExperiment, threshold:float=0.05) -> oms.Experiment:
+def trim_threshold(experiment:oms.MSExperiment, threshold:float=0.05) -> oms.MSExperiment:
     """
     Removes point below an absolute intensity theshold.
 
@@ -691,7 +691,7 @@ def trim_threshold(experiment:oms.MSExperiment, threshold:float=0.05) -> oms.Exp
     :param threshold: Threshold for values to be excluded, defaults to 0.05
     :type threshold: float, optional
     :return: Trimmed experiment
-    :rtype: oms.Experiment
+    :rtype: oms.MSExperiment
     """
     tm = oms.ThresholdMower()
     params = tm.getDefaults()

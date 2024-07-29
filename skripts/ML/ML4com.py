@@ -59,7 +59,7 @@ def dict_permutations(dictionary:dict) -> List[dict]:
     return [dict(zip(keys, v)) for v in itertools.product(*values)]
 
 
-def join_df_metNames(df:pd.Dataframe, grouper="peakID", include_mass=False) -> pd.DataFrame:
+def join_df_metNames(df:pd.DataFrame, grouper="peakID", include_mass=False) -> pd.DataFrame:
     """
     Join dataframe column metNames along grouper column. Sets common index for combination
     of positively and negatively charged dataframes along their metabolite Names

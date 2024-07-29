@@ -10,6 +10,7 @@ Welcome to Community composition VAE + Inference's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   modules
 
 
 Indices and tables

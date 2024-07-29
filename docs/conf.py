@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
-project = 'Community composition VAE + Inference'
+project = 'FIA_VAE & Inference'
 copyright = '2024, Josua Carl'
 author = 'Josua Carl'
 release = '0.9'

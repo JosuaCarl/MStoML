@@ -4,6 +4,10 @@
 #SBATCH --ntasks-per-node 1
 #SBATCH --cpus-per-task 1
 
+"""
+Check for GPU availability.
+"""
+
 import os
 import argparse
 

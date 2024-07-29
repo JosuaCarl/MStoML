@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 #SBATCH --mem=400G
 
+"""
+Methods for working with DataFrames from the command line.
+"""
+
 # imports
 import os
 import shutil
@@ -12,6 +16,16 @@ from tqdm import tqdm
 import argparse
 
 def read_df(path, framework=pd):
+    """
+    Read a dataframe in different formats.
+
+    :param path: Path to DataFrame
+    :type path: path-like
+    :param framework: Processing framework [pandas, polars], defaults to pd
+    :type framework: polars | pandas, optional
+    :return: Dataframe
+    :rtype: polars.DataFrame | pandas.DataFrame
+    """    
     print(f"Loading: {path}")
     if path.endswith(".parquet"):
         df = framework.read_parquet( path )
@@ -25,6 +39,16 @@ def read_df(path, framework=pd):
     return df
 
 def write_df(df, path, framework=pd):
+    """
+    Write dataframe in different formats.
+
+    :param df: Dataframe
+    :type df: polars.DataFrame | pandas.DataFrame
+    :param path: Path to write DataFrame to
+    :type path: path-like
+    :param framework: Processing framework [pandas, polars], defaults to pd
+    :type framework: polars | pandas, optional
+    """    
     if framework == pl:
         if path.endswith(".parquet"):
             df.write_parquet( path )
@@ -39,6 +63,16 @@ def write_df(df, path, framework=pd):
             df.to_feather( path )
 
 def concat_dfs(dfs, framework=pd):
+    """
+    Combine dataframes.
+
+    :param dfs: List of dataframes
+    :type dfs: list
+    :param framework: Processing framework [pandas, polars], defaults to pd
+    :type framework: polars | pandas, optional
+    :return: Concatted dataframe
+    :rtype: polars.DataFrame | pandas.DataFrame
+    """    
     if framework == pl:
         dfs = framework.concat( dfs, how="align" )
     elif framework == pd:
@@ -47,6 +81,20 @@ def concat_dfs(dfs, framework=pd):
 
 
 def combine_dc(path_combs, outpath, target_format="parquet", framework=pl, bins:int=2):
+    """
+    Combine dataframes in divide and conquer approach, if they are too big to be loaded into RAM at current compression.
+
+    :param path_combs: All path combinations
+    :type path_combs: list[str]
+    :param outpath: Output path
+    :type outpath: path-like
+    :param target_format: Target format [parquet, feather, tsv], defaults to "parquet"
+    :type target_format: str, optional
+    :param framework: Processing framework [pandas, polars], defaults to pd
+    :type framework: polars | pandas, optional
+    :param bins: Number of dataframes that are loaded at a time, defaults to 2
+    :type bins: int, optional
+    """    
     if len(path_combs) == 1:
         if path_combs[0].endswith(target_format):
             shutil.copy(path_combs[0], os.path.join(outpath, f"data_matrix.{target_format}"))
@@ -92,6 +140,12 @@ def combine_dc(path_combs, outpath, target_format="parquet", framework=pl, bins:
 
 
 def main(args):
+    """
+    Execution from shell script. For more info run python combine_dfs.py --help.
+
+    :param args: Arguments form command line
+    :type args: strings
+    """    
     in_dir = args.in_dirs
     out_dir = args.out_dir
     target_format = args.target_format

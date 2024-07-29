@@ -10,7 +10,7 @@ skripts/FIA/Z_fia_allions/
 skripts/FIA/Z_fia_annotate/
 skripts/KNIME/
 skripts/ML/hyperband_optimization/
-
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

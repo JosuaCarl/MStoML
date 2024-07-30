@@ -515,9 +515,9 @@ def evaluate_model_sklearn( X, ys, labels, indir, data_source, algorithm_name, o
             feature_importances[labels[i]] = model.feature_importances_
 
     feat_imp_df = pd.DataFrame(feature_importances, index=X.columns)
-    feat_imp_df.to_csv(os.path.join(outdir, f"feature_importance_{algorithm_name}_{data_source}.tsv"), sep="\t")
+    feat_imp_df.to_csv(os.path.join(indir, f"feature_importance_{algorithm_name}_{data_source}.tsv"), sep="\t")
 
-    eval_metrics_df.to_csv(os.path.join(outdir, f"{algorithm_name}_{data_source}_eval_metrics.tsv"), sep="\t")
+    eval_metrics_df.to_csv(os.path.join(indir, f"{algorithm_name}_{data_source}_eval_metrics.tsv"), sep="\t")
 
 
 

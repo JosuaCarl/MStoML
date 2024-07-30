@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>skripts.ML.ML4com &mdash; Community composition VAE + Inference 0.9 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=80d5e7a1" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=19f00094" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js?v=5d32c60e"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+        <script src="../../../_static/documentation_options.js?v=049aceee"></script>
+        <script src="../../../_static/doctools.js?v=9a2dae69"></script>
+        <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            Community composition VAE + Inference
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../modules.html">skripts</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">Community composition VAE + Inference</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">skripts.ML.ML4com</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for skripts.ML.ML4com</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python3</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Methods for Machine Learning for community inference.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="c1"># imports</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">gc</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">warnings</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span>
+<span class="kn">from</span> <span class="nn">tqdm</span> <span class="kn">import</span> <span class="n">tqdm</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+
+<span class="kn">import</span> <span class="nn">sklearn</span>
+<span class="kn">from</span> <span class="nn">sklearn.metrics</span> <span class="kn">import</span> <span class="n">accuracy_score</span><span class="p">,</span> <span class="n">confusion_matrix</span><span class="p">,</span> <span class="n">roc_auc_score</span><span class="p">,</span> <span class="n">roc_curve</span>
+<span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">cross_val_predict</span>
+<span class="kn">from</span> <span class="nn">sklearn.utils.random</span> <span class="kn">import</span> <span class="n">sample_without_replacement</span>
+<span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">KFold</span><span class="p">,</span> <span class="n">StratifiedKFold</span><span class="p">,</span> <span class="n">cross_val_score</span>
+<span class="kn">from</span> <span class="nn">sklearn.preprocessing</span> <span class="kn">import</span> <span class="n">StandardScaler</span><span class="p">,</span> <span class="n">MaxAbsScaler</span><span class="p">,</span> <span class="n">MinMaxScaler</span>
+<span class="kn">from</span> <span class="nn">sklearn.model_selection</span> <span class="kn">import</span> <span class="n">GridSearchCV</span><span class="p">,</span> <span class="n">StratifiedShuffleSplit</span>
+<span class="kn">from</span> <span class="nn">sklearn</span> <span class="kn">import</span> <span class="n">tree</span>
+
+<span class="kn">import</span> <span class="nn">seaborn</span> <span class="k">as</span> <span class="nn">sns</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+
+<span class="kn">import</span> <span class="nn">mlflow</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+
+<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;TF_CPP_MIN_LOG_LEVEL&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;2&#39;</span>
+<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;MALLOC_TRIM_THRESHOLD_&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;0&#39;</span>
+
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="nn">tf</span>
+<span class="kn">import</span> <span class="nn">keras</span>
+<span class="kn">from</span> <span class="nn">keras</span> <span class="kn">import</span> <span class="n">layers</span><span class="p">,</span> <span class="n">activations</span><span class="p">,</span> <span class="n">backend</span>
+
+<span class="kn">from</span> <span class="nn">ConfigSpace</span> <span class="kn">import</span> <span class="n">Categorical</span><span class="p">,</span> <span class="n">Configuration</span><span class="p">,</span> <span class="n">ConfigurationSpace</span><span class="p">,</span> <span class="n">EqualsCondition</span><span class="p">,</span> <span class="n">Float</span><span class="p">,</span> <span class="n">InCondition</span><span class="p">,</span> <span class="n">Integer</span><span class="p">,</span> <span class="n">Constant</span><span class="p">,</span> <span class="n">ForbiddenAndConjunction</span><span class="p">,</span> <span class="n">ForbiddenEqualsClause</span>
+<span class="kn">from</span> <span class="nn">smac</span> <span class="kn">import</span> <span class="n">HyperparameterOptimizationFacade</span><span class="p">,</span> <span class="n">MultiFidelityFacade</span><span class="p">,</span> <span class="n">Scenario</span>
+<span class="kn">from</span> <span class="nn">smac.intensifier.hyperband</span> <span class="kn">import</span> <span class="n">Hyperband</span>
+
+
+
+<span class="c1">## Helpers</span>
+<div class="viewcode-block" id="dict_permutations">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.dict_permutations">[docs]</a>
+<span class="k">def</span> <span class="nf">dict_permutations</span><span class="p">(</span><span class="n">dictionary</span><span class="p">:</span><span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">dict</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Combine all value combinations in a dictionary into a list of dictionaries.</span>
+
+<span class="sd">    :param dictionary: Input dictionary</span>
+<span class="sd">    :type dictionary: dict</span>
+<span class="sd">    :return: All permutations of dictionary</span>
+<span class="sd">    :rtype: List[dict]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">keys</span><span class="p">,</span> <span class="n">values</span> <span class="o">=</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">dictionary</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+    <span class="k">return</span> <span class="p">[</span><span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">v</span><span class="p">))</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">product</span><span class="p">(</span><span class="o">*</span><span class="n">values</span><span class="p">)]</span></div>
+
+
+
+<div class="viewcode-block" id="join_df_metNames">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.join_df_metNames">[docs]</a>
+<span class="k">def</span> <span class="nf">join_df_metNames</span><span class="p">(</span><span class="n">df</span><span class="p">:</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">grouper</span><span class="o">=</span><span class="s2">&quot;peakID&quot;</span><span class="p">,</span> <span class="n">include_mass</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Join dataframe column metNames along grouper column. Sets common index for combination</span>
+<span class="sd">    of positively and negatively charged dataframes along their metabolite Names</span>
+
+<span class="sd">    :param df: Input dataframe</span>
+<span class="sd">    :type df: pandas.Dataframe</span>
+<span class="sd">    :param grouper: Grouper column, defaults to &quot;peakID&quot;</span>
+<span class="sd">    :type grouper: str, optional</span>
+<span class="sd">    :param include_mass: Include mass column, defaults to False</span>
+<span class="sd">    :type include_mass: bool, optional</span>
+<span class="sd">    :return: Combined datafraame</span>
+<span class="sd">    :rtype: pandas.Dataframe</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">mass_name</span> <span class="o">=</span> <span class="s2">&quot;ref_mass&quot;</span> <span class="k">if</span> <span class="s2">&quot;ref_mass&quot;</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="k">else</span> <span class="s2">&quot;mass&quot;</span>
+    <span class="n">data_cols</span> <span class="o">=</span> <span class="p">[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">df</span><span class="o">.</span><span class="n">columns</span><span class="p">[</span><span class="n">df</span><span class="o">.</span><span class="n">dtypes</span> <span class="o">==</span> <span class="s2">&quot;float&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">col</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="n">mass_name</span><span class="p">,</span> <span class="s2">&quot;kegg&quot;</span><span class="p">,</span> <span class="s2">&quot;kegg_id&quot;</span><span class="p">,</span> <span class="s2">&quot;dmz&quot;</span><span class="p">]]</span>
+    <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;metNames&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;MS</span><span class="si">{</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data_cols</span><span class="p">))]</span>
+    <span class="k">if</span> <span class="n">include_mass</span><span class="p">:</span>
+        <span class="n">cols</span> <span class="o">=</span> <span class="n">cols</span> <span class="o">+</span> <span class="p">[</span><span class="n">mass_name</span><span class="p">]</span>
+    <span class="n">comb</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">cols</span><span class="p">)</span>
+    
+    <span class="n">grouper</span> <span class="o">=</span> <span class="n">mass_name</span> <span class="k">if</span> <span class="s2">&quot;mass&quot;</span> <span class="ow">in</span> <span class="n">grouper</span> <span class="k">else</span> <span class="n">grouper</span>
+    <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="n">df</span><span class="p">[</span><span class="n">grouper</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">():</span>
+        <span class="n">comb_met_name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">grouped_rows</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="n">grouper</span><span class="p">]</span> <span class="o">==</span> <span class="n">g</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">grouped_rows</span><span class="o">.</span><span class="n">iterrows</span><span class="p">():</span>
+            <span class="n">comb_met_name</span> <span class="o">+=</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;MetName&quot;</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="n">ref_mass</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="n">mass_name</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">include_mass</span><span class="p">:</span>
+            <span class="n">comb</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">comb</span><span class="o">.</span><span class="n">index</span><span class="p">)]</span> <span class="o">=</span> <span class="p">[</span><span class="n">comb_met_name</span><span class="p">[:</span><span class="o">-</span><span class="mi">2</span><span class="p">]]</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">grouped_rows</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">data_cols</span><span class="p">])</span> <span class="o">+</span> <span class="p">[</span><span class="n">ref_mass</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">comb</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">comb</span><span class="o">.</span><span class="n">index</span><span class="p">)]</span> <span class="o">=</span> <span class="p">[</span><span class="n">comb_met_name</span><span class="p">[:</span><span class="o">-</span><span class="mi">2</span><span class="p">]]</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">grouped_rows</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="n">data_cols</span><span class="p">])</span>
+    <span class="n">comb</span> <span class="o">=</span> <span class="n">comb</span><span class="o">.</span><span class="n">set_index</span><span class="p">(</span><span class="s1">&#39;metNames&#39;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">comb</span></div>
+
+
+
+<div class="viewcode-block" id="intersect_impute_on_left">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.intersect_impute_on_left">[docs]</a>
+<span class="k">def</span> <span class="nf">intersect_impute_on_left</span><span class="p">(</span><span class="n">df_base</span><span class="p">:</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">df_right</span><span class="p">:</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">imputation</span><span class="p">:</span><span class="nb">str</span><span class="o">=</span><span class="s2">&quot;zero&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Use all indices from the left (df_base) DataFrame and fill it with the intersection of df_right.</span>
+<span class="sd">    Indices without match are imputed by zero, mean or via kNN, whereas k can be specified as a number.</span>
+<span class="sd">    The default is 5.</span>
+
+<span class="sd">    :param df_base: Left datframe</span>
+<span class="sd">    :type df_base: pandas.DataFrame</span>
+<span class="sd">    :param df_right: Right dataframe</span>
+<span class="sd">    :type df_right: pandas.DataFrame</span>
+<span class="sd">    :param imputation: Imputation procedure [zero|mean|kNN], defaults to &quot;zero&quot;</span>
+<span class="sd">    :type imputation: str, optional</span>
+<span class="sd">    :return: Merged dataframe with imputed values</span>
+<span class="sd">    :rtype: pandas.DataFrame</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">df_merged</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">df_base</span><span class="p">,</span> <span class="n">df_right</span><span class="p">,</span> <span class="n">left_index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">right_index</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+    <span class="n">df_merged</span> <span class="o">=</span> <span class="n">df_merged</span><span class="o">.</span><span class="n">loc</span><span class="p">[:,</span> <span class="o">~</span><span class="n">df_merged</span><span class="o">.</span><span class="n">columns</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;_x&#39;</span><span class="p">)]</span>
+    <span class="n">df_merged</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="n">col</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;_y&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">df_merged</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+    <span class="n">df_merged</span> <span class="o">=</span> <span class="n">df_merged</span><span class="p">[</span><span class="n">df_right</span><span class="o">.</span><span class="n">columns</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">imputation</span> <span class="o">==</span> <span class="s2">&quot;zero&quot;</span><span class="p">:</span>
+        <span class="n">df_merged</span> <span class="o">=</span> <span class="n">df_merged</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">imputation</span> <span class="o">==</span> <span class="s2">&quot;mean&quot;</span><span class="p">:</span>
+        <span class="n">df_merged</span> <span class="o">=</span> <span class="n">df_merged</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">df_merged</span><span class="p">))</span>
+    <span class="k">elif</span> <span class="n">imputation</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;NN&quot;</span><span class="p">):</span>
+        <span class="n">k</span> <span class="o">=</span> <span class="mi">5</span> <span class="k">if</span> <span class="n">imputation</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;k&quot;</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">imputation</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">imputer</span> <span class="o">=</span> <span class="n">KNNImputer</span><span class="p">(</span><span class="n">n_neighbors</span><span class="o">=</span><span class="n">k</span><span class="p">,</span> <span class="n">keep_empty_features</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">df_merged</span><span class="o">.</span><span class="n">values</span> <span class="o">=</span> <span class="n">imputer</span><span class="o">.</span><span class="n">fit_transform</span><span class="p">(</span><span class="n">df_merged</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">df_merged</span></div>
+
+
+
+
+<span class="c1">## SKLearn</span>
+<div class="viewcode-block" id="individual_layers_to_tuple">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.individual_layers_to_tuple">[docs]</a>
+<span class="k">def</span> <span class="nf">individual_layers_to_tuple</span><span class="p">(</span><span class="n">config</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Change hidden_layer_sizes to tuple representation.</span>
+
+<span class="sd">    :param config: Configuration</span>
+<span class="sd">    :type config: dict-like</span>
+<span class="sd">    :return: Config with changed hidden_layer_sizes as tuples</span>
+<span class="sd">    :rtype: dict</span>
+<span class="sd">    &quot;&quot;&quot;</span>    
+    <span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+    <span class="n">hidden_layer_sizes</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">([</span><span class="n">config</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="k">if</span> <span class="n">k</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;n_neurons&quot;</span><span class="p">)])</span>
+    <span class="k">if</span> <span class="n">hidden_layer_sizes</span><span class="p">:</span>
+        <span class="n">config</span><span class="p">[</span><span class="s2">&quot;hidden_layer_sizes&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">hidden_layer_sizes</span>
+    <span class="k">return</span> <span class="n">config</span></div>
+
+
+
+<div class="viewcode-block" id="SKL_Classifier">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.SKL_Classifier">[docs]</a>
+<span class="k">class</span> <span class="nc">SKL_Classifier</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Representation of Scikit-learn classifier for SMAC3</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">ys</span><span class="p">,</span> <span class="n">cv</span><span class="p">,</span> <span class="n">configuration_space</span><span class="p">:</span><span class="n">ConfigurationSpace</span><span class="p">,</span> <span class="n">classifier</span><span class="p">,</span> <span class="n">n_trials</span><span class="p">:</span><span class="nb">int</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialization of sklearn classifier</span>
+
+<span class="sd">        :param X: Data values</span>
+<span class="sd">        :type X: dataframe-like</span>
+<span class="sd">        :param ys: True classes</span>
+<span class="sd">        :type ys: dataframe-like</span>
+<span class="sd">        :param cv: Cross-validation scheme</span>
+<span class="sd">        :type cv: cv-scheme</span>
+<span class="sd">        :param configuration_space: Configuration Space</span>
+<span class="sd">        :type configuration_space: ConfigSpace.ConfigurationSpace</span>
+<span class="sd">        :param classifier: Classifier</span>
+<span class="sd">        :type classifier: Classifier from sklearn</span>
+<span class="sd">        :param n_trials: Number of trials</span>
+<span class="sd">        :type n_trials: int</span>
+<span class="sd">        &quot;&quot;&quot;</span>        
+        <span class="bp">self</span><span class="o">.</span><span class="n">X</span> <span class="o">=</span> <span class="n">X</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ys</span> <span class="o">=</span> <span class="n">ys</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">cv</span> <span class="o">=</span> <span class="n">cv</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">configuration_space</span> <span class="o">=</span> <span class="n">configuration_space</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">classifier</span> <span class="o">=</span> <span class="n">classifier</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">progress_bar</span> <span class="o">=</span> <span class="n">tqdm</span><span class="p">(</span><span class="n">total</span><span class="o">=</span><span class="n">n_trials</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SKL_Classifier.train">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.SKL_Classifier.train">[docs]</a>
+    <span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">Configuration</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Train the classifier with given configuration.</span>
+
+<span class="sd">        :param config: Configuration</span>
+<span class="sd">        :type config: ConfigSpace.Configuration</span>
+<span class="sd">        :param seed: Seed value to control randomness, defaults to 0</span>
+<span class="sd">        :type seed: int, optional</span>
+<span class="sd">        :return: Loss (1-accuracy)</span>
+<span class="sd">        :rtype: np.float64</span>
+<span class="sd">        &quot;&quot;&quot;</span>        
+        <span class="n">config</span> <span class="o">=</span> <span class="n">individual_layers_to_tuple</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;hidden_layer_sizes&quot;</span> <span class="ow">in</span> <span class="n">config</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">progress_bar</span><span class="o">.</span><span class="n">set_postfix_str</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Connection size: </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">config</span><span class="p">[</span><span class="s2">&quot;hidden_layer_sizes&quot;</span><span class="p">])</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="n">mlflow</span><span class="o">.</span><span class="n">start_run</span><span class="p">(</span><span class="n">run_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;run_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">nested</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+            <span class="n">mlflow</span><span class="o">.</span><span class="n">set_tag</span><span class="p">(</span><span class="s2">&quot;test_identifier&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;child_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cv</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+                <span class="n">splitter</span> <span class="o">=</span> <span class="n">StratifiedKFold</span><span class="p">(</span><span class="n">n_splits</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">cv</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="n">seed</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">splitter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cv</span>
+            <span class="n">scores</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">train</span><span class="p">,</span> <span class="n">test</span> <span class="ow">in</span> <span class="n">splitter</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ys</span><span class="p">):</span>
+                <span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">classifier</span><span class="p">(</span><span class="o">**</span><span class="n">config</span><span class="p">)</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">train</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ys</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">train</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+                <span class="n">y_pred</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">X</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">test</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span>
+                <span class="n">scores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span> <span class="n">y_pred</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ys</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">test</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">)</span> <span class="p">)</span>
+            <span class="n">score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span> <span class="n">scores</span> <span class="p">)</span>
+            <span class="n">mlflow</span><span class="o">.</span><span class="n">log_params</span><span class="p">(</span> <span class="n">config</span> <span class="p">)</span>
+            <span class="n">mlflow</span><span class="o">.</span><span class="n">log_metrics</span><span class="p">(</span> <span class="p">{</span><span class="s2">&quot;accuracy&quot;</span><span class="p">:</span> <span class="n">score</span><span class="p">}</span> <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">progress_bar</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">score</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="tune_classifier">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.tune_classifier">[docs]</a>
+<span class="k">def</span> <span class="nf">tune_classifier</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">classifier</span><span class="p">,</span> <span class="n">cv</span><span class="p">,</span> <span class="n">configuration_space</span><span class="p">:</span><span class="n">ConfigurationSpace</span><span class="p">,</span> <span class="n">n_workers</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">n_trials</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span>
+                    <span class="n">algorithm_name</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">outdir</span><span class="p">,</span> <span class="n">verbosity</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Perform hyperparameter tuning on an Sklearn classifier.</span>
+
+<span class="sd">    :param X: Data values</span>
+<span class="sd">    :type X: dataframe-like</span>
+<span class="sd">    :param ys: True classes for one sample</span>
+<span class="sd">    :type ys: dataframe-like</span>
+<span class="sd">    :param classifier: Classifier</span>
+<span class="sd">    :type classifier: Classifier from sklearn</span>
+<span class="sd">    :param cv: Cross-validation scheme</span>
+<span class="sd">    :type cv: cv-scheme</span>
+<span class="sd">    :param configuration_space: Configuration Space</span>
+<span class="sd">    :type configuration_space: ConfigSpace.ConfigurationSpace</span>
+<span class="sd">    :param n_workers: Number of workers to work in parallel</span>
+<span class="sd">    :type n_workers: int</span>
+<span class="sd">    :param n_trials: Number of trials</span>
+<span class="sd">    :type n_trials: int</span>
+<span class="sd">    :param name: Name of run</span>
+<span class="sd">    :type name: str</span>
+<span class="sd">    :param algorithm_name: Algorithm name</span>
+<span class="sd">    :type algorithm_name: str</span>
+<span class="sd">    :param outdir: Output directory</span>
+<span class="sd">    :type outdir: path-like</span>
+<span class="sd">    :param verbosity: Level of verbosity, defaults to 0</span>
+<span class="sd">    :type verbosity: int, optional</span>
+<span class="sd">    :return: Incumbent</span>
+<span class="sd">    :rtype: configs (list, single config)</span>
+<span class="sd">    &quot;&quot;&quot;</span>    
+    <span class="n">classifier</span> <span class="o">=</span> <span class="n">SKL_Classifier</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">cv</span><span class="o">=</span><span class="n">cv</span><span class="p">,</span> <span class="n">configuration_space</span><span class="o">=</span><span class="n">configuration_space</span><span class="p">,</span> <span class="n">classifier</span><span class="o">=</span><span class="n">classifier</span><span class="p">,</span> <span class="n">n_trials</span><span class="o">=</span><span class="n">n_trials</span><span class="p">)</span>
+
+    <span class="n">scenario</span> <span class="o">=</span> <span class="n">Scenario</span><span class="p">(</span> <span class="n">classifier</span><span class="o">.</span><span class="n">configuration_space</span><span class="p">,</span> <span class="n">deterministic</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
+                         <span class="n">n_workers</span><span class="o">=</span><span class="n">n_workers</span><span class="p">,</span> <span class="n">n_trials</span><span class="o">=</span><span class="n">n_trials</span><span class="p">,</span>
+                         <span class="n">walltime_limit</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">cputime_limit</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span> <span class="n">trial_memory_limit</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                         <span class="n">output_directory</span><span class="o">=</span><span class="n">outdir</span> <span class="p">)</span>
+
+    <span class="n">facade</span> <span class="o">=</span> <span class="n">HyperparameterOptimizationFacade</span><span class="p">(</span><span class="n">scenario</span><span class="p">,</span> <span class="n">classifier</span><span class="o">.</span><span class="n">train</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">logging_level</span><span class="o">=</span><span class="mi">30</span><span class="o">-</span><span class="n">verbosity</span><span class="o">*</span><span class="mi">10</span><span class="p">)</span>
+
+    <span class="n">mlflow</span><span class="o">.</span><span class="n">set_tracking_uri</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="s2">&quot;mlruns&quot;</span><span class="p">)))</span>
+    <span class="n">mlflow</span><span class="o">.</span><span class="n">set_experiment</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">with</span> <span class="n">mlflow</span><span class="o">.</span><span class="n">start_run</span><span class="p">(</span><span class="n">run_name</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">):</span>
+        <span class="n">mlflow</span><span class="o">.</span><span class="n">set_tag</span><span class="p">(</span><span class="s2">&quot;test_identifier&quot;</span><span class="p">,</span> <span class="s2">&quot;parent&quot;</span><span class="p">)</span>
+        <span class="n">incumbent</span> <span class="o">=</span> <span class="n">facade</span><span class="o">.</span><span class="n">optimize</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">incumbent</span></div>
+
+
+
+<div class="viewcode-block" id="extract_metrics">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.extract_metrics">[docs]</a>
+<span class="k">def</span> <span class="nf">extract_metrics</span><span class="p">(</span><span class="n">true_labels</span><span class="p">,</span> <span class="n">prediction</span><span class="p">,</span> <span class="n">scoring</span><span class="p">,</span> <span class="n">run_label</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">cv_i</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                    <span class="n">metrics_df</span><span class="p">:</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Run&quot;</span><span class="p">,</span> <span class="s2">&quot;Cross-Validation run&quot;</span><span class="p">,</span> <span class="s2">&quot;Accuracy&quot;</span><span class="p">,</span> <span class="s2">&quot;AUC&quot;</span><span class="p">,</span> <span class="s2">&quot;TPR&quot;</span><span class="p">,</span> <span class="s2">&quot;FPR&quot;</span><span class="p">,</span> <span class="s2">&quot;Threshold&quot;</span><span class="p">,</span> <span class="s2">&quot;Conf_Mat&quot;</span><span class="p">])</span>
+                    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Extract metrics from machine learning. Metrics are TPR, FPR, Thresholds for </span>
+<span class="sd">    ROC curve + AUC and accuracy with confusion matrix.</span>
+
+<span class="sd">    :param true_labels: True labels</span>
+<span class="sd">    :type true_labels: array-like</span>
+<span class="sd">    :param prediction: Prediction</span>
+<span class="sd">    :type prediction: array-like</span>
+<span class="sd">    :param scoring: Scoring</span>
+<span class="sd">    :type scoring: array-like</span>
+<span class="sd">    :param run_label: Label of run, defaults to None</span>
+<span class="sd">    :type run_label: any, optional</span>
+<span class="sd">    :param cv_i: cross-validation instance, defaults to None</span>
+<span class="sd">    :type cv_i: any (usually int), optional</span>
+<span class="sd">    :param metrics_df: Dataframe with all extracted metrics, defaults to </span>
+<span class="sd">    pd.DataFrame(columns=[&quot;Run&quot;, &quot;Cross-Validation run&quot;, &quot;Accuracy&quot;, &quot;AUC&quot;, &quot;TPR&quot;, &quot;FPR&quot;, &quot;Threshold&quot;, &quot;Conf_Mat&quot;])</span>
+<span class="sd">    :type metrics_df: pd.DataFrame, optional</span>
+<span class="sd">    :return: Dataframe, filled with metrics</span>
+<span class="sd">    :rtype: pandas.DataFrame</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">fpr</span><span class="p">,</span> <span class="n">tpr</span><span class="p">,</span> <span class="n">threshold</span> <span class="o">=</span> <span class="n">roc_curve</span><span class="p">(</span><span class="n">true_labels</span><span class="p">,</span>  <span class="n">scoring</span><span class="p">)</span>
+    <span class="n">auc</span> <span class="o">=</span> <span class="n">roc_auc_score</span><span class="p">(</span><span class="n">true_labels</span><span class="p">,</span>  <span class="n">scoring</span><span class="p">)</span>
+    <span class="n">conf_mat</span> <span class="o">=</span> <span class="n">confusion_matrix</span><span class="p">(</span><span class="n">true_labels</span><span class="p">,</span>  <span class="n">prediction</span><span class="p">)</span>
+    <span class="n">accuracy</span> <span class="o">=</span> <span class="n">accuracy_score</span><span class="p">(</span><span class="n">true_labels</span><span class="p">,</span>  <span class="n">prediction</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="n">cv_i</span> <span class="ow">and</span> <span class="n">run_label</span><span class="p">:</span>
+        <span class="n">metrics_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">metrics_df</span><span class="p">)]</span> <span class="o">=</span> <span class="p">[</span><span class="n">run_label</span><span class="p">,</span> <span class="n">cv_i</span><span class="p">,</span> <span class="n">accuracy</span><span class="p">,</span> <span class="n">auc</span><span class="p">,</span> <span class="n">tpr</span><span class="p">,</span> <span class="n">fpr</span><span class="p">,</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">conf_mat</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">run_label</span><span class="p">:</span>
+        <span class="n">metrics_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">metrics_df</span><span class="p">)]</span> <span class="o">=</span> <span class="p">[</span><span class="n">run_label</span><span class="p">,</span> <span class="n">accuracy</span><span class="p">,</span> <span class="n">auc</span><span class="p">,</span> <span class="n">tpr</span><span class="p">,</span> <span class="n">fpr</span><span class="p">,</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">conf_mat</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">metrics_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">metrics_df</span><span class="p">)]</span> <span class="o">=</span> <span class="p">[</span><span class="n">accuracy</span><span class="p">,</span> <span class="n">auc</span><span class="p">,</span> <span class="n">tpr</span><span class="p">,</span> <span class="n">fpr</span><span class="p">,</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">conf_mat</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">metrics_df</span></div>
+
+
+
+<div class="viewcode-block" id="extract_best_hyperparameters_from_incumbent">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.extract_best_hyperparameters_from_incumbent">[docs]</a>
+<span class="k">def</span> <span class="nf">extract_best_hyperparameters_from_incumbent</span><span class="p">(</span><span class="n">incumbent</span><span class="p">,</span> <span class="n">configuration_space</span><span class="p">:</span><span class="n">ConfigurationSpace</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Extract a optimized set of hyperparameters from incumbent. Returns default if none was found.</span>
+
+<span class="sd">    :param incumbent: _description_</span>
+<span class="sd">    :type incumbent: config(s)</span>
+<span class="sd">    :param configuration_space: Configuration Space</span>
+<span class="sd">    :type configuration_space: ConfigSpace.ConfigurationSpace</span>
+<span class="sd">    :return: Best hyperparameters</span>
+<span class="sd">    :rtype: config</span>
+<span class="sd">    &quot;&quot;&quot;</span>    
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">incumbent</span><span class="p">:</span>
+        <span class="n">best_hp</span> <span class="o">=</span> <span class="n">configuration_space</span><span class="o">.</span><span class="n">get_default_configuration</span><span class="p">()</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">incumbent</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="n">best_hp</span> <span class="o">=</span> <span class="n">incumbent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span> 
+        <span class="n">best_hp</span> <span class="o">=</span> <span class="n">incumbent</span>
+    <span class="k">return</span> <span class="n">best_hp</span></div>
+
+
+
+
+<div class="viewcode-block" id="nested_cross_validate_model_sklearn">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.nested_cross_validate_model_sklearn">[docs]</a>
+<span class="k">def</span> <span class="nf">nested_cross_validate_model_sklearn</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">ys</span><span class="p">,</span> <span class="n">labels</span><span class="p">,</span> <span class="n">classifier</span><span class="p">,</span> <span class="n">configuration_space</span><span class="p">,</span> <span class="n">n_trials</span><span class="p">,</span>
+                                        <span class="n">name</span><span class="p">,</span> <span class="n">algorithm_name</span><span class="p">,</span> <span class="n">outdir</span><span class="p">,</span> <span class="n">fold</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">KFold</span><span class="p">,</span> <span class="n">StratifiedKFold</span><span class="p">]</span><span class="o">=</span><span class="n">KFold</span><span class="p">(),</span>
+                                        <span class="n">inner_fold</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">n_workers</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">verbosity</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Cross-validate a model against the given hyperparameters for all organisms in a nested manner.</span>
+
+<span class="sd">    :param X: Data values</span>
+<span class="sd">    :type X: dataframe-like</span>
+<span class="sd">    :param ys: True classes for one sample</span>
+<span class="sd">    :type ys: dataframe-like</span>
+<span class="sd">    :param labels: Labels</span>
+<span class="sd">    :type labels: dataframe-like</span>
+<span class="sd">    :param classifier: Classifier</span>
+<span class="sd">    :type classifier: Classifier from sklearn</span>
+<span class="sd">    :param configuration_space: Configuration Space</span>
+<span class="sd">    :type configuration_space: ConfigSpace.ConfigurationSpace</span>
+<span class="sd">    :param n_trials: Number of trials</span>
+<span class="sd">    :type n_trials: int</span>
+<span class="sd">    :param name: Name of run</span>
+<span class="sd">    :type name: str</span>
+<span class="sd">    :param algorithm_name: Algorithm name</span>
+<span class="sd">    :type algorithm_name: str</span>
+<span class="sd">    :param outdir: Output directory</span>
+<span class="sd">    :type outdir: path-like</span>
+<span class="sd">    :param fold: Outer fold, defaults to KFold()</span>
+<span class="sd">    :type fold: Union[KFold, StratifiedKFold], optional</span>
+<span class="sd">    :param inner_fold: Inner fold, defaults to 3</span>
+<span class="sd">    :type inner_fold: int, optional</span>
+<span class="sd">    :param n_workers: Number of workers, defaults to 1</span>
+<span class="sd">    :type n_workers: int, optional</span>
+<span class="sd">    :param verbosity: Level of verbosity, defaults to 0</span>
+<span class="sd">    :type verbosity: int, optional</span>
+<span class="sd">    :return: Dataframe with metrics on different levels</span>
+<span class="sd">    :rtype: tuple[pandas.DataFrame]</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">metrics_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Organism&quot;</span><span class="p">,</span> <span class="s2">&quot;Cross-Validation run&quot;</span><span class="p">,</span> <span class="s2">&quot;Accuracy&quot;</span><span class="p">,</span> <span class="s2">&quot;AUC&quot;</span><span class="p">,</span> <span class="s2">&quot;TPR&quot;</span><span class="p">,</span> <span class="s2">&quot;FPR&quot;</span><span class="p">,</span> <span class="s2">&quot;Threshold&quot;</span><span class="p">,</span> <span class="s2">&quot;Conf_Mat&quot;</span><span class="p">])</span>
+    <span class="n">organism_metrics_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Organism&quot;</span><span class="p">,</span> <span class="s2">&quot;Accuracy&quot;</span><span class="p">,</span> <span class="s2">&quot;AUC&quot;</span><span class="p">,</span> <span class="s2">&quot;TPR&quot;</span><span class="p">,</span> <span class="s2">&quot;FPR&quot;</span><span class="p">,</span> <span class="s2">&quot;Threshold&quot;</span><span class="p">,</span> <span class="s2">&quot;Conf_Mat&quot;</span><span class="p">])</span>
+    <span class="n">overall_metrics_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Accuracy&quot;</span><span class="p">,</span> <span class="s2">&quot;AUC&quot;</span><span class="p">,</span> <span class="s2">&quot;TPR&quot;</span><span class="p">,</span> <span class="s2">&quot;FPR&quot;</span><span class="p">,</span> <span class="s2">&quot;Threshold&quot;</span><span class="p">,</span> <span class="s2">&quot;Conf_Mat&quot;</span><span class="p">])</span>
+
+    <span class="n">all_predictions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">((</span><span class="mi">0</span><span class="p">))</span>
+    <span class="n">all_scorings</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">((</span><span class="mi">0</span><span class="p">))</span>
+    <span class="n">ys_deshuffeld</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">((</span><span class="mi">0</span><span class="p">))</span>
+
+    <span class="c1"># Iterate over all organisms for binary distinction</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tqdm</span><span class="p">(</span><span class="n">ys</span><span class="o">.</span><span class="n">columns</span><span class="p">)):</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">ys</span><span class="p">[</span><span class="n">y</span><span class="p">]</span>
+        <span class="n">predictions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">((</span><span class="mi">0</span><span class="p">))</span>
+        <span class="n">scorings</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">((</span><span class="mi">0</span><span class="p">))</span>
+        <span class="n">y_deshuffled</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">((</span><span class="mi">0</span><span class="p">))</span>
+
+        <span class="c1"># Outer Loop</span>
+        <span class="k">for</span> <span class="n">cv_i</span><span class="p">,</span> <span class="p">(</span><span class="n">train_index</span><span class="p">,</span> <span class="n">val_index</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tqdm</span><span class="p">(</span><span class="n">fold</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">))):</span>
+            <span class="n">training_data</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">train_index</span><span class="p">]</span>
+            <span class="n">training_labels</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">train_index</span><span class="p">]</span>
+            <span class="n">validation_data</span> <span class="o">=</span> <span class="n">X</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">val_index</span><span class="p">]</span>
+            <span class="n">validation_labels</span> <span class="o">=</span> <span class="n">y</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">val_index</span><span class="p">]</span>
+
+            <span class="c1"># Hyperparameter Tuning with inner CV loop</span>
+            <span class="n">incumbent</span> <span class="o">=</span> <span class="n">tune_classifier</span><span class="p">(</span><span class="n">training_data</span><span class="p">,</span> <span class="n">training_labels</span><span class="p">,</span> <span class="n">classifier</span><span class="p">,</span> <span class="n">inner_fold</span><span class="p">,</span> <span class="n">configuration_space</span><span class="p">,</span>
+                                        <span class="n">n_workers</span><span class="p">,</span> <span class="n">n_trials</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">algorithm_name</span><span class="p">,</span> <span class="n">outdir</span><span class="p">,</span> <span class="n">verbosity</span><span class="p">)</span>
+            
+            <span class="c1"># Model definition and fitting</span>
+            <span class="n">best_hp</span> <span class="o">=</span> <span class="n">extract_best_hyperparameters_from_incumbent</span><span class="p">(</span><span class="n">incumbent</span><span class="o">=</span><span class="n">incumbent</span><span class="p">,</span> <span class="n">configuration_space</span><span class="o">=</span><span class="n">configuration_space</span><span class="p">)</span>
+            <span class="n">best_hp</span> <span class="o">=</span> <span class="n">individual_layers_to_tuple</span><span class="p">(</span><span class="n">best_hp</span><span class="p">)</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">classifier</span><span class="p">(</span><span class="o">**</span><span class="n">best_hp</span><span class="p">)</span>		<span class="c1"># Ensures model resetting for each cross-validation</span>
+
+            <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">training_data</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">training_labels</span><span class="p">))</span>
+
+            <span class="c1"># Prediction and scoring</span>
+            <span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">validation_data</span><span class="p">)</span> <span class="p">)</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;decision_function&quot;</span><span class="p">):</span>
+                <span class="n">scoring</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">decision_function</span><span class="p">(</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">validation_data</span><span class="p">)</span> <span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;predict_proba&quot;</span><span class="p">):</span>
+                <span class="n">scoring</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">validation_data</span><span class="p">)</span> <span class="p">)[::,</span><span class="mi">1</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">scoring</span> <span class="o">=</span> <span class="n">prediction</span>
+            
+            <span class="n">metrics_df</span> <span class="o">=</span> <span class="n">extract_metrics</span><span class="p">(</span><span class="n">validation_labels</span><span class="p">,</span> <span class="n">prediction</span><span class="p">,</span> <span class="n">scoring</span><span class="p">,</span> <span class="n">labels</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">cv_i</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">metrics_df</span><span class="p">)</span>
+			
+            <span class="k">if</span> <span class="n">verbosity</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;evaluate&quot;</span><span class="p">):</span>
+                    <span class="n">model</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="n">validation_data</span><span class="p">,</span>  <span class="n">validation_labels</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbosity</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;score&quot;</span><span class="p">):</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Mean accuracy: </span><span class="si">{</span><span class="n">model</span><span class="o">.</span><span class="n">score</span><span class="p">(</span><span class="n">validation_data</span><span class="p">,</span><span class="w">  </span><span class="n">validation_labels</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+            <span class="n">predictions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">predictions</span><span class="p">,</span> <span class="n">prediction</span><span class="p">)</span>
+            <span class="n">scorings</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">scorings</span><span class="p">,</span> <span class="n">scoring</span><span class="p">)</span>
+            <span class="n">y_deshuffled</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">y_deshuffled</span><span class="p">,</span> <span class="n">validation_labels</span><span class="p">)</span>
+
+        <span class="n">organism_metrics_df</span> <span class="o">=</span> <span class="n">extract_metrics</span><span class="p">(</span><span class="n">y_deshuffled</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">scorings</span><span class="p">,</span> <span class="n">labels</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">metrics_df</span><span class="o">=</span><span class="n">organism_metrics_df</span><span class="p">)</span>
+        <span class="n">all_predictions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">all_predictions</span><span class="p">,</span> <span class="n">predictions</span><span class="p">)</span>
+        <span class="n">all_scorings</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">all_scorings</span><span class="p">,</span> <span class="n">scorings</span><span class="p">)</span>
+        <span class="n">ys_deshuffeld</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ys_deshuffeld</span><span class="p">,</span> <span class="n">y_deshuffled</span><span class="p">)</span>
+
+    <span class="n">overall_metrics_df</span> <span class="o">=</span> <span class="n">extract_metrics</span><span class="p">(</span><span class="n">ys_deshuffeld</span><span class="p">,</span> <span class="n">all_predictions</span><span class="p">,</span> <span class="n">all_scorings</span><span class="p">,</span> <span class="n">metrics_df</span><span class="o">=</span><span class="n">overall_metrics_df</span><span class="p">)</span>
+
+    <span class="c1"># Saving of results</span>
+    <span class="n">metrics_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s2">_metrics.tsv&quot;</span><span class="p">),</span> <span class="n">sep</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">organism_metrics_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s2">_organism_metrics.tsv&quot;</span><span class="p">),</span> <span class="n">sep</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">overall_metrics_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s2">_overall_metrics.tsv&quot;</span><span class="p">),</span> <span class="n">sep</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">(</span><span class="n">metrics_df</span><span class="p">,</span> <span class="n">organism_metrics_df</span><span class="p">,</span> <span class="n">overall_metrics_df</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="tune_train_model_sklearn">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.tune_train_model_sklearn">[docs]</a>
+<span class="k">def</span> <span class="nf">tune_train_model_sklearn</span><span class="p">(</span> <span class="n">X</span><span class="p">,</span> <span class="n">ys</span><span class="p">,</span> <span class="n">labels</span><span class="p">,</span> <span class="n">classifier</span><span class="p">,</span> <span class="n">configuration_space</span><span class="p">,</span> <span class="n">n_workers</span><span class="p">,</span> <span class="n">n_trials</span><span class="p">,</span>
+                                <span class="n">source</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">algorithm_name</span><span class="p">,</span> <span class="n">outdir</span><span class="p">,</span> <span class="n">fold</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">KFold</span><span class="p">,</span> <span class="n">StratifiedKFold</span><span class="p">]</span><span class="o">=</span><span class="n">KFold</span><span class="p">(),</span>
+                                <span class="n">verbosity</span><span class="o">=</span><span class="mi">0</span> <span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Tune and train a model in sklearn.</span>
+
+<span class="sd">    :param X: Data values</span>
+<span class="sd">    :type X: dataframe-like</span>
+<span class="sd">    :param ys: True classes for one sample</span>
+<span class="sd">    :type ys: dataframe-like</span>
+<span class="sd">    :param labels: Labels</span>
+<span class="sd">    :type labels: dataframe-like</span>
+<span class="sd">    :param classifier: Classifier</span>
+<span class="sd">    :type classifier: Classifier from sklearn</span>
+<span class="sd">    :param configuration_space: Configuration Space</span>
+<span class="sd">    :type configuration_space: ConfigSpace.ConfigurationSpace</span>
+<span class="sd">    :param n_workers: Number of workers</span>
+<span class="sd">    :type n_workers: int</span>
+<span class="sd">    :param n_trials: Number of trials</span>
+<span class="sd">    :type n_trials: int</span>
+<span class="sd">    :param source: Source of data</span>
+<span class="sd">    :type source: str</span>
+<span class="sd">    :param name: Name of run</span>
+<span class="sd">    :type name: str</span>
+<span class="sd">    :param algorithm_name: Algorithm name</span>
+<span class="sd">    :type algorithm_name: str</span>
+<span class="sd">    :param outdir: Output directory</span>
+<span class="sd">    :type outdir: path-like</span>
+<span class="sd">    :param fold: Fold for cross validation during tuning, defaults to KFold()</span>
+<span class="sd">    :type fold: Union[KFold, StratifiedKFold], optional</span>
+<span class="sd">    :param verbosity: Level of verbosity, defaults to 0</span>
+<span class="sd">    :type verbosity: int, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Iterate over all organisms for binary distinction</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">org</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tqdm</span><span class="p">(</span><span class="n">ys</span><span class="o">.</span><span class="n">columns</span><span class="p">)):</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">ys</span><span class="p">[</span><span class="n">org</span><span class="p">]</span>
+
+        <span class="n">incumbent</span> <span class="o">=</span> <span class="n">tune_classifier</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">classifier</span><span class="p">,</span> <span class="n">fold</span><span class="p">,</span> <span class="n">configuration_space</span><span class="p">,</span> <span class="n">n_workers</span><span class="p">,</span> <span class="n">n_trials</span><span class="p">,</span>
+                                    <span class="n">name</span><span class="p">,</span> <span class="n">algorithm_name</span><span class="p">,</span> <span class="n">outdir</span><span class="p">,</span> <span class="n">verbosity</span><span class="p">)</span>
+        
+        <span class="c1"># Model definition and fitting</span>
+        <span class="n">best_hp</span> <span class="o">=</span> <span class="n">extract_best_hyperparameters_from_incumbent</span><span class="p">(</span><span class="n">incumbent</span><span class="o">=</span><span class="n">incumbent</span><span class="p">,</span> <span class="n">configuration_space</span><span class="o">=</span><span class="n">configuration_space</span><span class="p">)</span>
+
+        <span class="n">best_hp</span> <span class="o">=</span> <span class="n">individual_layers_to_tuple</span><span class="p">(</span><span class="n">best_hp</span><span class="p">)</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">classifier</span><span class="p">(</span><span class="o">**</span><span class="n">best_hp</span><span class="p">)</span>		<span class="c1"># Ensures model resetting for each cross-validation</span>
+
+        <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;model_</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s1">_</span><span class="si">{</span><span class="n">labels</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">}</span><span class="s1">_</span><span class="si">{</span><span class="n">source</span><span class="si">}</span><span class="s1">.pkl&#39;</span><span class="p">),</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">pickle</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">model</span> <span class="p">,</span><span class="n">f</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="evaluate_model_sklearn">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.evaluate_model_sklearn">[docs]</a>
+<span class="k">def</span> <span class="nf">evaluate_model_sklearn</span><span class="p">(</span> <span class="n">X</span><span class="p">,</span> <span class="n">ys</span><span class="p">,</span> <span class="n">labels</span><span class="p">,</span> <span class="n">indir</span><span class="p">,</span> <span class="n">data_source</span><span class="p">,</span> <span class="n">algorithm_name</span><span class="p">,</span> <span class="n">outdir</span><span class="p">,</span> <span class="n">verbosity</span><span class="o">=</span><span class="mi">0</span> <span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Evaluate a model against the given hyperparameters for all organisms and save the resulting metrics and feature importances.</span>
+
+<span class="sd">    :param X: Data values</span>
+<span class="sd">    :type X: dataframe-like</span>
+<span class="sd">    :param ys: True classes for one sample</span>
+<span class="sd">    :type ys: dataframe-like</span>
+<span class="sd">    :param labels: Labels</span>
+<span class="sd">    :type labels: dataframe-like</span>
+<span class="sd">    :param indir: Input directory</span>
+<span class="sd">    :type indir: path-like</span>
+<span class="sd">    :param data_source: Data source</span>
+<span class="sd">    :type data_source: str</span>
+<span class="sd">    :param algorithm_name: Algorithm name</span>
+<span class="sd">    :type algorithm_name: str</span>
+<span class="sd">    :param outdir: Output directory</span>
+<span class="sd">    :type outdir: path-like</span>
+<span class="sd">    :param verbosity: Level of verbosity, defaults to 0</span>
+<span class="sd">    :type verbosity: int, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">eval_metrics_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Organism&quot;</span><span class="p">,</span> <span class="s2">&quot;Accuracy&quot;</span><span class="p">,</span> <span class="s2">&quot;AUC&quot;</span><span class="p">,</span> <span class="s2">&quot;TPR&quot;</span><span class="p">,</span> <span class="s2">&quot;FPR&quot;</span><span class="p">,</span> <span class="s2">&quot;Threshold&quot;</span><span class="p">,</span> <span class="s2">&quot;Conf_Mat&quot;</span><span class="p">])</span>
+    <span class="n">feature_importances</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">org</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">tqdm</span><span class="p">(</span><span class="n">ys</span><span class="o">.</span><span class="n">columns</span><span class="p">)):</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">ys</span><span class="p">[</span><span class="n">org</span><span class="p">]</span>
+
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">indir</span><span class="p">,</span> <span class="sa">f</span><span class="s1">&#39;model_</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s1">_</span><span class="si">{</span><span class="n">labels</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">}</span><span class="s1">.pkl&#39;</span><span class="p">),</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">model</span> <span class="o">=</span> <span class="n">pickle</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+        <span class="n">prediction</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;decision_function&quot;</span><span class="p">):</span>
+            <span class="n">scoring</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">decision_function</span><span class="p">(</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;predict_proba&quot;</span><span class="p">):</span>
+            <span class="n">scoring</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict_proba</span><span class="p">(</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">X</span><span class="p">)</span> <span class="p">)[::,</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">scoring</span> <span class="o">=</span> <span class="n">prediction</span>
+        
+        <span class="n">eval_metrics_df</span> <span class="o">=</span> <span class="n">extract_metrics</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">prediction</span><span class="p">,</span> <span class="n">scoring</span><span class="p">,</span> <span class="n">labels</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="n">eval_metrics_df</span><span class="p">)</span>
+
+        <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="s2">&quot;feature_importances_&quot;</span><span class="p">):</span>
+            <span class="n">feature_importances</span><span class="p">[</span><span class="n">labels</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">feature_importances_</span>
+
+    <span class="n">feat_imp_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">feature_importances</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="n">X</span><span class="o">.</span><span class="n">columns</span><span class="p">)</span>
+    <span class="n">feat_imp_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;feature_importance_</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">data_source</span><span class="si">}</span><span class="s2">.tsv&quot;</span><span class="p">),</span> <span class="n">sep</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">eval_metrics_df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">data_source</span><span class="si">}</span><span class="s2">_eval_metrics.tsv&quot;</span><span class="p">),</span> <span class="n">sep</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+
+<span class="c1"># PLOTTING</span>
+<div class="viewcode-block" id="plot_cv_confmat">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.plot_cv_confmat">[docs]</a>
+<span class="k">def</span> <span class="nf">plot_cv_confmat</span><span class="p">(</span><span class="n">ys</span><span class="p">,</span> <span class="n">target_labels</span><span class="p">,</span> <span class="n">accuracies</span><span class="p">,</span> <span class="n">confusion_matrices</span><span class="p">,</span> <span class="n">outdir</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Plot heatmap of confusion matrix</span>
+
+<span class="sd">    :param ys: Targets</span>
+<span class="sd">    :type ys: dataframe-like</span>
+<span class="sd">    :param target_labels: Target labels</span>
+<span class="sd">    :type target_labels: array-like</span>
+<span class="sd">    :param accuracies: Accuracies</span>
+<span class="sd">    :type accuracies: dataframe-like</span>
+<span class="sd">    :param confusion_matrices: Confusion matrices</span>
+<span class="sd">    :type confusion_matrices: dataframe-like</span>
+<span class="sd">    :param outdir: Output directory</span>
+<span class="sd">    :type outdir: path-like</span>
+<span class="sd">    :param name: Name of run</span>
+<span class="sd">    :type name: str</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="s2">&quot;This figure includes Axes that are not compatible with tight_layout, so results might be incorrect*&quot;</span><span class="p">)</span>
+    <span class="n">fig</span><span class="p">,</span> <span class="n">axs</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">nrows</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">ncols</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+    <span class="n">cbar_ax</span> <span class="o">=</span> <span class="n">fig</span><span class="o">.</span><span class="n">add_axes</span><span class="p">([</span><span class="mf">.91</span><span class="p">,</span> <span class="mf">.3</span><span class="p">,</span> <span class="mf">.03</span><span class="p">,</span> <span class="mf">.4</span><span class="p">])</span>          <span class="c1"># type: ignore</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">ax</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">axs</span><span class="o">.</span><span class="n">flat</span><span class="p">):</span>
+        <span class="n">sns</span><span class="o">.</span><span class="n">heatmap</span><span class="p">(</span><span class="n">confusion_matrices</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> 
+                    <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="n">annot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> 
+                    <span class="n">cbar</span><span class="o">=</span><span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="n">cbar_ax</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">i</span> <span class="k">else</span> <span class="n">cbar_ax</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">target_labels</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">}</span><span class="s1">, Accuracy: </span><span class="si">{</span><span class="nb">round</span><span class="p">(</span><span class="n">accuracies</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="mi">5</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">ax</span><span class="o">.</span><span class="n">axis</span><span class="p">(</span><span class="s1">&#39;off&#39;</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Overall accuracy: </span><span class="si">{</span><span class="nb">round</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">accuracies</span><span class="p">),</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">tight_layout</span><span class="p">(</span><span class="n">rect</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">.9</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>                <span class="c1"># type: ignore</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+    
+
+<div class="viewcode-block" id="plot_decision_trees">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.plot_decision_trees">[docs]</a>
+<span class="k">def</span> <span class="nf">plot_decision_trees</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">feature_names</span><span class="p">,</span> <span class="n">class_names</span><span class="p">,</span> <span class="n">outdir</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Plot decision trees of model</span>
+
+<span class="sd">    :param model: Model</span>
+<span class="sd">    :type model: model-lie</span>
+<span class="sd">    :param feature_names: Feature names</span>
+<span class="sd">    :type feature_names: array-like</span>
+<span class="sd">    :param class_names: Class names</span>
+<span class="sd">    :type class_names: array-like</span>
+<span class="sd">    :param outdir: Output directory</span>
+<span class="sd">    :type outdir: path-like</span>
+<span class="sd">    :param name: Name of run</span>
+<span class="sd">    :type name: str</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">nrows</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span><span class="n">ncols</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span><span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">),</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">900</span><span class="p">)</span>
+    <span class="n">tree</span><span class="o">.</span><span class="n">plot_tree</span><span class="p">(</span><span class="n">model</span><span class="p">,</span>
+                <span class="n">feature_names</span> <span class="o">=</span> <span class="n">feature_names</span><span class="p">,</span> 
+                <span class="n">class_names</span> <span class="o">=</span> <span class="n">class_names</span><span class="p">,</span>
+                <span class="n">filled</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">))</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="plot_metrics_df">
+<a class="viewcode-back" href="../../../skripts.ML.html#skripts.ML.ML4com.plot_metrics_df">[docs]</a>
+<span class="k">def</span> <span class="nf">plot_metrics_df</span><span class="p">(</span><span class="n">metrics_df</span><span class="p">,</span> <span class="n">organism_metrics_df</span><span class="p">,</span> <span class="n">overall_metrics_df</span><span class="p">,</span> <span class="n">algorithm_name</span><span class="p">,</span> <span class="n">outdir</span><span class="p">,</span> <span class="n">show</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Plot the extracted metrics as a heatmap and ROC AUC curve</span>
+
+<span class="sd">    :param metrics_df: Metrics dataframe</span>
+<span class="sd">    :type metrics_df: pandas.DataFrame</span>
+<span class="sd">    :param organism_metrics_df: Metrics dataframe on organism level</span>
+<span class="sd">    :type organism_metrics_df: pandas.DataFrame</span>
+<span class="sd">    :param overall_metrics_df: Metrics dataframe on overall level</span>
+<span class="sd">    :type overall_metrics_df: pandas.DataFrame</span>
+<span class="sd">    :param algorithm_name: Algorithm name</span>
+<span class="sd">    :type algorithm_name: str</span>
+<span class="sd">    :param outdir: Output directory</span>
+<span class="sd">    :type outdir: path-like</span>
+<span class="sd">    :param show: Show plot, defaults to False</span>
+<span class="sd">    :type show: bool, optional</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="n">sns</span><span class="o">.</span><span class="n">heatmap</span><span class="p">(</span><span class="n">metrics_df</span><span class="o">.</span><span class="n">pivot</span><span class="p">(</span><span class="n">index</span><span class="o">=</span><span class="s2">&quot;Organism&quot;</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="s2">&quot;Cross-Validation run&quot;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="s2">&quot;Accuracy&quot;</span><span class="p">),</span>
+                    <span class="n">vmin</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">annot</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="n">sns</span><span class="o">.</span><span class="n">diverging_palette</span><span class="p">(</span><span class="mf">328.87</span><span class="p">,</span>  <span class="mf">221.63</span><span class="p">,</span> <span class="n">center</span><span class="o">=</span><span class="s2">&quot;light&quot;</span><span class="p">,</span> <span class="n">as_cmap</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+    <span class="n">fig</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">get_figure</span><span class="p">()</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s2">_heatmap_accuracies.png&quot;</span><span class="p">),</span> <span class="n">bbox_inches</span><span class="o">=</span><span class="s2">&quot;tight&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">show</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="n">ax</span> <span class="o">=</span> <span class="n">sns</span><span class="o">.</span><span class="n">lineplot</span><span class="p">(</span> <span class="n">overall_metrics_df</span><span class="o">.</span><span class="n">explode</span><span class="p">([</span><span class="s2">&quot;TPR&quot;</span><span class="p">,</span> <span class="s2">&quot;FPR&quot;</span><span class="p">]),</span> <span class="n">x</span><span class="o">=</span><span class="s2">&quot;FPR&quot;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">&quot;TPR&quot;</span><span class="p">,</span> <span class="n">hue</span><span class="o">=</span><span class="s2">&quot;AUC&quot;</span><span class="p">)</span>
+    <span class="n">ax</span> <span class="o">=</span> <span class="n">sns</span><span class="o">.</span><span class="n">lineplot</span><span class="p">(</span> <span class="n">organism_metrics_df</span><span class="o">.</span><span class="n">explode</span><span class="p">([</span><span class="s2">&quot;TPR&quot;</span><span class="p">,</span> <span class="s2">&quot;FPR&quot;</span><span class="p">]),</span> <span class="n">x</span><span class="o">=</span><span class="s2">&quot;FPR&quot;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">&quot;TPR&quot;</span><span class="p">,</span> <span class="n">hue</span><span class="o">=</span><span class="s2">&quot;Organism&quot;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">)</span>
+    <span class="n">ax</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;AUC&quot;</span><span class="p">)</span>
+    <span class="n">leg</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">axes</span><span class="o">.</span><span class="n">get_legend</span><span class="p">()</span>
+    <span class="n">leg</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s2">&quot;Organism (AUC)&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">t</span><span class="p">,</span> <span class="n">l</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">leg</span><span class="o">.</span><span class="n">texts</span><span class="p">,</span> <span class="p">[</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;Organism&quot;</span><span class="p">]</span><span class="si">}</span><span class="s1"> (AUC=</span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s2">&quot;AUC&quot;</span><span class="p">])</span><span class="si">}</span><span class="s1">)&#39;</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">organism_metrics_df</span><span class="o">.</span><span class="n">iterrows</span><span class="p">()]</span><span class="o">+</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;Overall (AUC=</span><span class="si">{</span><span class="n">overall_metrics_df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;AUC&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">]):</span>
+        <span class="n">t</span><span class="o">.</span><span class="n">set_text</span><span class="p">(</span><span class="n">l</span><span class="p">)</span>
+    <span class="n">fig</span> <span class="o">=</span> <span class="n">ax</span><span class="o">.</span><span class="n">get_figure</span><span class="p">()</span>
+    <span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">outdir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm_name</span><span class="si">}</span><span class="s2">_AUC.png&quot;</span><span class="p">),</span> <span class="n">bbox_inches</span><span class="o">=</span><span class="s2">&quot;tight&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">show</span><span class="p">:</span>
+        <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Josua Carl.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

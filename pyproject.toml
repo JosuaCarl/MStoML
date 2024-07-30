@@ -1,10 +1,10 @@
 [tool.poetry]
 name = "mstoml"
 version = "0.3.0"
-description = "\"Dimensionality reduction and community classification from flow injection mass spectrometry.\""
+description = "Dimensionality reduction and community classification from flow injection mass spectrometry."
 authors = ["JosuaCarl <josi.carl@gmx.de>"]
 readme = "README.md"
-package-mode = false
+package-mode = true
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -46,6 +46,13 @@ statsmodels = "^0.14.2"
 name = "nvidia"
 url = "https://anaconda.org/nvidia/repo"
 priority = "primary"
+
+
+[[tool.poetry.source]]
+name = "pytorch"
+url = "https://anaconda.org/pytorch/repo"
+priority = "supplemental"
+
 
 [build-system]
 requires = ["poetry-core"]

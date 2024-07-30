@@ -5,7 +5,7 @@ Run multiple groups of Machine Learning Tuning, Training or Evaluation experimen
 
 partition="cpu3-long"
 time="14-00:00:00"
-declare -a algorithms=("Linear Discriminant Analysis")
+declare -a algorithms=("Extreme gradient boosting RF")
 base_out="../../runs/ML/ml_"
 tries=200
 inner_fold=5
@@ -13,7 +13,7 @@ outer_fold=6
 backend="tensorflow"
 source_dir="../.."
 suffix=""
-task="tune"
+task="train"
 
 
 # Com8 equal comb

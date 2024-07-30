@@ -13,6 +13,9 @@ skripts/ML/hyperband_optimization/
 .vscode/
 skripts/.vscode/
 
+# Poetry
+poetry.lock
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

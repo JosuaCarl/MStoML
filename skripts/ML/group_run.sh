@@ -5,7 +5,7 @@ Run multiple groups of Machine Learning Tuning, Training or Evaluation experimen
 
 partition="cpu3-long"
 time="14-00:00:00"
-declare -a algorithms=("Extreme gradient boosting RF")
+declare -a algorithms=( "Linear Discriminant Analysis" "Extreme gradient boosting RF" )
 base_out="../../runs/ML/ml_"
 tries=200
 inner_fold=5
@@ -13,7 +13,7 @@ outer_fold=6
 backend="tensorflow"
 source_dir="../.."
 suffix=""
-task="train"
+task="evaluate"
 
 
 # Com8 equal comb
@@ -26,10 +26,9 @@ sbatch --partition=$partition --time=$time --output="${base_out}ec_annot${task}$
     ML4com_run.py \
     -t $tries -if $inner_fold -of $outer_fold -v 0 -st $source_dir -s "annotated" -sam $source -ms $model_source \
     -b $backend -c "gpu" -n "cosine_2" -fn "${file}" -mfn "${model_file}" -a "${algorithms[@]}" -ta $task
-
-: ' 
+ 
 sbatch --partition=$partition --time=$time --output="${base_out}ec_cos${task}${suffix}.out" \
-    ML4com_run.py 
+    ML4com_run.py \
     -t $tries -if $inner_fold -of $outer_fold -v 0 -st $source_dir -s "latent" -sam $source -ms $model_source \
     -b $backend -c "gpu" -n "cosine_2" -fn "${file}" -mfn "${model_file}" -a "${algorithms[@]}" -ta $task
 
@@ -57,6 +56,9 @@ sbatch --partition=$partition --time=$time --output="${base_out}ec_mse${task}${s
     ML4com_run.py \
     -t $tries -if $inner_fold -of $outer_fold -v 0 -st $source_dir -s "latent" -sam $source -ms $model_source \
     -b $backend -c "cpu" -n "mse_2" -fn "${file}" -mfn "${model_file}" -a "${algorithms[@]}" -ta $task
+
+
+: '
 
 # COM 8 grown together
 source="Com8_grown_together"

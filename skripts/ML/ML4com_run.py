@@ -259,14 +259,14 @@ def main(args):
 
     algorithms_configspaces["Logistic Regression"] = {"classifier": LogisticRegression, "configuration_space": configuration_space}
     
-
+    
     if algorithms and "all" not in algorithms:
         algorithms_configspaces_acc = {}
         for algorithm in algorithms:
             if algorithm in algorithms_configspaces:
                 algorithms_configspaces_acc[algorithm] = algorithms_configspaces[algorithm]
             else:
-                raise( ValueError(f"-a/--algorithm is unknown. Choose one of {list(algorithms_configspaces.keys())}"))
+                raise( ValueError(f"-a/--algorithm {algorithm} is unknown. Choose one of {list(algorithms_configspaces.keys())}"))
         algorithms_configspaces = algorithms_configspaces_acc
 
    

@@ -292,9 +292,10 @@ def main(args):
             met_raw_comb_2 = pd.concat( [ total_ion_count_normalization( join_df_metNames(met_raw_pos_2, grouper="mass") ),
                                           total_ion_count_normalization( join_df_metNames(met_raw_neg_2, grouper="mass") ) ] )
             X = intersect_impute_on_left(met_raw_comb_2, met_raw_comb, imputation="zero").transpose()
-
+    	
+        print(f"Evalutation of {os.path.basename(outdir)} on models trained with {os.path.basename(indir)}. Saved in {indir} as algorithm_{sample}_eval_metrics.tsv")
         for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
-            evaluate_model_sklearn( X=X, ys=ys, labels=labels, indir=indir, data_source=source, algorithm_name=algorithm_name, outdir=outdir,
+            evaluate_model_sklearn( X=X, ys=ys, labels=labels, indir=indir, data_source=sample, algorithm_name=algorithm_name, outdir=outdir,
                                     verbosity=verbosity )
     else:
         print("Tuning:")

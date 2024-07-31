@@ -25,6 +25,7 @@ from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
 from sklearn.preprocessing import StandardScaler, MaxAbsScaler, MinMaxScaler
 from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
 from sklearn import tree
+from sklearn.impute import KNNImputer
 
 import seaborn as sns
 import matplotlib.pyplot as plt

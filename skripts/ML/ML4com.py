@@ -15,6 +15,7 @@ from typing import List
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import cupy
 import pickle
 
 import sklearn
@@ -165,13 +166,16 @@ class SKL_Classifier:
         :param n_trials: Number of trials
         :type n_trials: int
         """        
-        self.X = X
-        self.ys = ys
+        self.X = np.array(X)
+        self.ys = np.array(ys)
         self.cv = cv
         self.configuration_space = configuration_space
         self.classifier = classifier
         self.count = 0
         self.progress_bar = tqdm(total=n_trials)
+        if "device" in self.configuration_space:
+            self.X_cuda = cupy.array(self.X)
+            self.ys_cuda = cupy.array(self.ys)
 
     def train(self, config: Configuration, seed:int=0) -> np.float64:
         """
@@ -197,9 +201,13 @@ class SKL_Classifier:
             scores = []
             for train, test in splitter.split(self.X, self.ys):
                 model = self.classifier(**config)
-                model.fit(self.X.iloc[train].values, self.ys.iloc[train].values)
-                y_pred = model.predict(self.X.iloc[test].values)
-                scores.append( np.mean( y_pred == self.ys.iloc[test].values) )
+                if config["device"] == "cuda":
+                    model.fit(self.X_cuda[train], self.ys_cuda[train])
+                    y_pred = model.predict(self.X_cuda[test])
+                else:
+                    model.fit(self.X[train], self.ys[train])
+                    y_pred = model.predict(self.X[test])
+                scores.append( np.mean( y_pred == self.ys[test]) )
             score = np.mean( scores )
             mlflow.log_params( config )
             mlflow.log_metrics( {"accuracy": score} )
@@ -466,7 +474,11 @@ def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_
         best_hp = individual_layers_to_tuple(best_hp)
         model = classifier(**best_hp)		# Ensures model resetting for each cross-validation
 
-        model.fit(np.array(X), np.array(y))
+        if "device" in best_hp and best_hp["device"] == "cuda":
+            X, y = (cupy.array(X), cupy.array(y))
+        else:
+            X, y = (np.array(X), np.array(y))
+        model.fit(X, y)
         with open(os.path.join(outdir, f'model_{algorithm_name}_{labels[i]}_{source}.pkl'), 'wb') as f:
             pickle.dump(model ,f)
 

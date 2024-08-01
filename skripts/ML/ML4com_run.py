@@ -81,7 +81,7 @@ def main(args):
     algorithms_configspaces = {}
     
     # KNN
-    from sklearn.neighbors import KNeighborsClassifier 
+    from sklearn.neighbors import KNeighborsClassifier
     configuration_space = ConfigurationSpace()
     hyperparameters = [ 
                         Integer("n_neighbors",   (2,50), default=5),
@@ -149,8 +149,11 @@ def main(args):
     # Decision Tree
     from sklearn.tree import DecisionTreeClassifier
     configuration_space = ConfigurationSpace()
-    ccp_alpha   = Float("ccp_alpha", (1e-3, 1e0), log=True, default=0.01)
-    configuration_space.add_hyperparameters([ccp_alpha])
+    hyperparameters = [
+        Constant( "random_state",          42),
+        Float("ccp_alpha", (1e-3, 1e0), log=True, default=0.01)
+    ]
+    configuration_space.add_hyperparameters(hyperparameters)
 
     algorithms_configspaces["Decision tree"] = {"classifier": DecisionTreeClassifier, "configuration_space": configuration_space}
 
@@ -158,10 +161,13 @@ def main(args):
     # Random Forest
     from sklearn.ensemble import RandomForestClassifier
     configuration_space = ConfigurationSpace()
-    ccp_alpha       = Float("ccp_alpha", (1e-3, 1e-1), log=True, default=0.01)
-    n_estimators    = Integer("n_estimators", (10,1000), log=True, default=100)
-    max_depth       = Integer("max_depth", (5, 100), default=20)
-    configuration_space.add_hyperparameters([ccp_alpha, n_estimators, max_depth])
+    hyperparameters = [
+        Constant( "random_state",          42),
+        Float("ccp_alpha", (1e-3, 1e-1), log=True, default=0.01),
+        Integer("n_estimators", (10,1000), log=True, default=100),
+        Integer("max_depth", (5, 100), default=20),
+    ]
+    configuration_space.add_hyperparameters(hyperparameters)
 
     algorithms_configspaces["Random forest"] = {"classifier": RandomForestClassifier, "configuration_space": configuration_space}
 

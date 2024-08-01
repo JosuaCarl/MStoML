@@ -45,6 +45,8 @@ from ConfigSpace import Categorical, Configuration, ConfigurationSpace, EqualsCo
 from smac import HyperparameterOptimizationFacade, MultiFidelityFacade, Scenario
 from smac.intensifier.hyperband import Hyperband
 
+import dask.multiprocessing
+
 
 
 ## Helpers
@@ -173,7 +175,7 @@ class SKL_Classifier:
         self.classifier = classifier
         self.count = 0
         self.progress_bar = tqdm(total=n_trials)
-        if "device" in self.configuration_space:
+        if "device" in configuration_space._hyperparameters:
             self.X_cuda = cupy.array(self.X)
             self.ys_cuda = cupy.array(self.ys)
 
@@ -201,7 +203,7 @@ class SKL_Classifier:
             scores = []
             for train, test in splitter.split(self.X, self.ys):
                 model = self.classifier(**config)
-                if config["device"] == "cuda":
+                if "device" in config and config["device"] == "cuda":
                     model.fit(self.X_cuda[train], self.ys_cuda[train])
                     y_pred = model.predict(self.X_cuda[test])
                 else:
@@ -428,6 +430,56 @@ def nested_cross_validate_model_sklearn(X, ys, labels, classifier, configuration
     return (metrics_df, organism_metrics_df, overall_metrics_df)
 
 
+
+def tune_train_single_model_sklearn( X, y, label, classifier, configuration_space, n_trials,
+                                source:str, name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
+                                verbosity=0 ):
+    """
+    Tune and train a model in sklearn.
+
+    :param X: Data values
+    :type X: dataframe-like
+    :param y: True classes for one sample
+    :type y: array-like
+    :param labels: Labels
+    :type labels: dataframe-like
+    :param classifier: Classifier
+    :type classifier: Classifier from sklearn
+    :param configuration_space: Configuration Space
+    :type configuration_space: ConfigSpace.ConfigurationSpace
+    :param n_trials: Number of trials
+    :type n_trials: int
+    :param source: Source of data
+    :type source: str
+    :param name: Name of run
+    :type name: str
+    :param algorithm_name: Algorithm name
+    :type algorithm_name: str
+    :param outdir: Output directory
+    :type outdir: path-like
+    :param fold: Fold for cross validation during tuning, defaults to KFold()
+    :type fold: Union[KFold, StratifiedKFold], optional
+    :param verbosity: Level of verbosity, defaults to 0
+    :type verbosity: int, optional
+    """
+    # Iterate over all organisms for binary distinction
+    incumbent = tune_classifier(X, y, classifier, fold, configuration_space, 1, n_trials,
+                                name, algorithm_name, outdir, verbosity)
+    
+    # Model definition and fitting
+    best_hp = extract_best_hyperparameters_from_incumbent(incumbent=incumbent, configuration_space=configuration_space)
+
+    best_hp = individual_layers_to_tuple(best_hp)
+    model = classifier(**best_hp)		# Ensures model resetting for each cross-validation
+
+    if "device" in best_hp and best_hp["device"] == "cuda":
+        X, y = (cupy.array(X), cupy.array(y))
+    else:
+        X, y = (np.array(X), np.array(y))
+    model.fit(X, y)
+    with open(os.path.join(outdir, f'model_{algorithm_name}_{label}_{source}.pkl'), 'wb') as f:
+        pickle.dump(model ,f)
+
 def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_workers, n_trials,
                                 source:str, name, algorithm_name, outdir, fold:Union[KFold, StratifiedKFold]=KFold(),
                                 verbosity=0 ):
@@ -462,25 +514,13 @@ def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_
     :type verbosity: int, optional
     """
     # Iterate over all organisms for binary distinction
-    for i, org in enumerate(tqdm(ys.columns)):
-        y = ys[org]
+    dask.config.set(scheduler='processes', num_workers = n_workers)
+    futures = [ dask.delayed(tune_train_single_model_sklearn)( X, ys[org], labels[i], classifier, configuration_space, n_trials,
+                                                               source, name, algorithm_name, outdir, fold, verbosity )
+                for i, org in enumerate(tqdm(ys.columns))  
+              ]
+    dask.compute(futures)
 
-        incumbent = tune_classifier(X, y, classifier, fold, configuration_space, n_workers, n_trials,
-                                    name, algorithm_name, outdir, verbosity)
-        
-        # Model definition and fitting
-        best_hp = extract_best_hyperparameters_from_incumbent(incumbent=incumbent, configuration_space=configuration_space)
-
-        best_hp = individual_layers_to_tuple(best_hp)
-        model = classifier(**best_hp)		# Ensures model resetting for each cross-validation
-
-        if "device" in best_hp and best_hp["device"] == "cuda":
-            X, y = (cupy.array(X), cupy.array(y))
-        else:
-            X, y = (np.array(X), np.array(y))
-        model.fit(X, y)
-        with open(os.path.join(outdir, f'model_{algorithm_name}_{labels[i]}_{source}.pkl'), 'wb') as f:
-            pickle.dump(model ,f)
 
 
 def evaluate_model_sklearn( X, ys, labels, indir, data_source, algorithm_name, outdir, verbosity=0 ):

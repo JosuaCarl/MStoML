@@ -169,13 +169,17 @@ def main(args):
     # Extreme Gradient Boosting
     from xgboost import XGBClassifier
     configuration_space = ConfigurationSpace()
-    objective           = Constant( "objective",            "binary:logistic")
-    num_parallel_tree   = Constant( "num_parallel_tree",    4)
-    n_estimators        = Integer(  "n_estimators",         (10,1000), log=True, default=100)
-    max_depth           = Integer(  "max_depth",            (1, 100), default=20)
-    subsample           = Float(    "subsample",            (1e-1, 1e0), default=1e0)
-    learning_rate       = Float(    "learning_rate",        (1e-2, 5e-1), default=1e-1)
-    configuration_space.add_hyperparameters([objective, num_parallel_tree, n_estimators, max_depth, subsample, learning_rate])
+    hyperparameters = [
+        Constant( "random_state",          42),
+        Constant( "device",               "cuda"),
+        Constant( "objective",            "binary:logistic"),
+        Integer( "num_parallel_tree",     (1, 100), log=True, default=4),
+        Integer(  "n_estimators",         (10,1000), log=True, default=100),
+        Integer(  "max_depth",            (1, 100), default=20),
+        Float(    "subsample",            (1e-1, 1e0), default=1e0),
+        Float(    "learning_rate",        (1e-2, 5e-1), default=1e-1),
+    ]
+    configuration_space.add_hyperparameters(hyperparameters)
 
     algorithms_configspaces["Extreme gradient boosting RF"] = {"classifier": XGBClassifier, "configuration_space": configuration_space}
 

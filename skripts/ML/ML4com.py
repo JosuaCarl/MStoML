@@ -7,6 +7,7 @@ Methods for Machine Learning for community inference.
 import os
 import gc
 import time
+import datetime
 import warnings
 import itertools
 from typing import Union
@@ -477,7 +478,7 @@ def tune_train_single_model_sklearn( X, y, label, classifier, configuration_spac
     else:
         X, y = (np.array(X), np.array(y))
     model.fit(X, y)
-    with open(os.path.join(outdir, f'model_{algorithm_name}_{label}_{source}.pkl'), 'wb') as f:
+    with open(os.path.join(outdir, f'model_{algorithm_name}_{label}.pkl'), 'wb') as f:
         pickle.dump(model ,f)
 
 def tune_train_model_sklearn( X, ys, labels, classifier, configuration_space, n_workers, n_trials,

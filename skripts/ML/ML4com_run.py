@@ -279,7 +279,7 @@ def main(args):
                 raise( ValueError(f"-a/--algorithm {algorithm} is unknown. Choose one of {list(algorithms_configspaces.keys())}"))
         algorithms_configspaces = algorithms_configspaces_acc
 
-   
+    print(f"Starting at: {datetime.datetime.now()}")
     if task == "train":
         print("Training:")
         for algorithm_name in tqdm(list(algorithms_configspaces.keys())):
@@ -325,7 +325,7 @@ def main(args):
 
             plot_metrics_df(metrics_df, organism_metrics_df, overall_metrics_df, algorithm_name, outdir, show=False)
 
-
+    print(f"FInished at {datetime.datetime.now()}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='ML4com_run',
